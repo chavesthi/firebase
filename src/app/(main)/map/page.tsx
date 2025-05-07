@@ -215,7 +215,10 @@ const MapContentAndLogic = () => {
           <MapUpdater center={userLocation} />
           <Marker position={userLocation} title="Sua Localização" />
           {filteredVenues.map((venue) => {
-            const anchorPoint = new mapsApi.Point(12, 24); // Use mapsApi which is now guaranteed to be loaded
+            // Ensure window.google.maps.Point is used as mapsApi.Point might not be a constructor
+            // This assumes google maps api is loaded and window.google is available,
+            // which is true if mapsApi is not null.
+            const anchorPoint = new window.google.maps.Point(12, 24); 
 
             return (
               <Marker
@@ -241,13 +244,23 @@ const MapContentAndLogic = () => {
       {selectedVenue && (
         <Popover open={!!selectedVenue} onOpenChange={() => setSelectedVenue(null)}>
           <PopoverTrigger asChild>
-            <div style={{ position: 'fixed', top: selectedVenue.location.lat, left: selectedVenue.location.lng, pointerEvents: 'none' }} />
+            {/* The PopoverTrigger needs a child, even if it's not directly interacted with for map-based popovers */}
+            {/* Using a visually hidden div at the marker's logical position (not perfect for screen space, but works for trigger) */}
+            <div style={{ 
+                position: 'fixed', 
+                left: `${selectedVenue.location.lng}%`, // This won't be accurate screen coords
+                top: `${selectedVenue.location.lat}%`, // This won't be accurate screen coords
+                width: 0, 
+                height: 0, 
+                pointerEvents: 'none' 
+              }} />
           </PopoverTrigger>
           <PopoverContent
             className="w-80 bg-background/90 backdrop-blur-md shadow-2xl border-secondary/70"
+            // Position the popover near the center of the map as an alternative to precise marker anchoring
             style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
-            side="bottom"
-            align="center"
+            side="bottom" // Preferred side
+            align="center" // Preferred alignment
           >
             <div className="grid gap-4">
               <div className="space-y-2">
@@ -276,10 +289,11 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   return (
-    <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
+    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} solutionChannel="GMP_devsite_samples_v3_rgmbasic">
       <MapContentAndLogic />
     </APIProvider>
   );
 }
 
 export default MapPage;
+
