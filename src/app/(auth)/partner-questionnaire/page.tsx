@@ -277,7 +277,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         <Logo iconClassName="text-destructive" />
       </div>
       {isProfileLocked && (
-        <div className="w-full max-w-3xl mb-4 flex justify-start">
+        <div className="w-full max-w-3xl mb-4 flex justify-end">
           <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar ao Painel
