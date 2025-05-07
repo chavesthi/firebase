@@ -1,7 +1,7 @@
 
 'use client';
 
-import { APIProvider, Map as GoogleMap, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { APIProvider, Map as GoogleMap, Marker, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
@@ -10,7 +10,7 @@ import { Filter, X, Music2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
+import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
 import { 
   IconBar, 
@@ -54,30 +54,24 @@ const venueTypeIcons: Record<VenueType, React.ElementType> = {
   [VenueType.LGBT]: IconLGBT,
 };
 
-const venueTypeLabels: Record<VenueType, string> = {
-  [VenueType.NIGHTCLUB]: 'Balada',
-  [VenueType.BAR]: 'Bar',
-  [VenueType.STAND_UP]: 'Stand Up',
-  [VenueType.SHOW_HOUSE]: 'Casa de Show',
-  [VenueType.ADULT_ENTERTAINMENT]: 'Entretenimento Adulto',
-  [VenueType.LGBT]: 'LGBTQIA+',
-};
+const venueTypeLabels: Record<VenueType, string> = VENUE_TYPE_OPTIONS.reduce((acc, curr) => {
+  acc[curr.value] = curr.label;
+  return acc;
+}, {} as Record<VenueType, string>);
+
 
 const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce((acc, curr) => {
   acc[curr.value] = curr.label;
   return acc;
 }, {} as Record<MusicStyle, string>);
 
-
-const MAP_PIN_SVG_PATH = "M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z";
-
 const venueTypeColors: Record<VenueType, string> = {
-  [VenueType.NIGHTCLUB]: '#7DF9FF', // Neon Blue
-  [VenueType.BAR]: '#1F51FF',       // Using a distinct blue for bars
-  [VenueType.STAND_UP]: '#FFFF00',  // Neon Yellow
-  [VenueType.SHOW_HOUSE]: '#D400FF',// Neon Purple
-  [VenueType.ADULT_ENTERTAINMENT]: '#FF4136', // Neon Red
-  [VenueType.LGBT]: '#FFA500',      // Orange
+  [VenueType.NIGHTCLUB]: 'hsl(var(--primary))', 
+  [VenueType.BAR]: 'hsl(var(--accent))',       
+  [VenueType.STAND_UP]: '#FACC15', // Tailwind yellow-400
+  [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Tailwind pink-500
+  [VenueType.LGBT]: '#F97316',      // Tailwind orange-500
 };
 
 const MapUpdater = ({ center }: { center: Location }) => {
@@ -90,6 +84,28 @@ const MapUpdater = ({ center }: { center: Location }) => {
   return null;
 };
 
+// Custom marker component for venues
+const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName: string }) => {
+  const IconComponent = venueTypeIcons[type];
+  const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; // Default color
+
+  return (
+    <div className="flex flex-col items-center cursor-pointer" title={venueName}>
+      <div
+        className="flex items-center justify-center w-10 h-10 rounded-full shadow-lg"
+        style={{ backgroundColor: pinColor }}
+      >
+        {IconComponent ? <IconComponent className="w-6 h-6 text-white" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
+      </div>
+      <div
+        className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px]"
+        style={{ borderTopColor: pinColor }}
+      />
+    </div>
+  );
+};
+
+
 const MapContentAndLogic = () => {
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
@@ -97,7 +113,7 @@ const MapContentAndLogic = () => {
   const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const mapsApi = useMapsLibrary('maps');
+  const mapsApi = useMapsLibrary('maps'); // For any direct maps API usage if needed
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -140,27 +156,35 @@ const MapContentAndLogic = () => {
     });
   }, [activeVenueTypeFilters, activeMusicStyleFilters]);
 
-  const VenueIconDisplay = ({ type }: { type: VenueType }) => {
+  // This component is used for filter buttons, not map markers directly.
+  const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; // Default color
-    switch (type) {
-        case VenueType.NIGHTCLUB: colorClass = "text-primary"; break;
-        case VenueType.BAR: colorClass = "text-accent"; break; 
-        case VenueType.STAND_UP: colorClass = "text-yellow-400"; break; 
-        case VenueType.SHOW_HOUSE: colorClass = "text-secondary"; break; 
-        case VenueType.ADULT_ENTERTAINMENT: colorClass = "text-pink-500"; break; 
-        case VenueType.LGBT: colorClass = "text-orange-400"; break; 
-    }
-    return <IconComponent className={`w-5 h-5 ${colorClass}`} />;
+    let colorClass = "text-foreground"; 
+    const typeOption = VENUE_TYPE_OPTIONS.find(option => option.value === type);
+
+    // Using defined colors for consistency, with fallbacks
+    if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
+    else if (type === VenueType.BAR) colorClass = "text-accent";
+    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
+    else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
+    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
+    else if (type === VenueType.LGBT) colorClass = "text-orange-400";
+    
+    return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
+
 
   if (!userLocation) {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
-  if (!mapsApi) {
+  // mapsApi check is good for features that might depend on it, like drawing or services.
+  // AdvancedMarker and Marker components manage their own loading of the API.
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
+     // Only show loading if API key is present, otherwise a different message is shown by MapPage
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa...</div>;
   }
+
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
@@ -175,16 +199,16 @@ const MapContentAndLogic = () => {
           <ScrollArea className="h-[calc(100vh-12rem)] pr-3">
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Tipo de Local</h3>
-              {(Object.keys(venueTypeIcons) as VenueType[]).map((type) => (
+              {VENUE_TYPE_OPTIONS.map((option) => (
                 <Button
-                  key={type}
-                  variant={activeVenueTypeFilters.includes(type) ? "secondary" : "outline"}
-                  onClick={() => toggleVenueTypeFilter(type)}
-                  className={`w-full justify-start ${activeVenueTypeFilters.includes(type) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
-                  aria-pressed={activeVenueTypeFilters.includes(type)}
+                  key={option.value}
+                  variant={activeVenueTypeFilters.includes(option.value) ? "secondary" : "outline"}
+                  onClick={() => toggleVenueTypeFilter(option.value)}
+                  className={`w-full justify-start ${activeVenueTypeFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
+                  aria-pressed={activeVenueTypeFilters.includes(option.value)}
                 >
-                  <VenueIconDisplay type={type} />
-                  <span className="ml-2">{venueTypeLabels[type]}</span>
+                  <VenueIconDisplayForFilter type={option.value} />
+                  <span className="ml-2">{option.label}</span>
                 </Button>
               ))}
             </div>
@@ -228,7 +252,7 @@ const MapContentAndLogic = () => {
           disableDefaultUI={true}
           className="w-full h-full"
           options={{
-            styles: [
+            styles: [ // Dark theme for map
               { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
               { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
               { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
@@ -251,55 +275,19 @@ const MapContentAndLogic = () => {
           }}
         >
           <MapUpdater center={userLocation} />
+          {/* Standard marker for user location */}
           <Marker position={userLocation} title="Sua Localização" />
-          {filteredVenues.map((venue) => {
-            let anchorPoint: google.maps.Point | undefined = undefined;
-            if (mapsApi && typeof mapsApi.Point === 'function') {
-              try {
-                anchorPoint = new mapsApi.Point(12, 24);
-              } catch (e) {
-                // If mapsApi.Point is not a constructor, it might be because the google.maps object is not fully loaded or structured as expected.
-                // Try accessing via window.google.maps.Point as a fallback.
-                if (typeof window.google?.maps?.Point === 'function') {
-                    try {
-                        anchorPoint = new window.google.maps.Point(12, 24);
-                    } catch (e2) {
-                         console.error("Error creating google.maps.Point with window.google.maps.Point after mapsApi.Point failed:", e2);
-                    }
-                } else {
-                    console.error("Error creating google.maps.Point with mapsApi.Point, and window.google.maps.Point is not available:", e);
-                }
-              }
-            } else if (typeof window.google?.maps?.Point === 'function') {
-                try {
-                    anchorPoint = new window.google.maps.Point(12, 24);
-                } catch (e) {
-                    console.error("Error creating google.maps.Point with window.google.maps.Point:", e);
-                }
-            } else {
-                 if(mapsApi) console.warn("mapsApi.Point is not a constructor and window.google.maps.Point is not available. mapsApi:", mapsApi);
-                 else console.warn("mapsApi is not available and window.google.maps.Point is not available.");
-            }
-
-
-            return (
-              <Marker
+          
+          {/* Custom markers for venues */}
+          {filteredVenues.map((venue) => (
+              <AdvancedMarker
                 key={venue.id}
                 position={venue.location}
                 onClick={() => setSelectedVenue(venue)}
-                title={venue.name}
-                icon={{
-                  path: MAP_PIN_SVG_PATH,
-                  fillColor: venueTypeColors[venue.type] || '#7DF9FF',
-                  fillOpacity: 1,
-                  strokeWeight: 1,
-                  strokeColor: '#000000',
-                  scale: 1.5,
-                  anchor: anchorPoint, 
-                }}
-              />
-            );
-          })}
+              >
+                <VenueCustomMapMarker type={venue.type} venueName={venue.name} />
+              </AdvancedMarker>
+            ))}
         </GoogleMap>
       </div>
 
@@ -312,15 +300,15 @@ const MapContentAndLogic = () => {
           <PopoverContent
             className="w-80 bg-background/90 backdrop-blur-md shadow-2xl border-secondary/70"
             style={{
-              position: 'fixed',
+              position: 'fixed', // Using fixed to overlay on map correctly
               top: '50%',
               left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 100 
+              transform: 'translate(-50%, -50%)', // Center it
+              zIndex: 100 // Ensure it's above map and other elements
             }}
-            onCloseAutoFocus={(e) => e.preventDefault()} 
-            side="bottom" 
-            align="center" 
+            onCloseAutoFocus={(e) => e.preventDefault()} // Prevent map pan on close
+            side="bottom" // Preferred side, may adjust based on space
+            align="center" // Preferred align
           >
             <div className="grid gap-4">
               <div className="space-y-2">
@@ -356,9 +344,7 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  // The API key "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc" is a placeholder from Google itself,
-  // but for this app, if it's configured, it means the user intends to use it or replace it later.
-  // The main error is if it's still the template "YOUR_DEFAULT_API_KEY_HERE" or truly empty.
+
   if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações em next.config.ts (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
