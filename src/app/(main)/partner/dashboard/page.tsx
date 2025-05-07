@@ -9,7 +9,7 @@ import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin } from 'lucide-react';
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star } from 'lucide-react';
 import type { Location } from '@/services/geocoding'; // For type consistency
 import { VenueType, MusicStyle } from '@/lib/constants'; // For type consistency
 
@@ -115,15 +115,25 @@ export default function PartnerDashboardPage() {
             >
               <PlusCircle className="w-5 h-5 mr-2" /> Adicionar/Gerenciar Eventos
             </Button>
-            {/* 
-            <Button 
+          </CardContent>
+        </Card>
+        
+        <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
+          <CardHeader>
+            <CardTitle className="flex items-center text-xl text-destructive">
+              <Star className="w-6 h-6 mr-3" />
+              Avaliações e Comentários
+            </CardTitle>
+            <CardDescription>Veja o que os usuários acharam dos seus eventos.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+             <Button 
                 variant="outline" 
                 className="w-full border-destructive text-destructive hover:bg-destructive/10"
-                onClick={() => router.push('/partner/events')} // Can also go to same page or a dedicated view page
+                onClick={() => router.push('/partner/ratings')}
             >
-              Ver Meus Eventos
+              Ver Avaliações
             </Button>
-             */}
           </CardContent>
         </Card>
 
@@ -140,7 +150,7 @@ export default function PartnerDashboardPage() {
           </CardContent>
         </Card>
         
-        <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
+        <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow lg:col-start-2">
           <CardHeader>
             <CardTitle className="flex items-center text-xl text-destructive">
               <Settings className="w-6 h-6 mr-3" />

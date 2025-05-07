@@ -5,9 +5,9 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation'; // Added useRouter
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare } from 'lucide-react';
-import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
+import { useRouter } from 'next/navigation'; 
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send } from 'lucide-react';
+import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -26,8 +26,10 @@ import {
 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { firestore } from '@/lib/firebase';
+import { firestore, auth } from '@/lib/firebase';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
+import { StarRating } from '@/components/ui/star-rating';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import type { User as FirebaseUser } from 'firebase/auth';
 
 interface VenueEvent {
   id: string;
@@ -49,23 +52,32 @@ interface VenueEvent {
   pricingValue?: number;
   description?: string;
   visibility: boolean;
+  averageRating?: number;
+  ratingCount?: number;
 }
 
 interface Venue {
-  id: string; // User ID of the partner
+  id: string; 
   name: string;
   type: VenueType;
-  musicStyles?: MusicStyle[]; // Venue's general music styles
+  musicStyles?: MusicStyle[]; 
   location: Location;
-  description: string; // Could be venue description
+  description: string; 
   imageUrl?: string; 
   youtubeUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
-  whatsappPhone?: string; // Added WhatsApp phone number
-  events?: VenueEvent[]; // Loaded dynamically on selection
-  hasActiveEvent?: boolean; // For map marker badge
-  activeEventName?: string | null; // Name of one active event (optional for badge text)
+  whatsappPhone?: string; 
+  events?: VenueEvent[]; 
+  hasActiveEvent?: boolean; 
+  activeEventName?: string | null; 
+}
+
+interface UserRating {
+  rating: number;
+  comment?: string;
+  createdAt: FirebaseTimestamp;
+  userName: string;
 }
 
 
@@ -92,10 +104,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))', 
   [VenueType.BAR]: 'hsl(var(--accent))',       
-  [VenueType.STAND_UP]: '#FACC15', // Tailwind yellow-400
+  [VenueType.STAND_UP]: '#FACC15', 
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Tailwind pink-500
-  [VenueType.LGBT]: '#F97316',      // Tailwind orange-500
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
+  [VenueType.LGBT]: '#F97316',      
 };
 
 const MapUpdater = ({ center }: { center: Location }) => {
@@ -108,7 +120,6 @@ const MapUpdater = ({ center }: { center: Location }) => {
   return null;
 };
 
-// Custom marker component for venues
 const VenueCustomMapMarker = ({ 
   type, 
   venueName, 
@@ -123,7 +134,7 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
   
-  let effectiveBlinkHighlightColor = '#FACC15'; // Default: Tailwind yellow-400 for blinking
+  let effectiveBlinkHighlightColor = '#FACC15'; 
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   if (normalizeHex(basePinColor) === normalizeHex(effectiveBlinkHighlightColor)) {
@@ -147,14 +158,14 @@ const VenueCustomMapMarker = ({
         {hasActiveEvent && (
           <div 
             className="absolute -top-8 mb-1 px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded-md shadow-lg whitespace-nowrap z-20 animate-pulse"
-            style={{ transform: 'translateX(-50%)', left: '50%' }} // Center above the marker
+            style={{ transform: 'translateX(-50%)', left: '50%' }} 
           >
             Acontecendo Um Evento Agora!!!
           </div>
         )}
         <div
           className={cn(
-            "flex items-center justify-center w-10 h-10 rounded-full z-10", // Ensure icon is above triangle
+            "flex items-center justify-center w-10 h-10 rounded-full z-10", 
             isFilterActive ? 'shadow-xl' : 'shadow-lg', 
           )}
           style={{ 
@@ -173,7 +184,6 @@ const VenueCustomMapMarker = ({
   );
 };
 
-// Custom marker component for user location
 const UserCustomMapMarker = () => {
   return (
     <div className="flex flex-col items-center" title="Sua Localização" style={{ transform: 'translate(-50%, -100%)' }}>
@@ -205,7 +215,7 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
     console.warn("Could not parse YouTube URL for embed: ", url, e);
     return null;
   }
-  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null; // Added autoplay=1
+  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0` : null; 
 };
 
 const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: FirebaseTimestamp): boolean => {
@@ -217,6 +227,8 @@ const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: Fire
 
 
 const MapContentAndLogic = () => {
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
@@ -227,9 +239,69 @@ const MapContentAndLogic = () => {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  
+  const [userCheckIns, setUserCheckIns] = useState<Record<string, boolean>>({}); // { eventId: true }
+  const [userRatings, setUserRatings] = useState<Record<string, UserRating>>({}); // { eventId: UserRating }
 
+  const [currentRating, setCurrentRating] = useState(0);
+  const [currentComment, setCurrentComment] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   const mapsApi = useMapsLibrary('maps'); 
+
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        const userDocRef = doc(firestore, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          setCurrentUserName(userDocSnap.data().name || "Usuário Fervo");
+        } else {
+          setCurrentUserName("Usuário Fervo");
+        }
+      } else {
+        setCurrentUserName(null);
+      }
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+
+  useEffect(() => {
+    if (currentUser) {
+      const checkInsRef = collection(firestore, `users/${currentUser.uid}/checkedInEvents`);
+      const unsubscribeCheckIns = onSnapshot(checkInsRef, (snapshot) => {
+        const checkInsData: Record<string, boolean> = {};
+        snapshot.docs.forEach(doc => {
+          checkInsData[doc.id] = true; 
+        });
+        setUserCheckIns(checkInsData);
+      });
+      
+      // Listener for user's ratings to update UI if they rate elsewhere or to load existing ratings
+      const ratingsQuery = query(collection(firestore, 'eventRatings'), where('userId', '==', currentUser.uid));
+      const unsubscribeRatings = onSnapshot(ratingsQuery, (snapshot) => {
+        const ratingsData: Record<string, UserRating> = {};
+        snapshot.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            ratingsData[data.eventId] = {
+                rating: data.rating,
+                comment: data.comment,
+                createdAt: data.createdAt,
+                userName: data.userName, // Though this is their own rating, good to have consistent structure
+            };
+        });
+        setUserRatings(ratingsData);
+      });
+
+      return () => {
+        unsubscribeCheckIns();
+        unsubscribeRatings();
+      };
+    }
+  }, [currentUser]);
+
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -306,7 +378,7 @@ const MapContentAndLogic = () => {
             youtubeUrl: partnerData.youtubeUrl,
             instagramUrl: partnerData.instagramUrl,
             facebookUrl: partnerData.facebookUrl,
-            whatsappPhone: partnerData.whatsappPhone, // Fetch WhatsApp phone
+            whatsappPhone: partnerData.whatsappPhone,
             hasActiveEvent,
             activeEventName,
           };
@@ -332,16 +404,23 @@ const MapContentAndLogic = () => {
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
       const q = query(eventsCollectionRef, where('visibility', '==', true));
-      const snapshot = await getDocs(q);
-      const eventsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as VenueEvent)).sort((a,b) => a.startDateTime.toMillis() - b.startDateTime.toMillis()); 
-      
-      setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
+      // Add listener for real-time event updates (including ratings)
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const eventsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        } as VenueEvent)).sort((a,b) => a.startDateTime.toMillis() - b.startDateTime.toMillis()); 
+        
+        setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
+        setIsLoadingEvents(false); 
+      }, (error) => {
+        console.error("Error fetching venue events with onSnapshot:", error);
+        setIsLoadingEvents(false);
+      });
+      // Store unsubscribe function to call on cleanup if needed, though sheet closure handles this.
+      return unsubscribe; 
     } catch (error) {
       console.error("Error fetching venue events:", error);
-    } finally {
       setIsLoadingEvents(false);
     }
   };
@@ -349,6 +428,10 @@ const MapContentAndLogic = () => {
   useEffect(() => {
     if (selectedVenue && !selectedVenue.events) {
       fetchVenueEvents(selectedVenue.id);
+    } else if (selectedVenue && selectedVenue.events) {
+      // If events are already loaded, reset rating form for the selected venue
+      setCurrentRating(0);
+      setCurrentComment('');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVenue]);
@@ -407,6 +490,65 @@ const MapContentAndLogic = () => {
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
 
+  const handleRateEvent = async (eventId: string, partnerId: string) => {
+    if (!currentUser || !currentUserName) {
+        toast({ title: "Não Autenticado", description: "Você precisa estar logado para avaliar.", variant: "destructive" });
+        return;
+    }
+    if (currentRating === 0) {
+        toast({ title: "Avaliação Incompleta", description: "Por favor, selecione uma nota (1-5 estrelas).", variant: "destructive" });
+        return;
+    }
+    setIsSubmittingRating(true);
+    try {
+        const eventDocRef = doc(firestore, `users/${partnerId}/events/${eventId}`);
+        // Store user's rating in a top-level collection for easier querying by eventId later by partner
+        const ratingDocRef = doc(collection(firestore, 'eventRatings'), `${eventId}_${currentUser.uid}`);
+        
+        // Update aggregated rating on event document
+        await runTransaction(firestore, async (transaction) => {
+            const eventSnap = await transaction.get(eventDocRef);
+            if (!eventSnap.exists()) throw new Error("Evento não encontrado para atualizar avaliação.");
+            
+            const eventData = eventSnap.data();
+            const oldRatingCount = eventData.ratingCount || 0;
+            const oldAverageRating = eventData.averageRating || 0;
+
+            const newRatingCount = oldRatingCount + 1;
+            const newAverageRating = ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount;
+            
+            transaction.update(eventDocRef, {
+                averageRating: newAverageRating,
+                ratingCount: newRatingCount,
+            });
+
+            transaction.set(ratingDocRef, {
+                eventId: eventId,
+                partnerId: partnerId,
+                userId: currentUser.uid,
+                userName: currentUserName,
+                rating: currentRating,
+                comment: currentComment || null,
+                createdAt: serverTimestamp(),
+            });
+
+            // Mark as rated in user's personal check-in log
+            const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
+            transaction.update(userCheckedInEventRef, { hasRated: true });
+        });
+
+        toast({ title: "Avaliação Enviada!", description: "Obrigado pelo seu feedback!", variant: "default" });
+        setCurrentRating(0);
+        setCurrentComment('');
+        // UI should update due to onSnapshot listeners
+    } catch (error: any) {
+        console.error("Error submitting rating:", error);
+        toast({ title: "Erro ao Avaliar", description: error.message || "Não foi possível enviar sua avaliação.", variant: "destructive" });
+    } finally {
+        setIsSubmittingRating(false);
+    }
+};
+
 
   if (!userLocation) {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
@@ -428,7 +570,6 @@ const MapContentAndLogic = () => {
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]"> 
-      {/* Filter Sidebar */}
       <Card 
         className={cn(
           "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
@@ -478,7 +619,6 @@ const MapContentAndLogic = () => {
         </CardContent>
       </Card>
 
-      {/* Map Area */}
       <div className="flex-1 h-full">
         {!filterSidebarOpen && (
           <Button
@@ -557,7 +697,6 @@ const MapContentAndLogic = () => {
         </GoogleMap>
       </div>
 
-      {/* Venue Details Sidebar */}
       {selectedVenue && (
         <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { if (!isOpen) setSelectedVenue(null); }}>
           <SheetContent 
@@ -576,11 +715,10 @@ const MapContentAndLogic = () => {
                     <span className="sr-only">Fechar</span>
                   </Button>
                 </SheetClose>
-                {/* Ensure description is present even if sr-only for accessibility */}
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
             
-            <ScrollArea className="h-[calc(100vh-6rem)]"> {/* Adjusted for header height */}
+            <ScrollArea className="h-[calc(100vh-6rem)]"> 
               <div className="px-6 pb-6 pt-4 space-y-6">
                   {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
                     <div className="mb-4">
@@ -625,7 +763,7 @@ const MapContentAndLogic = () => {
                             title="WhatsApp" 
                             className="text-muted-foreground hover:text-primary transition-colors"
                           >
-                            <MessageSquare className="w-6 h-6" /> {/* Using MessageSquare as a placeholder for WhatsApp */}
+                            <MessageSquare className="w-6 h-6" /> 
                           </a>
                         )}
                         {selectedVenue.instagramUrl && (
@@ -659,6 +797,10 @@ const MapContentAndLogic = () => {
                       <div className="space-y-3">
                         {selectedVenue.events.map(event => {
                           const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
+                          const userHasCheckedIn = !!userCheckIns[event.id];
+                          const userHasRated = !!userRatings[event.id];
+                          const existingRatingForEvent = userRatings[event.id];
+
                           return (
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
@@ -702,12 +844,50 @@ const MapContentAndLogic = () => {
                                 {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
                                 {event.pricingType !== PricingType.FREE && event.pricingValue ? `: R$ ${event.pricingValue.toFixed(2)}` : ''}
                               </p>
+                               {event.averageRating !== undefined && event.ratingCount !== undefined && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <StarRating rating={event.averageRating} totalStars={5} size={14} readOnly />
+                                    <span className="text-xs text-muted-foreground">({event.ratingCount} {event.ratingCount === 1 ? 'avaliação' : 'avaliações'})</span>
+                                </div>
+                               )}
                               {event.musicStyles && event.musicStyles.length > 0 && (
                                 <p className="text-xs text-muted-foreground mt-1">
                                   Músicas: {event.musicStyles.map(style => musicStyleLabels[style]).join(', ')}
                                 </p>
                               )}
                               {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
+                              
+                              {currentUser && userHasCheckedIn && !userHasRated && (
+                                <div className="mt-3 pt-3 border-t border-border/30">
+                                  <h4 className="text-sm font-semibold text-primary mb-1.5">Avalie este evento:</h4>
+                                  <StarRating rating={currentRating} setRating={setCurrentRating} />
+                                  <Textarea 
+                                    placeholder="Deixe um comentário (opcional)..."
+                                    value={currentComment}
+                                    onChange={(e) => setCurrentComment(e.target.value)}
+                                    className="mt-2 text-xs"
+                                    rows={2}
+                                  />
+                                  <Button 
+                                    size="sm" 
+                                    className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
+                                    onClick={() => handleRateEvent(event.id, selectedVenue.id)}
+                                    disabled={isSubmittingRating || currentRating === 0}
+                                  >
+                                    {isSubmittingRating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                                    Enviar Avaliação
+                                  </Button>
+                                </div>
+                              )}
+                              {currentUser && userHasCheckedIn && userHasRated && existingRatingForEvent && (
+                                <div className="mt-3 pt-3 border-t border-border/30">
+                                    <h4 className="text-sm font-semibold text-primary mb-1.5">Sua avaliação:</h4>
+                                    <StarRating rating={existingRatingForEvent.rating} totalStars={5} size={16} readOnly />
+                                    {existingRatingForEvent.comment && <p className="mt-1 text-xs text-muted-foreground italic">"{existingRatingForEvent.comment}"</p>}
+                                </div>
+                              )}
+
+
                             </Card>
                           );
                         })}
@@ -788,14 +968,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
-    
-
-
-
-
-
-
-
-
-
