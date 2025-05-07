@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface VenueEvent {
   id: string;
@@ -102,14 +103,17 @@ const MapUpdater = ({ center }: { center: Location }) => {
 };
 
 // Custom marker component for venues
-const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName: string }) => {
+const VenueCustomMapMarker = ({ type, venueName, isFilterActive }: { type: VenueType, venueName: string, isFilterActive: boolean }) => {
   const IconComponent = venueTypeIcons[type];
   const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
   
   return (
     <div className="flex flex-col items-center cursor-pointer" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
       <div
-        className="flex items-center justify-center w-10 h-10 rounded-full shadow-lg"
+        className={cn(
+          "flex items-center justify-center w-10 h-10 rounded-full",
+          isFilterActive ? 'shadow-xl ring-2 ring-yellow-300' : 'shadow-lg' // Highlight applied here
+        )}
         style={{ backgroundColor: pinColor }}
       >
         {IconComponent ? <IconComponent className="w-6 h-6 text-white" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
@@ -289,6 +293,8 @@ const MapContentAndLogic = () => {
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters]);
 
+  const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
+
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
     let colorClass = "text-foreground"; 
@@ -426,10 +432,6 @@ const MapContentAndLogic = () => {
           )}
           
           {mapsApi && filteredVenues.map((venue) => {
-            // const anchorPoint = mapsApi && new (mapsApi as any).Point(12, 24); 
-            // The AdvancedMarker component from @vis.gl/react-google-maps
-            // handles its own anchor positioning internally.
-            // We directly pass the VenueCustomMapMarker as children.
             return (
               <AdvancedMarker
                 key={venue.id}
@@ -439,7 +441,7 @@ const MapContentAndLogic = () => {
                 }}
                 title={venue.name}
               >
-                <VenueCustomMapMarker type={venue.type} venueName={venue.name} />
+                <VenueCustomMapMarker type={venue.type} venueName={venue.name} isFilterActive={isAnyFilterActive} />
               </AdvancedMarker>
             );
           })}
