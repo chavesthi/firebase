@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 
@@ -296,6 +296,12 @@ const ManageEventsPage: NextPage = () => {
 
   return (
     <div className="container py-8 mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar ao Painel
+        </Button>
+      </div>
       <Card className="mb-8 border-destructive/50 shadow-lg shadow-destructive/15">
         <CardHeader>
           <CardTitle className="text-2xl text-destructive flex items-center">
