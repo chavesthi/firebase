@@ -145,7 +145,7 @@ const VenueCustomMapMarker = ({
       <div className="flex flex-col items-center cursor-pointer relative" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
         {hasActiveEvent && (
           <div 
-            className="absolute -top-8 mb-1 px-2 py-1 text-xs font-semibold text-white bg-red-600 rounded-md shadow-lg whitespace-nowrap z-20"
+            className="absolute -top-8 mb-1 px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded-md shadow-lg whitespace-nowrap z-20 animate-pulse"
             style={{ transform: 'translateX(-50%)', left: '50%' }} // Center above the marker
           >
             Acontecendo Um Evento Agora!!!
@@ -775,6 +775,7 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
 
 
 
