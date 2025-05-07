@@ -26,8 +26,9 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
+import { Badge } from '@/components/ui/badge';
 
 
 const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/; // HH:mm format
@@ -79,6 +80,13 @@ interface EventDocument extends EventFormInputs {
   endDateTime: Timestamp;
   createdAt: Timestamp;
 }
+
+const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
+  const now = new Date();
+  const startTime = startDateTime.toDate();
+  const endTime = endDateTime.toDate();
+  return now >= startTime && now <= endTime;
+};
 
 
 const ManageEventsPage: NextPage = () => {
@@ -447,12 +455,19 @@ const ManageEventsPage: NextPage = () => {
           {!loading && partnerEvents.length > 0 && (
             <ScrollArea className="h-[400px] pr-3">
               <div className="space-y-4">
-                {partnerEvents.map(event => (
+                {partnerEvents.map(event => {
+                  const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
+                  return (
                   <Card key={event.id} className={`p-4 border rounded-lg ${event.id === editingEventId ? 'border-destructive shadow-md' : 'border-border'}`}>
                     <div className="flex justify-between items-start">
                       <div>
                         <h3 className="text-lg font-semibold text-foreground">{event.eventName}</h3>
-                        <p className="text-sm text-muted-foreground">
+                        {isHappening && (
+                          <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
+                             <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
+                          </Badge>
+                        )}
+                        <p className="text-sm text-muted-foreground mt-1">
                           {format(event.startDateTime.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })}
                         </p>
                         <p className="text-sm text-muted-foreground">
@@ -480,7 +495,7 @@ const ManageEventsPage: NextPage = () => {
                         </div>
                     )}
                   </Card>
-                ))}
+                )})}
               </div>
             </ScrollArea>
           )}
@@ -491,3 +506,4 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
+

@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation'; // Added useRouter
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2 } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -125,8 +125,9 @@ const VenueCustomMapMarker = ({ type, venueName, isFilterActive }: { type: Venue
       {isFilterActive && (
         <style jsx global>{`
           @keyframes ${animationName} {
-            0% { background-color: ${basePinColor}; }
-            100% { background-color: ${effectiveBlinkHighlightColor}; }
+            0% { background-color: ${basePinColor}; box-shadow: 0 0 8px 2px ${basePinColor};}
+            50% { background-color: ${effectiveBlinkHighlightColor}; box-shadow: 0 0 12px 4px ${effectiveBlinkHighlightColor}; transform: scale(1.1);}
+            100% { background-color: ${basePinColor}; box-shadow: 0 0 8px 2px ${basePinColor};}
           }
         `}</style>
       )}
@@ -137,8 +138,8 @@ const VenueCustomMapMarker = ({ type, venueName, isFilterActive }: { type: Venue
             isFilterActive ? 'shadow-xl' : 'shadow-lg', 
           )}
           style={{ 
-            backgroundColor: isFilterActive ? undefined : basePinColor, 
-            ...(isFilterActive && { animation: `${animationName} 1s infinite alternate` }) 
+            backgroundColor: basePinColor, 
+            ...(isFilterActive && { animation: `${animationName} 1.5s infinite ease-in-out` }) 
           }}
         >
           {IconComponent ? <IconComponent className="w-6 h-6 text-white" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
@@ -185,6 +186,13 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
     return null;
   }
   return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+};
+
+const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: FirebaseTimestamp): boolean => {
+  const now = new Date();
+  const startTime = startDateTime.toDate();
+  const endTime = endDateTime.toDate();
+  return now >= startTime && now <= endTime;
 };
 
 
@@ -315,33 +323,27 @@ const MapContentAndLogic = () => {
 
   const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
 
-  const filteredVenues = useMemo(() => {
-    // This variable is used to determine which venues should *blink* if filters are active.
-    // It does not filter out venues from being displayed on the map.
-    if (!isAnyFilterActive) return []; // No active filters, so no venues are "filtered" for blinking.
+  const filteredVenuesForBlinking = useMemo(() => {
+    if (!isAnyFilterActive) return [];
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
       const musicStyleMatch = activeMusicStyleFilters.length === 0 || 
                              (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
       
-      // A venue is considered "filtered" (and should blink) if it matches *all* active filter categories.
       if (activeVenueTypeFilters.length > 0 && activeMusicStyleFilters.length > 0) {
         return venueTypeMatch && musicStyleMatch;
       }
-      // If only one category of filter is active, match against that.
       if (activeVenueTypeFilters.length > 0) {
         return venueTypeMatch;
       }
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false; // Should not reach here if isAnyFilterActive is true
+      return false;
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
   const displayedVenues = useMemo(() => {
-    // Always display all venues on the map.
-    // The blinking effect is handled by `isVenueFiltered` within the marker mapping.
     return venues;
   }, [venues]);
 
@@ -486,8 +488,7 @@ const MapContentAndLogic = () => {
           )}
           
           {mapsApi && displayedVenues.map((venue) => {
-            // Check if this venue is part of the `filteredVenues` (i.e., should blink)
-            const isVenueFilteredForBlinking = filteredVenues.some(fv => fv.id === venue.id);
+            const isVenueFilteredForBlinking = filteredVenuesForBlinking.some(fv => fv.id === venue.id);
             
             return (
               <AdvancedMarker
@@ -525,7 +526,6 @@ const MapContentAndLogic = () => {
                     <span className="sr-only">Fechar</span>
                   </Button>
                 </SheetClose>
-                {/* Hidden Description for accessibility, as title is visible */}
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
             
@@ -594,50 +594,60 @@ const MapContentAndLogic = () => {
                     )}
                     {!isLoadingEvents && selectedVenue.events && selectedVenue.events.length > 0 && (
                       <div className="space-y-3">
-                        {selectedVenue.events.map(event => (
-                          <Card key={event.id} className="p-3 bg-card/50 border-border/50">
-                            <div className="flex justify-between items-start">
-                                <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
-                                <div className="flex items-center space-x-1">
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="text-accent hover:text-accent/80 -mr-2 -mt-1"
-                                        onClick={() => {
-                                          router.push(`/shared-event/${selectedVenue.id}/${event.id}`);
-                                          toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins! (Recurso em breve)", duration: 4000, variant: "default"});
-                                        }}
-                                        title="Compartilhar evento"
-                                    >
-                                        <Share2 className="w-5 h-5" />
-                                    </Button>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="text-primary hover:text-primary/80 -mr-2 -mt-1"
-                                        onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
-                                        title="Ativar notificação para este evento"
-                                    >
-                                        <Bell className="w-5 h-5" />
-                                    </Button>
-                                </div>
-                            </div>
-                            <p className="text-xs text-muted-foreground flex items-center">
-                              <CalendarClock className="w-3 h-3 mr-1.5"/>
-                              {format(event.startDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
-                              {event.pricingType !== PricingType.FREE && event.pricingValue ? `: R$ ${event.pricingValue.toFixed(2)}` : ''}
-                            </p>
-                            {event.musicStyles && event.musicStyles.length > 0 && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Músicas: {event.musicStyles.map(style => musicStyleLabels[style]).join(', ')}
+                        {selectedVenue.events.map(event => {
+                          const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
+                          return (
+                            <Card key={event.id} className="p-3 bg-card/50 border-border/50">
+                              <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
+                                    {isHappening && (
+                                      <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
+                                        <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center space-x-1">
+                                      <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="text-accent hover:text-accent/80 -mr-2 -mt-1"
+                                          onClick={() => {
+                                            router.push(`/shared-event/${selectedVenue.id}/${event.id}`);
+                                            toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins! (Recurso em breve)", duration: 4000, variant: "default"});
+                                          }}
+                                          title="Compartilhar evento"
+                                      >
+                                          <Share2 className="w-5 h-5" />
+                                      </Button>
+                                      <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="text-primary hover:text-primary/80 -mr-2 -mt-1"
+                                          onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
+                                          title="Ativar notificação para este evento"
+                                      >
+                                          <Bell className="w-5 h-5" />
+                                      </Button>
+                                  </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground flex items-center mt-1">
+                                <CalendarClock className="w-3 h-3 mr-1.5"/>
+                                {format(event.startDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })}
                               </p>
-                            )}
-                            {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
-                          </Card>
-                        ))}
+                              <p className="text-xs text-muted-foreground">
+                                {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
+                                {event.pricingType !== PricingType.FREE && event.pricingValue ? `: R$ ${event.pricingValue.toFixed(2)}` : ''}
+                              </p>
+                              {event.musicStyles && event.musicStyles.length > 0 && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Músicas: {event.musicStyles.map(style => musicStyleLabels[style]).join(', ')}
+                                </p>
+                              )}
+                              {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
+                            </Card>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -717,6 +727,7 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
 
 
 
