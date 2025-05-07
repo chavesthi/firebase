@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
     ],
   },
   env: {
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc",
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc",
   }
 };
 
