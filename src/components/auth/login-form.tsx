@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -17,7 +18,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
@@ -56,7 +57,35 @@ export function LoginForm() {
   const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
     loginMethods.formState.isSubmitting;
     try {
-      await signInWithEmailAndPassword(auth, data.email, data.password);
+      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      // Check user role and questionnaire completion from Firestore
+      const userDocRef = doc(firestore, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        // This case should ideally not happen if signup creates the doc
+        toast({ title: "Erro", description: "Dados do usuário não encontrados.", variant: "destructive" });
+        return;
+      }
+
+      const userData = userDoc.data();
+      const userRoleInDb = userData.role || UserRole.USER; // Default to USER if role not set
+      const questionnaireCompleted = userData.questionnaireCompleted || false;
+      
+      // Ensure UI activeRole matches the role from DB for this user
+      // This is important if a user tries to log in as 'partner' but their account is 'user'
+      if (activeRole !== userRoleInDb) {
+        toast({
+          title: "Tipo de Conta Incorreto",
+          description: `Este e-mail está registrado como ${userRoleInDb === UserRole.USER ? 'usuário' : 'parceiro'}. Por favor, use a aba correta.`,
+          variant: "destructive",
+        });
+        // Optionally, switch the tab for them: setActiveRole(userRoleInDb);
+        return;
+      }
+
 
       toast({
         title: "Login Bem Sucedido!",
@@ -65,9 +94,17 @@ export function LoginForm() {
       });
 
       if (activeRole === UserRole.USER) {
-        router.push('/map');
-      } else {
-        router.push('/partner/dashboard');
+        if (questionnaireCompleted) {
+          router.push('/map');
+        } else {
+          router.push('/questionnaire');
+        }
+      } else { // Partner
+        if (questionnaireCompleted) {
+          router.push('/partner/dashboard');
+        } else {
+          router.push('/partner-questionnaire');
+        }
       }
       loginMethods.reset();
     } catch (error: any) {
@@ -96,19 +133,20 @@ export function LoginForm() {
         email: data.email,
         role: activeRole,
         createdAt: new Date(),
+        questionnaireCompleted: false, // New users always start with incomplete questionnaire
       });
       
       toast({
         title: "Conta Criada com Sucesso!",
         description: "Quase lá! Conte-nos um pouco mais sobre você.",
-        variant: "default",
+        variant: activeRole === UserRole.USER ? "default" : "destructive",
       });
       signupMethods.reset();
       
       if (activeRole === UserRole.USER) {
-        router.push('/questionnaire'); // Redirect to questionnaire for new users
-      } else { // For partners, redirect to dashboard
-        router.push('/partner/dashboard');
+        router.push('/questionnaire'); 
+      } else { 
+        router.push('/partner-questionnaire'); // Redirect partner to their questionnaire
       }
 
     } catch (error: any) {
@@ -313,3 +351,4 @@ export function LoginForm() {
     </Tabs>
   );
 }
+
