@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -466,11 +465,24 @@ const MapContentAndLogic = () => {
           
           {mapsApi && displayedVenues.map((venue) => {
             // Determine if this specific venue marker should be highlighted/blink
-            const isVenueFiltered = isAnyFilterActive && (
-                (activeVenueTypeFilters.length > 0 && activeVenueTypeFilters.includes(venue.type)) ||
-                (activeMusicStyleFilters.length > 0 && venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)))
-            );
+            // A venue is considered "filtered" if ANY active filter matches it.
+            // If venue type filters are active, it must match one of them.
+            // OR if music style filters are active, it must match one of them.
+            // If BOTH filter categories are active, it must match BOTH (implicitly handled by the logic below).
+            let isVenueFiltered = false;
+            if (isAnyFilterActive) {
+                const typeMatch = activeVenueTypeFilters.length > 0 ? activeVenueTypeFilters.includes(venue.type) : true;
+                const musicMatch = activeMusicStyleFilters.length > 0 ? (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style))) : true;
 
+                if (activeVenueTypeFilters.length > 0 && activeMusicStyleFilters.length > 0) {
+                    isVenueFiltered = typeMatch && musicMatch;
+                } else if (activeVenueTypeFilters.length > 0) {
+                    isVenueFiltered = typeMatch;
+                } else if (activeMusicStyleFilters.length > 0) {
+                    isVenueFiltered = musicMatch;
+                }
+            }
+            
             return (
               <AdvancedMarker
                 key={venue.id}
@@ -497,7 +509,7 @@ const MapContentAndLogic = () => {
             onOpenAutoFocus={(e) => e.preventDefault()} 
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md z-10 border-b border-border">
+            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border">
                 <SheetTitle className="text-2xl font-bold text-secondary mr-8">
                   {selectedVenue.name}
                 </SheetTitle>
@@ -642,4 +654,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
