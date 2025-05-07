@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, getDoc, arrayUnion, serverTimestamp, collection, addDoc, setDoc } from 'firebase/firestore'; // Added setDoc
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Loader2, XCircle, CheckCircle2 } from 'lucide-react';
 
@@ -36,7 +36,7 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
       setScanResult(null);
       setProcessingResult(null);
       setIsLoading(false);
-      // Dynamically import QrScanner only when the modal is open and on client-side
+      
       import('qr-scanner').then(module => {
         const QrScanner = module.default;
         const getCameraPermissionAndStartScanner = async () => {
@@ -58,8 +58,8 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
                   highlightScanRegion: true,
                   highlightCodeOutline: true,
                   onDecodeError: error => {
-                    if (error !== 'No QR code found') { // Avoid spamming console for no QR found
-                      console.warn('QR Scan Error:', error);
+                    if (error !== 'No QR code found') { 
+                      // console.warn('QR Scan Error:', error); // Optionally log non-critical errors
                     }
                   }
                  }
@@ -87,8 +87,7 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
         toast({ variant: 'destructive', title: 'Erro no Scanner', description: 'Não foi possível carregar o módulo de scanner.' });
       });
 
-
-      return () => { // Cleanup on modal close or component unmount
+      return () => { 
         if (scanner) {
           scanner.stop();
           scanner.destroy();
@@ -105,7 +104,7 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
   }, [isOpen]);
 
   const handleScan = async (data: string) => {
-    if (isLoading || processingResult) return; // Don't process if already loading or has a result
+    if (isLoading || processingResult) return; 
 
     setScanResult(data);
     setIsLoading(true);
@@ -113,14 +112,12 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
 
     if (scanner) scanner.stop();
 
-
     try {
       const parsedData: QrCodePayload = JSON.parse(data);
       if (!parsedData.eventId || !parsedData.partnerId || !parsedData.token) {
         throw new Error("QR Code inválido ou mal formatado.");
       }
 
-      // 1. Verify token with the event document
       const eventDocRef = doc(firestore, `users/${parsedData.partnerId}/events/${parsedData.eventId}`);
       const eventDocSnap = await getDoc(eventDocRef);
 
@@ -132,41 +129,40 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
         throw new Error("Token de check-in inválido para este evento.");
       }
 
-      // 2. Check if user already checked in for this event
-      const checkInDocRef = doc(firestore, `users/${parsedData.partnerId}/events/${parsedData.eventId}/checkIns/${userId}`);
-      const checkInDocSnap = await getDoc(checkInDocRef);
+      const partnerCheckInDocRef = doc(firestore, `users/${parsedData.partnerId}/events/${parsedData.eventId}/checkIns/${userId}`);
+      const partnerCheckInDocSnap = await getDoc(partnerCheckInDocRef);
 
-      if (checkInDocSnap.exists()) {
+      if (partnerCheckInDocSnap.exists()) {
          setProcessingResult({success: false, message: "Você já fez check-in neste evento."});
          setIsLoading(false);
          return;
       }
       
-      // 3. Record check-in for the partner
-      // Store the check-in document with the user's ID as the document ID for easy lookup.
-      await setDoc(checkInDocRef, {
+      // Record check-in for the partner
+      await setDoc(partnerCheckInDocRef, {
         userId: userId,
         checkedInAt: serverTimestamp(),
         eventId: parsedData.eventId,
         partnerId: parsedData.partnerId,
-        eventName: eventData.eventName, // Store event name for partner convenience
+        eventName: eventData.eventName, 
       });
       
-      // 4. Record check-in for the user (in their own collection)
-      const userEventsRef = doc(firestore, `users/${userId}/checkedInEvents/${parsedData.eventId}`);
-      await setDoc(userEventsRef, {
+      // Record check-in for the user
+      const userCheckedInEventRef = doc(firestore, `users/${userId}/checkedInEvents/${parsedData.eventId}`);
+      await setDoc(userCheckedInEventRef, {
           eventId: parsedData.eventId,
           partnerId: parsedData.partnerId,
           eventName: eventData.eventName, 
-          checkedInAt: serverTimestamp()
+          checkedInAt: serverTimestamp(),
+          hasRated: false, // Initialize hasRated to false
       });
-
 
       setProcessingResult({success: true, message: `Check-in realizado com sucesso no evento: ${eventData.eventName}!`});
       toast({
         title: "Check-in Confirmado!",
-        description: `Você fez check-in em: ${eventData.eventName}.`,
+        description: `Você fez check-in em: ${eventData.eventName}. Agora você pode avaliar este evento!`,
         variant: "default",
+        duration: 5000,
       });
 
     } catch (error: any) {
@@ -191,15 +187,13 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
   const handleCloseModal = () => {
     if (scanner) {
         scanner.stop();
-        // scanner.destroy(); // scanner.destroy() causes issues if modal reopens quickly
-        // setScanner(null);
     }
      if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
         videoRef.current.srcObject = null;
     }
-    setHasCameraPermission(null); // Reset permission status
+    setHasCameraPermission(null); 
     onClose();
   }
 
@@ -226,7 +220,7 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
               <AlertTitle>Acesso à Câmera Necessário</AlertTitle>
               <AlertDescription>
                 Por favor, permita o acesso à câmera nas configurações do seu navegador para escanear o QR Code.
-                Recarregue a página após conceder a permissão.
+                Recarregue a página após conceder a permissão, se necessário.
               </AlertDescription>
             </Alert>
           )}
@@ -256,6 +250,11 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
                 <p className={`text-lg font-semibold text-center ${processingResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                     {processingResult.message}
                 </p>
+                 {processingResult.success && (
+                    <Button variant="link" className="mt-2 text-primary" onClick={handleCloseModal}>
+                        Ver eventos e avaliar
+                    </Button>
+                 )}
             </div>
           )}
 

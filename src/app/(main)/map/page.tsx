@@ -4,10 +4,10 @@
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
-import Image from 'next/image';
+// import Image from 'next/image'; // No longer used directly for venue image
 import { useRouter } from 'next/navigation'; 
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send } from 'lucide-react';
-import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, setDoc, serverTimestamp, onSnapshot, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, getDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -62,8 +62,8 @@ interface Venue {
   type: VenueType;
   musicStyles?: MusicStyle[]; 
   location: Location;
-  description: string; 
-  imageUrl?: string; 
+  // description: string; // Potentially remove if not used
+  // imageUrl?: string; // Replaced by youtube embed logic
   youtubeUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
@@ -73,7 +73,7 @@ interface Venue {
   activeEventName?: string | null; 
 }
 
-interface UserRating {
+interface UserRatingData { // Renamed from UserRating to avoid conflict with component
   rating: number;
   comment?: string;
   createdAt: FirebaseTimestamp;
@@ -104,10 +104,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))', 
   [VenueType.BAR]: 'hsl(var(--accent))',       
-  [VenueType.STAND_UP]: '#FACC15', 
+  [VenueType.STAND_UP]: '#FACC15', // yellow-400
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
-  [VenueType.LGBT]: '#F97316',      
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // pink-500
+  [VenueType.LGBT]: '#F97316',      // orange-500
 };
 
 const MapUpdater = ({ center }: { center: Location }) => {
@@ -134,11 +134,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
   
-  let effectiveBlinkHighlightColor = '#FACC15'; 
+  let effectiveBlinkHighlightColor = '#FACC15'; // Default highlight: yellow-400
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
+  const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : normalizeHex(basePinColor);
 
-  if (normalizeHex(basePinColor) === normalizeHex(effectiveBlinkHighlightColor)) {
-    effectiveBlinkHighlightColor = 'white'; 
+
+  if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor)) {
+    effectiveBlinkHighlightColor = 'white'; // Fallback if base is same as highlight
   }
 
   const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -160,7 +162,7 @@ const VenueCustomMapMarker = ({
             className="absolute -top-8 mb-1 px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded-md shadow-lg whitespace-nowrap z-20 animate-pulse"
             style={{ transform: 'translateX(-50%)', left: '50%' }} 
           >
-            Acontecendo Um Evento Agora!!!
+            Acontecendo Agora!
           </div>
         )}
         <div
@@ -240,12 +242,14 @@ const MapContentAndLogic = () => {
   const { toast } = useToast();
   const router = useRouter();
   
-  const [userCheckIns, setUserCheckIns] = useState<Record<string, boolean>>({}); // { eventId: true }
-  const [userRatings, setUserRatings] = useState<Record<string, UserRating>>({}); // { eventId: UserRating }
+  const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
+  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({}); // { eventId: UserRatingData }
 
   const [currentRating, setCurrentRating] = useState(0);
   const [currentComment, setCurrentComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
+
 
   const mapsApi = useMapsLibrary('maps'); 
 
@@ -272,24 +276,23 @@ const MapContentAndLogic = () => {
     if (currentUser) {
       const checkInsRef = collection(firestore, `users/${currentUser.uid}/checkedInEvents`);
       const unsubscribeCheckIns = onSnapshot(checkInsRef, (snapshot) => {
-        const checkInsData: Record<string, boolean> = {};
-        snapshot.docs.forEach(doc => {
-          checkInsData[doc.id] = true; 
+        const checkInsData: Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }> = {};
+        snapshot.docs.forEach(docSnap => {
+          checkInsData[docSnap.id] = docSnap.data() as { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean };
         });
         setUserCheckIns(checkInsData);
       });
       
-      // Listener for user's ratings to update UI if they rate elsewhere or to load existing ratings
       const ratingsQuery = query(collection(firestore, 'eventRatings'), where('userId', '==', currentUser.uid));
       const unsubscribeRatings = onSnapshot(ratingsQuery, (snapshot) => {
-        const ratingsData: Record<string, UserRating> = {};
+        const ratingsData: Record<string, UserRatingData> = {};
         snapshot.docs.forEach(docSnap => {
             const data = docSnap.data();
             ratingsData[data.eventId] = {
                 rating: data.rating,
                 comment: data.comment,
-                createdAt: data.createdAt,
-                userName: data.userName, // Though this is their own rating, good to have consistent structure
+                createdAt: data.createdAt as FirebaseTimestamp,
+                userName: data.userName,
             };
         });
         setUserRatings(ratingsData);
@@ -314,6 +317,7 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
+          // Default to SP if location is denied or fails
           setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
         }
       );
@@ -337,21 +341,12 @@ const MapContentAndLogic = () => {
         
         const venuePromises = partnersSnapshot.docs.map(async (partnerDoc) => {
           const partnerData = partnerDoc.data();
-          let imageUrl;
-          if (partnerData.youtubeUrl) {
-            try {
-                const embedUrl = getYouTubeEmbedUrl(partnerData.youtubeUrl);
-                if (embedUrl) {
-                    const videoId = embedUrl.split('/').pop()?.split('?')[0];
-                    if (videoId) imageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-                }
-            } catch (e) { console.warn("Could not parse YouTube URL for thumbnail: ", partnerData.youtubeUrl); }
-          }
-
+          
           let hasActiveEvent = false;
           let activeEventName: string | null = null;
 
           const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
+          // Query only visible events to determine active status
           const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
           const eventsSnapshot = await getDocs(eventsQuery);
 
@@ -373,8 +368,6 @@ const MapContentAndLogic = () => {
             type: partnerData.venueType as VenueType,
             musicStyles: partnerData.musicStyles || [],
             location: partnerData.location,
-            description: partnerData.venueName || 'Visite este local!', 
-            imageUrl: imageUrl,
             youtubeUrl: partnerData.youtubeUrl,
             instagramUrl: partnerData.instagramUrl,
             facebookUrl: partnerData.facebookUrl,
@@ -399,39 +392,45 @@ const MapContentAndLogic = () => {
   }, []);
 
   const fetchVenueEvents = async (venueId: string) => {
-    if (!selectedVenue || selectedVenue.id !== venueId || selectedVenue.events) return; 
+    if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return; 
     setIsLoadingEvents(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
-      const q = query(eventsCollectionRef, where('visibility', '==', true));
-      // Add listener for real-time event updates (including ratings)
+      const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
+      
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-        } as VenueEvent)).sort((a,b) => a.startDateTime.toMillis() - b.startDateTime.toMillis()); 
+        } as VenueEvent)); 
         
         setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
         setIsLoadingEvents(false); 
       }, (error) => {
         console.error("Error fetching venue events with onSnapshot:", error);
+        toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
         setIsLoadingEvents(false);
       });
-      // Store unsubscribe function to call on cleanup if needed, though sheet closure handles this.
       return unsubscribe; 
     } catch (error) {
       console.error("Error fetching venue events:", error);
+      toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
       setIsLoadingEvents(false);
     }
   };
 
   useEffect(() => {
+    let unsubscribeEvents: (() => void) | undefined;
     if (selectedVenue && !selectedVenue.events) {
-      fetchVenueEvents(selectedVenue.id);
+       fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
-      // If events are already loaded, reset rating form for the selected venue
+      // If events are already loaded, reset rating form for the selected venue/event
+      setCurrentlyRatingEventId(null); 
       setCurrentRating(0);
       setCurrentComment('');
+    }
+    return () => {
+        if (unsubscribeEvents) unsubscribeEvents();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVenue]);
@@ -472,6 +471,7 @@ const MapContentAndLogic = () => {
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
   const displayedVenues = useMemo(() => {
+    // For now, always display all venues. Filtering for blinking happens separately.
     return venues;
   }, [venues]);
 
@@ -500,12 +500,12 @@ const MapContentAndLogic = () => {
         return;
     }
     setIsSubmittingRating(true);
+    setCurrentlyRatingEventId(eventId); 
+
     try {
         const eventDocRef = doc(firestore, `users/${partnerId}/events/${eventId}`);
-        // Store user's rating in a top-level collection for easier querying by eventId later by partner
-        const ratingDocRef = doc(collection(firestore, 'eventRatings'), `${eventId}_${currentUser.uid}`);
+        const ratingDocRef = doc(firestore, 'eventRatings', `${eventId}_${currentUser.uid}`);
         
-        // Update aggregated rating on event document
         await runTransaction(firestore, async (transaction) => {
             const eventSnap = await transaction.get(eventDocRef);
             if (!eventSnap.exists()) throw new Error("Evento não encontrado para atualizar avaliação.");
@@ -514,8 +514,22 @@ const MapContentAndLogic = () => {
             const oldRatingCount = eventData.ratingCount || 0;
             const oldAverageRating = eventData.averageRating || 0;
 
-            const newRatingCount = oldRatingCount + 1;
-            const newAverageRating = ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount;
+            // Check if user has already rated this specific event via this transaction path
+            // This is a safeguard, main check happens via userRatings state
+            const existingRatingSnap = await transaction.get(ratingDocRef);
+            let newRatingCount = oldRatingCount;
+            let newAverageRating = oldAverageRating;
+
+            if (existingRatingSnap.exists()) {
+                 // User is updating their rating
+                const previousUserRating = existingRatingSnap.data()?.rating || 0;
+                newAverageRating = ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount;
+                // ratingCount does not change if user updates rating
+            } else {
+                // New rating
+                newRatingCount = oldRatingCount + 1;
+                newAverageRating = ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount;
+            }
             
             transaction.update(eventDocRef, {
                 averageRating: newAverageRating,
@@ -530,9 +544,8 @@ const MapContentAndLogic = () => {
                 rating: currentRating,
                 comment: currentComment || null,
                 createdAt: serverTimestamp(),
-            });
+            }, { merge: true }); // Use merge true to update if exists or create new
 
-            // Mark as rated in user's personal check-in log
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
             transaction.update(userCheckedInEventRef, { hasRated: true });
         });
@@ -540,7 +553,8 @@ const MapContentAndLogic = () => {
         toast({ title: "Avaliação Enviada!", description: "Obrigado pelo seu feedback!", variant: "default" });
         setCurrentRating(0);
         setCurrentComment('');
-        // UI should update due to onSnapshot listeners
+        setCurrentlyRatingEventId(null);
+        // UI should update due to onSnapshot listeners for both events and userRatings
     } catch (error: any) {
         console.error("Error submitting rating:", error);
         toast({ title: "Erro ao Avaliar", description: error.message || "Não foi possível enviar sua avaliação.", variant: "destructive" });
@@ -555,7 +569,8 @@ const MapContentAndLogic = () => {
   }
 
   if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
-    return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa...</div>;
+    // This indicates an issue with Google Maps API loading, not just the key itself
+    return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
   if (isLoadingVenues) {
@@ -631,70 +646,73 @@ const MapContentAndLogic = () => {
             <Filter className="w-5 h-5" />
           </Button>
         )}
-        <GoogleMap
-          defaultCenter={userLocation}
-          defaultZoom={15}
-          mapId="fervoAppMap"
-          gestureHandling="greedy"
-          disableDefaultUI={true}
-          className="w-full h-full"
-          options={{
-            styles: [ 
-              { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-              { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-              { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-              { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-              { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-              { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
-              { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
-              { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-              { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-              { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
-              { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
-              { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
-              { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
-              { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
-              { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-              { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
-              { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
-              { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
-            ],
-          }}
-        >
-          <MapUpdater center={userLocation} />
-          
-          {mapsApi && userLocation && (
-            <AdvancedMarker
-              position={userLocation}
-              title="Sua Localização"
-            >
-              <UserCustomMapMarker />
-            </AdvancedMarker>
-          )}
-          
-          {mapsApi && displayedVenues.map((venue) => {
-            const isVenueFilteredForBlinking = filteredVenuesForBlinking.some(fv => fv.id === venue.id);
-            
-            return (
-              <AdvancedMarker
-                key={venue.id}
-                position={venue.location}
-                onClick={() => {
-                  setSelectedVenue(venue);
+        {/* Ensure GoogleMap only renders if API Key is valid and mapsApi is loaded to prevent Point error */}
+        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
+            <GoogleMap
+                defaultCenter={userLocation}
+                defaultZoom={15}
+                mapId="fervoAppMap"
+                gestureHandling="greedy"
+                disableDefaultUI={true}
+                className="w-full h-full"
+                options={{
+                styles: [ 
+                    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+                    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+                    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+                    { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
+                    { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+                    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+                    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+                    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+                    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+                    { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
+                    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
+                    { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+                    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
+                    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
+                    { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
+                ],
                 }}
-                title={venue.name}
-                zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1} 
-              >
-                <VenueCustomMapMarker 
-                  type={venue.type} 
-                  venueName={venue.name} 
-                  isFilterActive={isVenueFilteredForBlinking}
-                  hasActiveEvent={venue.hasActiveEvent}
-                />
-              </AdvancedMarker>
-            );
-          })}
-        </GoogleMap>
+            >
+                <MapUpdater center={userLocation} />
+                
+                {userLocation && (
+                    <AdvancedMarker position={userLocation} title="Sua Localização">
+                        <UserCustomMapMarker />
+                    </AdvancedMarker>
+                )}
+                
+                {displayedVenues.map((venue) => {
+                    const isVenueFilteredForBlinking = filteredVenuesForBlinking.some(fv => fv.id === venue.id);
+                    
+                    return (
+                    <AdvancedMarker
+                        key={venue.id}
+                        position={venue.location}
+                        onClick={() => { setSelectedVenue(venue); }}
+                        title={venue.name}
+                        zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1} 
+                    >
+                        <VenueCustomMapMarker 
+                            type={venue.type} 
+                            venueName={venue.name} 
+                            isFilterActive={isVenueFilteredForBlinking}
+                            hasActiveEvent={venue.hasActiveEvent}
+                        />
+                    </AdvancedMarker>
+                    );
+                })}
+            </GoogleMap>
+        )}
+        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE") && (
+             <div className="flex items-center justify-center h-full bg-background text-destructive">
+                API Key do Google Maps não configurada ou inválida.
+            </div>
+        )}
       </div>
 
       {selectedVenue && (
@@ -797,8 +815,9 @@ const MapContentAndLogic = () => {
                       <div className="space-y-3">
                         {selectedVenue.events.map(event => {
                           const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
-                          const userHasCheckedIn = !!userCheckIns[event.id];
-                          const userHasRated = !!userRatings[event.id];
+                          const userCheckedInData = userCheckIns[event.id];
+                          const userHasCheckedIn = !!userCheckedInData;
+                          const userHasRated = userHasCheckedIn && !!userCheckedInData.hasRated;
                           const existingRatingForEvent = userRatings[event.id];
 
                           return (
@@ -818,8 +837,13 @@ const MapContentAndLogic = () => {
                                           size="icon" 
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
                                           onClick={() => {
-                                            router.push(`/shared-event/${selectedVenue.id}/${event.id}`);
-                                            toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins! (Recurso em breve)", duration: 4000, variant: "default"});
+                                            const shareUrl = `${window.location.origin}/shared-event/${selectedVenue.id}/${event.id}`;
+                                            navigator.clipboard.writeText(shareUrl).then(() => {
+                                                toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins! (Recurso em breve)", duration: 4000, variant: "default"});
+                                            }).catch(err => {
+                                                console.error('Failed to copy: ', err);
+                                                toast({ title: "Erro ao Copiar", description: "Não foi possível copiar o link.", variant: "destructive"});
+                                            });
                                           }}
                                           title="Compartilhar evento"
                                       >
@@ -862,21 +886,31 @@ const MapContentAndLogic = () => {
                               {currentUser && userHasCheckedIn && !userHasRated && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
                                   <h4 className="text-sm font-semibold text-primary mb-1.5">Avalie este evento:</h4>
-                                  <StarRating rating={currentRating} setRating={setCurrentRating} />
+                                  <StarRating rating={currentlyRatingEventId === event.id ? currentRating : 0} setRating={setCurrentRating} />
                                   <Textarea 
                                     placeholder="Deixe um comentário (opcional)..."
-                                    value={currentComment}
-                                    onChange={(e) => setCurrentComment(e.target.value)}
+                                    value={currentlyRatingEventId === event.id ? currentComment : ''}
+                                    onChange={(e) => {
+                                      setCurrentlyRatingEventId(event.id); // Ensure we are editing the right event's comment
+                                      setCurrentComment(e.target.value);
+                                    }}
                                     className="mt-2 text-xs"
                                     rows={2}
                                   />
                                   <Button 
                                     size="sm" 
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
-                                    onClick={() => handleRateEvent(event.id, selectedVenue.id)}
-                                    disabled={isSubmittingRating || currentRating === 0}
+                                    onClick={() => {
+                                        if(currentlyRatingEventId !== event.id) { // if user starts rating another event
+                                            setCurrentRating(0);
+                                            setCurrentComment('');
+                                        }
+                                        setCurrentlyRatingEventId(event.id);
+                                        handleRateEvent(event.id, selectedVenue.id)
+                                    }}
+                                    disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
                                   >
-                                    {isSubmittingRating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                                    {(isSubmittingRating && currentlyRatingEventId === event.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                                     Enviar Avaliação
                                   </Button>
                                 </div>
@@ -960,7 +994,7 @@ const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
 
   if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
-    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações em next.config.ts (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
+    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
     <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic" libraries={['marker', 'maps']}>
@@ -970,4 +1004,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-

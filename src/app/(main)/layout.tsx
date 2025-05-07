@@ -28,7 +28,7 @@ interface AppUser {
   name: string;
   email: string | null;
   role: UserRole | null;
-  uid: string; // Add UID for check-in
+  uid: string; 
   // photoURL removed
 }
 
