@@ -5,6 +5,7 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation'; // Added useRouter
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2 } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -197,6 +198,7 @@ const MapContentAndLogic = () => {
   const [isLoadingVenues, setIsLoadingVenues] = useState(true);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
 
   const mapsApi = useMapsLibrary('maps'); 
@@ -601,7 +603,10 @@ const MapContentAndLogic = () => {
                                         variant="ghost" 
                                         size="icon" 
                                         className="text-accent hover:text-accent/80 -mr-2 -mt-1"
-                                        onClick={() => toast({ title: "Compartilhe e Ganhe!", description: `Compartilhe ${event.eventName} e ganhe 2 FervoCoins! (Recurso em breve)`, duration: 4000, variant: "default"})}
+                                        onClick={() => {
+                                          router.push(`/shared-event/${selectedVenue.id}/${event.id}`);
+                                          toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins! (Recurso em breve)", duration: 4000, variant: "default"});
+                                        }}
                                         title="Compartilhar evento"
                                     >
                                         <Share2 className="w-5 h-5" />
@@ -712,6 +717,7 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
 
 
 
