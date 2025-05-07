@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, getDoc, arrayUnion, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, arrayUnion, serverTimestamp, collection, addDoc, setDoc } from 'firebase/firestore'; // Added setDoc
 import { firestore } from '@/lib/firebase';
 import { Loader2, XCircle, CheckCircle2 } from 'lucide-react';
 
@@ -142,25 +142,24 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
          return;
       }
       
-      // 3. Record check-in
-      const checkInCollectionRef = collection(firestore, `users/${parsedData.partnerId}/events/${parsedData.eventId}/checkIns`);
+      // 3. Record check-in for the partner
       // Store the check-in document with the user's ID as the document ID for easy lookup.
-      const userCheckInSpecificDocRef = doc(checkInCollectionRef, userId);
-      await updateDoc(userCheckInSpecificDocRef, {
+      await setDoc(checkInDocRef, {
         userId: userId,
         checkedInAt: serverTimestamp(),
         eventId: parsedData.eventId,
         partnerId: parsedData.partnerId,
-      }, { merge: true }); // Use merge: true to create if not exists, or update if it somehow does
+        eventName: eventData.eventName, // Store event name for partner convenience
+      });
       
-      // Optionally, add this event to a user's personal list of checked-in events
+      // 4. Record check-in for the user (in their own collection)
       const userEventsRef = doc(firestore, `users/${userId}/checkedInEvents/${parsedData.eventId}`);
-      await updateDoc(userEventsRef, {
+      await setDoc(userEventsRef, {
           eventId: parsedData.eventId,
           partnerId: parsedData.partnerId,
-          eventName: eventData.eventName, // Store event name for easier display
+          eventName: eventData.eventName, 
           checkedInAt: serverTimestamp()
-      }, { merge: true });
+      });
 
 
       setProcessingResult({success: true, message: `Check-in realizado com sucesso no evento: ${eventData.eventName}!`});
