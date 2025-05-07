@@ -9,8 +9,8 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { format, parse } from 'date-fns';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
@@ -26,8 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft } from 'lucide-react';
-import { Timestamp } from 'firebase/firestore';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 
@@ -46,6 +45,7 @@ const eventFormSchema = z.object({
   pricingValue: z.coerce.number().positive({ message: 'Valor deve ser positivo.' }).optional(),
   description: z.string().max(500, { message: 'Descrição muito longa (máx. 500 caracteres).' }).optional(),
   visibility: z.boolean().default(true),
+  // checkInToken is not part of form input, generated on save
 }).refine(data => {
     if (data.pricingType !== PricingType.FREE && (data.pricingValue === undefined || data.pricingValue <= 0)) {
         return false;
@@ -67,7 +67,7 @@ const eventFormSchema = z.object({
     return endDateTime > startDateTime;
 }, {
     message: 'A data/hora de fim deve ser posterior à data/hora de início.',
-    path: ['endDate'], // Or a more general path
+    path: ['endDate'], 
 });
 
 
@@ -79,6 +79,8 @@ interface EventDocument extends EventFormInputs {
   startDateTime: Timestamp;
   endDateTime: Timestamp;
   createdAt: Timestamp;
+  updatedAt?: Timestamp;
+  checkInToken?: string; 
 }
 
 const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
@@ -97,14 +99,14 @@ const ManageEventsPage: NextPage = () => {
   const [partnerEvents, setPartnerEvents] = useState<EventDocument[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { errors, isSubmitting }, watch, reset, setValue } = useForm<EventFormInputs>({
+  const { control, handleSubmit, formState: { errors, isSubmitting }, watch, reset } = useForm<EventFormInputs>({
     resolver: zodResolver(eventFormSchema),
     defaultValues: {
       eventName: '',
       startDate: new Date(),
       startTime: format(new Date(), 'HH:mm'),
       endDate: new Date(),
-      endTime: format(new Date(new Date().getTime() + 60 * 60 * 1000), 'HH:mm'), // 1 hour later
+      endTime: format(new Date(new Date().getTime() + 60 * 60 * 1000 * 2), 'HH:mm'), // 2 hours later
       musicStyles: [],
       pricingType: PricingType.FREE,
       pricingValue: undefined,
@@ -120,12 +122,12 @@ const ManageEventsPage: NextPage = () => {
     setLoading(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', userId, 'events');
-      const q = query(eventsCollectionRef); // Order by creation or start date if needed
+      const q = query(eventsCollectionRef); 
       const snapshot = await getDocs(q);
       const eventsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-      } as EventDocument)).sort((a,b) => b.createdAt.toMillis() - a.createdAt.toMillis()); // Sort by most recent first
+      } as EventDocument)).sort((a,b) => b.createdAt.toMillis() - a.createdAt.toMillis());
       setPartnerEvents(eventsData);
     } catch (error) {
       console.error("Error fetching events:", error);
@@ -162,7 +164,7 @@ const ManageEventsPage: NextPage = () => {
 
     const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
 
-    if (!editingEventId) { // Creating new event
+    if (!editingEventId) { 
         const visibleEventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
         const visibleEventsSnapshot = await getDocs(visibleEventsQuery);
         if (visibleEventsSnapshot.size >= 5 && data.visibility) {
@@ -176,33 +178,41 @@ const ManageEventsPage: NextPage = () => {
         }
     }
 
+    const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
+    // Generate checkInToken if it's a new event or if an existing event doesn't have one.
+    // Normally, an existing event should retain its token unless explicitly regenerated.
+    const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10);
 
-    const eventPayload = {
+
+    const eventPayload: Omit<EventDocument, 'id' | 'createdAt'> & { createdAt?: Timestamp } = {
       partnerId: currentUser.uid,
       eventName: data.eventName,
       startDateTime: combineDateAndTime(data.startDate, data.startTime),
       endDateTime: combineDateAndTime(data.endDate, data.endTime),
       musicStyles: data.musicStyles || [],
       pricingType: data.pricingType,
-      pricingValue: data.pricingType === PricingType.FREE ? null : data.pricingValue,
+      pricingValue: data.pricingType === PricingType.FREE ? undefined : data.pricingValue, // Store undefined for Firestore
       description: data.description || '',
       visibility: data.visibility,
-      createdAt: editingEventId ? partnerEvents.find(e=>e.id === editingEventId)?.createdAt : serverTimestamp(),
+      checkInToken: checkInToken,
       updatedAt: serverTimestamp(),
     };
 
     try {
       if (editingEventId) {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', editingEventId);
+        // Retain original createdAt if editing
+        eventPayload.createdAt = existingEvent?.createdAt;
         await updateDoc(eventDocRef, eventPayload);
         toast({ title: "Evento Atualizado!", description: "O evento foi atualizado com sucesso." });
       } else {
-        await addDoc(eventsCollectionRef, eventPayload);
+        eventPayload.createdAt = serverTimestamp();
+        await addDoc(eventsCollectionRef, eventPayload as EventDocument); // Cast needed due to optional createdAt
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
-      reset(); // Reset form to default values
+      reset(); 
       setEditingEventId(null);
-      fetchEvents(currentUser.uid); // Refresh list
+      fetchEvents(currentUser.uid); 
     } catch (error) {
       console.error("Error saving event:", error);
       toast({ title: "Erro ao Salvar Evento", description: "Não foi possível salvar o evento.", variant: "destructive" });
@@ -248,15 +258,14 @@ const ManageEventsPage: NextPage = () => {
 
     const newVisibility = !event.visibility;
 
-    if (newVisibility) { // Trying to make it visible
+    if (newVisibility) { 
         const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
         const visibleEventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
         const visibleEventsSnapshot = await getDocs(visibleEventsQuery);
         
-        // Count visible events, excluding the current one if it's already in the list and about to be toggled
         let visibleCount = 0;
         visibleEventsSnapshot.docs.forEach(doc => {
-            if (doc.id !== event.id) { // Don't count itself if it was previously visible
+            if (doc.id !== event.id) { 
                 visibleCount++;
             }
         });
@@ -285,7 +294,7 @@ const ManageEventsPage: NextPage = () => {
   };
 
 
-  if (loading && !currentUser) { // Show loading only if user is not yet determined
+  if (loading && !currentUser) { 
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto">
         <p className="text-xl text-destructive animate-pulse">Carregando...</p>
@@ -315,14 +324,12 @@ const ManageEventsPage: NextPage = () => {
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              {/* Event Name */}
               <div className="md:col-span-2">
                 <Label htmlFor="eventName" className="text-destructive/90">Nome do Evento</Label>
                 <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-red-500' : ''} />} />
                 {errors.eventName && <p className="mt-1 text-sm text-red-500">{errors.eventName.message}</p>}
               </div>
 
-              {/* Start Date & Time */}
               <div>
                 <Label htmlFor="startDate" className="text-destructive/90">Data de Início</Label>
                 <Controller name="startDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.startDate ? 'border-red-500' : ''} />} />
@@ -334,7 +341,6 @@ const ManageEventsPage: NextPage = () => {
                 {errors.startTime && <p className="mt-1 text-sm text-red-500">{errors.startTime.message}</p>}
               </div>
 
-              {/* End Date & Time */}
               <div>
                 <Label htmlFor="endDate" className="text-destructive/90">Data de Fim</Label>
                 <Controller name="endDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.endDate ? 'border-red-500' : ''} />} />
@@ -346,7 +352,6 @@ const ManageEventsPage: NextPage = () => {
                 {errors.endTime && <p className="mt-1 text-sm text-red-500">{errors.endTime.message}</p>}
               </div>
               
-              {/* Music Styles */}
               <div className="md:col-span-2">
                 <Label className="text-destructive/90">Estilos Musicais (Máx. 4)</Label>
                 <ScrollArea className="h-32 p-2 border rounded-md border-input">
@@ -386,7 +391,6 @@ const ManageEventsPage: NextPage = () => {
                 {errors.musicStyles && <p className="mt-1 text-sm text-red-500">{errors.musicStyles.message}</p>}
               </div>
 
-              {/* Pricing */}
               <div>
                 <Label htmlFor="pricingType" className="text-destructive/90">Tipo de Preço</Label>
                 <Controller
@@ -416,14 +420,12 @@ const ManageEventsPage: NextPage = () => {
                 </div>
               )}
               
-              {/* Description */}
               <div className="md:col-span-2">
                 <Label htmlFor="description" className="text-destructive/90">Descrição do Evento (Opcional)</Label>
                 <Controller name="description" control={control} render={({ field }) => <Textarea id="description" placeholder="Detalhes sobre o evento, atrações, etc." {...field} className={errors.description ? 'border-red-500' : ''} />} />
                 {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description.message}</p>}
               </div>
 
-              {/* Visibility */}
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Controller name="visibility" control={control} render={({ field }) => <Switch id="visibility" checked={field.value} onCheckedChange={field.onChange} />} />
                 <Label htmlFor="visibility" className="text-destructive/90">Visível para usuários?</Label>
@@ -444,7 +446,6 @@ const ManageEventsPage: NextPage = () => {
         </form>
       </Card>
 
-      {/* Events List */}
       <Card className="border-destructive/50 shadow-lg shadow-destructive/15">
         <CardHeader>
           <CardTitle className="text-2xl text-destructive flex items-center">
@@ -478,10 +479,10 @@ const ManageEventsPage: NextPage = () => {
                         </p>
                         <p className="text-sm text-muted-foreground">
                             Preço: {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
-                            {event.pricingType !== PricingType.FREE && event.pricingValue ? ` (R$ ${event.pricingValue.toFixed(2)})` : ''}
+                            {event.pricingType !== PricingType.FREE && event.pricingValue ? ` (R$ ${Number(event.pricingValue).toFixed(2)})` : ''}
                         </p>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1 flex-wrap sm:flex-nowrap">
                         <Button variant="ghost" size="icon" onClick={() => toggleEventVisibility(event)} title={event.visibility ? "Ocultar evento" : "Tornar evento visível"}>
                           {event.visibility ? <Eye className="w-5 h-5 text-green-500" /> : <EyeOff className="w-5 h-5 text-gray-500" />}
                         </Button>
@@ -500,6 +501,27 @@ const ManageEventsPage: NextPage = () => {
                             {event.musicStyles.map(style => MUSIC_STYLE_OPTIONS.find(s => s.value === style)?.label).join(', ')}
                         </div>
                     )}
+                    {event.checkInToken && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <QrCode className="w-5 h-5 text-destructive" />
+                        <Input 
+                          type="text" 
+                          readOnly 
+                          value={event.checkInToken} 
+                          className="text-xs flex-1 bg-muted/50 border-dashed"
+                          onClick={(e) => {
+                            (e.target as HTMLInputElement).select();
+                            navigator.clipboard.writeText(event.checkInToken || "");
+                            toast({ title: "Token Copiado!", description: "Token de Check-in copiado para a área de transferência." });
+                          }}
+                        />
+                         <Button size="sm" variant="outline" className="text-xs border-destructive text-destructive hover:bg-destructive/10"
+                          onClick={() => router.push(`/partner/qr-code/${event.id}`)}
+                         >
+                           Ver QR Code
+                         </Button>
+                      </div>
+                    )}
                   </Card>
                 )})}
               </div>
@@ -512,4 +534,3 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
-

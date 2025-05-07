@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/constants';
@@ -21,12 +21,14 @@ import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
+import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 
 
 interface AppUser {
   name: string;
   email: string | null;
   role: UserRole | null;
+  uid: string; // Add UID for check-in
   // photoURL removed
 }
 
@@ -60,6 +62,7 @@ const useAuth = () => {
         }
         
         setAppUser({
+          uid: firebaseUser.uid,
           name: userName,
           email: firebaseUser.email,
           role: userRole,
@@ -87,11 +90,12 @@ export default function MainAppLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       // Redirect to login if user is not authenticated and not already on a public/auth page.
-      const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire'];
+      const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
       const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
       
       if (!isAllowedPath) {
@@ -120,10 +124,8 @@ export default function MainAppLayout({
     );
   }
 
-  // If still loading or user is null and redirection is about to happen, show loading/redirecting.
-  // The useEffect above will handle the actual redirection.
   if (!user) {
-     const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire'];
+     const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
      const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
      if (!isAllowedPath) {
         return (
@@ -132,16 +134,8 @@ export default function MainAppLayout({
           </div>
         );
      }
-     // If it's an allowed unauthenticated path, we might still render children if the page handles it.
-     // However, for a protected layout, it's typical to only render children if user exists.
-     // For this case, if user is null but on an allowed path like /login, the children of THIS layout won't be rendered.
-     // Login page itself is not part of this layout's children.
-     // This part of the condition might need adjustment based on how public routes are structured relative to this layout.
-     // For now, if !user, we assume children dependent on user context shouldn't render, and redirection or loading message is shown.
   }
   
-  // Determine active color based on role
-  // Ensure user object exists before trying to access user.role
   const activeColorClass = user?.role === UserRole.PARTNER ? 'text-destructive' : 'text-primary';
   const activeBorderColorClass = user?.role === UserRole.PARTNER ? 'border-destructive' : 'border-primary';
 
@@ -159,6 +153,10 @@ export default function MainAppLayout({
                     <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
                   </Button>
                 </Link>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => setIsQrScannerOpen(true)} title="Check-in com QR Code">
+                  <ScanLine className="w-5 h-5" />
+                  <span className="sr-only">Check-in QR Code</span>
+                </Button>
                 <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Notificações", description: "Aqui ficaram as notificações ativadas pelo usuário. Se não tiver nenhuma, mostre Nada Por aqui Ainda.", variant: "default"})}>
                   <Bell className="w-5 h-5" />
                   <span className="sr-only">Notificações</span>
@@ -180,11 +178,10 @@ export default function MainAppLayout({
                 </Button>
               </Link>
             )}
-            {user && ( // Ensure user exists before rendering dropdown trigger
+            {user && ( 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
-                  {/* Replaced Avatar with simple text or icon */}
                   {user?.name ? (
                     <span className={`text-lg font-semibold ${activeColorClass}`}>
                       {user.name.charAt(0).toUpperCase()}
@@ -218,7 +215,7 @@ export default function MainAppLayout({
                 )}
                  {user?.role === UserRole.PARTNER && (
                   <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
-                    <Settings className="w-4 h-4 mr-2" /> {/* Changed icon to Settings */}
+                    <Settings className="w-4 h-4 mr-2" /> 
                     Configurações da Conta
                   </DropdownMenuItem>
                 )}
@@ -233,9 +230,14 @@ export default function MainAppLayout({
           </nav>
         </div>
       </header>
-      <main className="flex-1">{user ? children : null}</main> {/* Only render children if user is authenticated */}
+      <main className="flex-1">{user ? children : null}</main>
+      {user && user.role === UserRole.USER && user.uid && (
+        <QrScannerModal 
+          isOpen={isQrScannerOpen} 
+          onClose={() => setIsQrScannerOpen(false)}
+          userId={user.uid}
+        />
+      )}
     </div>
   );
 }
-
-
