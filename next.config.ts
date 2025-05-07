@@ -16,8 +16,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      // Add other image domains if needed, e.g., for user-uploaded content
     ],
   },
+  env: {
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc",
+  }
 };
 
 export default nextConfig;
