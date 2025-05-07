@@ -56,9 +56,6 @@ export function LoginForm() {
   const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
     loginMethods.formState.isSubmitting;
     try {
-      // Simulate API call for login if needed, or directly use Firebase
-      // await new Promise((resolve) => setTimeout(resolve, 1000));
-      
       await signInWithEmailAndPassword(auth, data.email, data.password);
 
       toast({
@@ -93,22 +90,27 @@ export function LoginForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
-      // Store additional user info in Firestore
       await setDoc(doc(firestore, "users", user.uid), {
         uid: user.uid,
         name: data.name,
         email: data.email,
-        role: activeRole, // UserRole.USER or UserRole.PARTNER
+        role: activeRole,
         createdAt: new Date(),
       });
       
       toast({
         title: "Conta Criada com Sucesso!",
-        description: "Você já pode fazer login com suas novas credenciais.",
+        description: "Quase lá! Conte-nos um pouco mais sobre você.",
         variant: "default",
       });
       signupMethods.reset();
-      setFormMode('login'); // Switch to login form
+      
+      if (activeRole === UserRole.USER) {
+        router.push('/questionnaire'); // Redirect to questionnaire for new users
+      } else { // For partners, redirect to dashboard
+        router.push('/partner/dashboard');
+      }
+
     } catch (error: any) {
       console.error('Signup error:', error);
       let errorMessage = "Falha ao criar conta. Tente novamente.";
@@ -133,7 +135,7 @@ export function LoginForm() {
     ? 'bg-primary hover:bg-primary/90 text-primary-foreground' 
     : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground';
 
-  const commonLabelStyle = activeRole === UserRole.PARTNER ? "text-destructive/80" : "";
+  const commonLabelStyle = activeRole === UserRole.PARTNER ? "text-destructive/80" : "text-primary/80";
   const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive";
 
   return (
