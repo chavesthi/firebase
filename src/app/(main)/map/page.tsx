@@ -62,7 +62,9 @@ interface Venue {
   youtubeUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
-  events?: VenueEvent[]; // Loaded dynamically
+  events?: VenueEvent[]; // Loaded dynamically on selection
+  hasActiveEvent?: boolean; // For map marker badge
+  activeEventName?: string | null; // Name of one active event (optional for badge text)
 }
 
 
@@ -106,16 +108,25 @@ const MapUpdater = ({ center }: { center: Location }) => {
 };
 
 // Custom marker component for venues
-const VenueCustomMapMarker = ({ type, venueName, isFilterActive }: { type: VenueType, venueName: string, isFilterActive: boolean }) => {
+const VenueCustomMapMarker = ({ 
+  type, 
+  venueName, 
+  isFilterActive,
+  hasActiveEvent 
+}: { 
+  type: VenueType, 
+  venueName: string, 
+  isFilterActive: boolean,
+  hasActiveEvent?: boolean 
+}) => {
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
   
   let effectiveBlinkHighlightColor = '#FACC15'; // Default: Tailwind yellow-400 for blinking
-  // Sanitize hex comparison by ensuring consistent casing and removing #
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   if (normalizeHex(basePinColor) === normalizeHex(effectiveBlinkHighlightColor)) {
-    effectiveBlinkHighlightColor = 'white'; // Fallback to white if basePinColor is already yellow-400
+    effectiveBlinkHighlightColor = 'white'; 
   }
 
   const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -131,10 +142,18 @@ const VenueCustomMapMarker = ({ type, venueName, isFilterActive }: { type: Venue
           }
         `}</style>
       )}
-      <div className="flex flex-col items-center cursor-pointer" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
+      <div className="flex flex-col items-center cursor-pointer relative" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
+        {hasActiveEvent && (
+          <div 
+            className="absolute -top-8 mb-1 px-2 py-1 text-xs font-semibold text-white bg-red-600 rounded-md shadow-lg whitespace-nowrap z-20"
+            style={{ transform: 'translateX(-50%)', left: '50%' }} // Center above the marker
+          >
+            Acontecendo Um Evento Agora!!!
+          </div>
+        )}
         <div
           className={cn(
-            "flex items-center justify-center w-10 h-10 rounded-full",
+            "flex items-center justify-center w-10 h-10 rounded-full z-10", // Ensure icon is above triangle
             isFilterActive ? 'shadow-xl' : 'shadow-lg', 
           )}
           style={{ 
@@ -158,7 +177,7 @@ const UserCustomMapMarker = () => {
   return (
     <div className="flex flex-col items-center" title="Sua Localização" style={{ transform: 'translate(-50%, -100%)' }}>
       <div
-        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" // Using a distinct color for user
+        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" 
       >
         <UserIconLucide className="w-5 h-5 text-white" />
       </div>
@@ -236,40 +255,64 @@ const MapContentAndLogic = () => {
       setIsLoadingVenues(true);
       try {
         const usersCollectionRef = collection(firestore, 'users');
-        const q = query(
+        const qPartners = query(
           usersCollectionRef,
           where('role', '==', UserRole.PARTNER),
           where('questionnaireCompleted', '==', true)
         );
-        const querySnapshot = await getDocs(q);
-        const fetchedVenues: Venue[] = querySnapshot.docs.map(doc => {
-          const data = doc.data();
+        const partnersSnapshot = await getDocs(qPartners);
+        
+        const venuePromises = partnersSnapshot.docs.map(async (partnerDoc) => {
+          const partnerData = partnerDoc.data();
           let imageUrl;
-          if (data.youtubeUrl) {
+          if (partnerData.youtubeUrl) {
             try {
-                const embedUrl = getYouTubeEmbedUrl(data.youtubeUrl);
+                const embedUrl = getYouTubeEmbedUrl(partnerData.youtubeUrl);
                 if (embedUrl) {
                     const videoId = embedUrl.split('/').pop()?.split('?')[0];
                     if (videoId) imageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
                 }
-            } catch (e) {
-                console.warn("Could not parse YouTube URL for thumbnail: ", data.youtubeUrl);
+            } catch (e) { console.warn("Could not parse YouTube URL for thumbnail: ", partnerData.youtubeUrl); }
+          }
+
+          let hasActiveEvent = false;
+          let activeEventName: string | null = null;
+
+          const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
+          const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
+          const eventsSnapshot = await getDocs(eventsQuery);
+
+          if (!eventsSnapshot.empty) {
+            for (const eventDoc of eventsSnapshot.docs) {
+              const eventData = eventDoc.data();
+              if (eventData.startDateTime && eventData.endDateTime && 
+                  isEventHappeningNow(eventData.startDateTime as FirebaseTimestamp, eventData.endDateTime as FirebaseTimestamp)) {
+                hasActiveEvent = true;
+                activeEventName = eventData.eventName as string;
+                break; 
+              }
             }
           }
 
           return {
-            id: doc.id, // This is the partner's user ID
-            name: data.venueName || 'Nome Indisponível',
-            type: data.venueType as VenueType,
-            musicStyles: data.musicStyles || [],
-            location: data.location,
-            description: data.venueName || 'Visite este local!', 
+            id: partnerDoc.id,
+            name: partnerData.venueName || 'Nome Indisponível',
+            type: partnerData.venueType as VenueType,
+            musicStyles: partnerData.musicStyles || [],
+            location: partnerData.location,
+            description: partnerData.venueName || 'Visite este local!', 
             imageUrl: imageUrl,
-            youtubeUrl: data.youtubeUrl,
-            instagramUrl: data.instagramUrl,
-            facebookUrl: data.facebookUrl,
+            youtubeUrl: partnerData.youtubeUrl,
+            instagramUrl: partnerData.instagramUrl,
+            facebookUrl: partnerData.facebookUrl,
+            hasActiveEvent,
+            activeEventName,
           };
-        }).filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
+        });
+
+        const fetchedVenues = (await Promise.all(venuePromises))
+          .filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
+        
         setVenues(fetchedVenues);
       } catch (error) {
         console.error("Error fetching venues:", error);
@@ -282,16 +325,16 @@ const MapContentAndLogic = () => {
   }, []);
 
   const fetchVenueEvents = async (venueId: string) => {
-    if (!selectedVenue || selectedVenue.id !== venueId || selectedVenue.events) return; // Already fetched or different venue
+    if (!selectedVenue || selectedVenue.id !== venueId || selectedVenue.events) return; 
     setIsLoadingEvents(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
-      const q = query(eventsCollectionRef, where('visibility', '==', true)); // Only fetch visible events
+      const q = query(eventsCollectionRef, where('visibility', '==', true));
       const snapshot = await getDocs(q);
       const eventsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-      } as VenueEvent)).sort((a,b) => a.startDateTime.toMillis() - b.startDateTime.toMillis()); // Sort by upcoming
+      } as VenueEvent)).sort((a,b) => a.startDateTime.toMillis() - b.startDateTime.toMillis()); 
       
       setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
     } catch (error) {
@@ -386,7 +429,7 @@ const MapContentAndLogic = () => {
       {/* Filter Sidebar */}
       <Card 
         className={cn(
-          "absolute z-10 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
+          "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
           filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'
         )}
       >
@@ -498,9 +541,14 @@ const MapContentAndLogic = () => {
                   setSelectedVenue(venue);
                 }}
                 title={venue.name}
-                zIndex={isVenueFilteredForBlinking ? 100 : 1} 
+                zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1} 
               >
-                <VenueCustomMapMarker type={venue.type} venueName={venue.name} isFilterActive={isVenueFilteredForBlinking} />
+                <VenueCustomMapMarker 
+                  type={venue.type} 
+                  venueName={venue.name} 
+                  isFilterActive={isVenueFilteredForBlinking}
+                  hasActiveEvent={venue.hasActiveEvent}
+                />
               </AdvancedMarker>
             );
           })}
@@ -727,6 +775,7 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
 
 
 
