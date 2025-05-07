@@ -1,17 +1,17 @@
 
 'use client';
 
-import { APIProvider, Map as GoogleMap, Marker, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
-import { Filter, X, Music2, Loader2, CalendarClock, Map as MapIcon, Navigation2, Car, Navigation as NavigationIcon } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle as FilterCardTitle } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
+import { Card, CardContent, CardHeader, CardTitle as UICardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -102,14 +102,10 @@ const MapUpdater = ({ center }: { center: Location }) => {
 };
 
 // Custom marker component for venues
-const VenueCustomMapMarker = ({ type, venueName, mapsApi }: { type: VenueType, venueName: string, mapsApi: typeof google.maps | null }) => {
+const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName: string }) => {
   const IconComponent = venueTypeIcons[type];
   const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
   
-  // Use mapsApi to create Point for anchor if needed by AdvancedMarker or custom logic,
-  // but for simple div transform, it's not directly used in this component's rendering.
-  // The anchor point for AdvancedMarker is set directly on it.
-
   return (
     <div className="flex flex-col items-center cursor-pointer" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
       <div
@@ -125,6 +121,23 @@ const VenueCustomMapMarker = ({ type, venueName, mapsApi }: { type: VenueType, v
     </div>
   );
 };
+
+// Custom marker component for user location
+const UserCustomMapMarker = () => {
+  return (
+    <div className="flex flex-col items-center" title="Sua Localização" style={{ transform: 'translate(-50%, -100%)' }}>
+      <div
+        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" // Using a distinct color for user
+      >
+        <UserIconLucide className="w-5 h-5 text-white" />
+      </div>
+      <div
+        className="w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-t-[9px] border-t-blue-500"
+      />
+    </div>
+  );
+};
+
 
 const getYouTubeEmbedUrl = (url?: string): string | null => {
   if (!url) return null;
@@ -316,7 +329,7 @@ const MapContentAndLogic = () => {
         className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <FilterCardTitle className="text-lg text-primary">Filtrar Locais</FilterCardTitle>
+          <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
@@ -402,30 +415,27 @@ const MapContentAndLogic = () => {
           }}
         >
           <MapUpdater center={userLocation} />
-          <Marker position={userLocation} title="Sua Localização" />
+          
+          {mapsApi && userLocation && (
+            <AdvancedMarker
+              position={userLocation}
+              title="Sua Localização"
+            >
+              <UserCustomMapMarker />
+            </AdvancedMarker>
+          )}
           
           {mapsApi && filteredVenues.map((venue) => {
-            // Ensure mapsApi.Point is available before using.
-            // For AdvancedMarker, the anchor is typically handled internally or via different props.
-            // If VenueCustomMapMarker needed a mapsApi.Point for complex logic, it would be passed there.
-            // The current VenueCustomMapMarker uses CSS transform, so it doesn't strictly need google.maps.Point.
-
             return (
               <AdvancedMarker
                 key={venue.id}
                 position={venue.location}
                 onClick={() => {
                   setSelectedVenue(venue);
-                  // Event fetching will be triggered by useEffect watching selectedVenue
                 }}
                 title={venue.name}
-                // The `AdvancedMarker` component from `@vis.gl/react-google-maps`
-                // might not directly use `anchor` in the same way as a raw Google Maps Marker's Icon object.
-                // It often simplifies marker creation. If specific anchor adjustments are needed,
-                // it might involve custom rendering within AdvancedMarker or ensuring its API supports it.
-                // For now, we rely on the default anchor or the CSS transform in VenueCustomMapMarker.
               >
-                <VenueCustomMapMarker type={venue.type} venueName={venue.name} mapsApi={mapsApi} />
+                <VenueCustomMapMarker type={venue.type} venueName={venue.name} />
               </AdvancedMarker>
             );
           })}
@@ -492,7 +502,7 @@ const MapContentAndLogic = () => {
                       <div className="space-y-3">
                         {selectedVenue.events.map(event => (
                           <Card key={event.id} className="p-3 bg-card/50 border-border/50">
-                            <FilterCardTitle className="text-md text-secondary mb-1">{event.eventName}</FilterCardTitle>
+                            <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
                             <p className="text-xs text-muted-foreground flex items-center">
                               <CalendarClock className="w-3 h-3 mr-1.5"/>
                               {format(event.startDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })}
@@ -531,7 +541,7 @@ const MapContentAndLogic = () => {
                               window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
                             }}
                           >
-                            <MapIcon className="w-4 h-4 mr-2 text-primary" /> Google Maps
+                            <MapPin className="w-4 h-4 mr-2 text-primary" /> Google Maps
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
