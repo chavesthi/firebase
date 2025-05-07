@@ -6,7 +6,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation'; // Added useRouter
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -62,6 +62,7 @@ interface Venue {
   youtubeUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
+  whatsappPhone?: string; // Added WhatsApp phone number
   events?: VenueEvent[]; // Loaded dynamically on selection
   hasActiveEvent?: boolean; // For map marker badge
   activeEventName?: string | null; // Name of one active event (optional for badge text)
@@ -305,6 +306,7 @@ const MapContentAndLogic = () => {
             youtubeUrl: partnerData.youtubeUrl,
             instagramUrl: partnerData.instagramUrl,
             facebookUrl: partnerData.facebookUrl,
+            whatsappPhone: partnerData.whatsappPhone, // Fetch WhatsApp phone
             hasActiveEvent,
             activeEventName,
           };
@@ -574,6 +576,7 @@ const MapContentAndLogic = () => {
                     <span className="sr-only">Fechar</span>
                   </Button>
                 </SheetClose>
+                {/* Ensure description is present even if sr-only for accessibility */}
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
             
@@ -609,10 +612,22 @@ const MapContentAndLogic = () => {
                     </div>
                   )}
 
-                  {(selectedVenue.instagramUrl || selectedVenue.facebookUrl || selectedVenue.youtubeUrl) && (
+                  {(selectedVenue.instagramUrl || selectedVenue.facebookUrl || selectedVenue.youtubeUrl || selectedVenue.whatsappPhone) && (
                     <div className="pt-4 mt-4 border-t border-border">
-                      <h3 className="text-lg font-semibold text-foreground mb-3">Redes Sociais</h3>
+                      <h3 className="text-lg font-semibold text-foreground mb-3">Contatos e Redes Sociais</h3>
                       <div className="flex items-center space-x-4">
+                        {selectedVenue.whatsappPhone && (
+                           <a 
+                            href={`https://wa.me/${selectedVenue.whatsappPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${selectedVenue.name}, te encontrei pelo Fervo App. Gostaria de informações adicionais sobre vocês.`)}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            aria-label="WhatsApp do local" 
+                            title="WhatsApp" 
+                            className="text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            <MessageSquare className="w-6 h-6" /> {/* Using MessageSquare as a placeholder for WhatsApp */}
+                          </a>
+                        )}
                         {selectedVenue.instagramUrl && (
                           <a href={selectedVenue.instagramUrl} target="_blank" rel="noopener noreferrer" aria-label="Instagram do local" title="Instagram" className="text-muted-foreground hover:text-primary transition-colors">
                             <Instagram className="w-6 h-6" />
@@ -775,6 +790,7 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
 
 
 

@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, updateDoc, getDoc } from 'firebase/firestore'; // Added getDoc
-import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +26,10 @@ import { geocodeAddress, type Location } from '@/services/geocoding';
 import { MapPin, Save, ArrowLeft } from 'lucide-react';
 
 const cepRegex = /^\d{5}-?\d{3}$/;
+// Basic regex for phone numbers, allows international and national with/without special chars.
+// For wa.me, it's best to instruct user to include country code.
+const phoneRegex = /^\+?[0-9\s\(\)\-]{9,20}$/;
+
 
 const partnerQuestionnaireSchema = z.object({
   venueName: z.string().min(3, { message: 'O nome do local deve ter pelo menos 3 caracteres.' }),
@@ -35,7 +38,7 @@ const partnerQuestionnaireSchema = z.object({
     .min(1, { message: "Selecione pelo menos 1 estilo musical."})
     .max(4, { message: "Selecione no máximo 4 estilos musicais." })
     .default([]),
-  phone: z.string().min(10, { message: 'Telefone inválido. Inclua DDD.' }).optional().or(z.literal('')), // Example: (XX) XXXXX-XXXX
+  phone: z.string().min(10, { message: 'Telefone inválido. Inclua DDD.' }).optional().or(z.literal('')), 
   
   country: z.string().min(2, { message: 'País inválido.' }),
   state: z.string().min(2, { message: 'Estado inválido.' }),
@@ -47,6 +50,7 @@ const partnerQuestionnaireSchema = z.object({
   instagramUrl: z.string().url({ message: 'URL do Instagram inválida.' }).optional().or(z.literal('')),
   facebookUrl: z.string().url({ message: 'URL do Facebook inválida.' }).optional().or(z.literal('')),
   youtubeUrl: z.string().url({ message: 'URL do YouTube inválida.' }).optional().or(z.literal('')),
+  whatsappPhone: z.string().regex(phoneRegex, { message: 'Número do WhatsApp inválido. Inclua código do país se necessário (Ex: +55 DD XXXXX-XXXX).' }).optional().or(z.literal('')),
 });
 
 type PartnerQuestionnaireFormInputs = z.infer<typeof partnerQuestionnaireSchema>;
@@ -68,7 +72,7 @@ const PartnerQuestionnairePage: NextPage = () => {
   const [loading, setLoading] = useState(true);
   const [venueLocation, setVenueLocation] = useState<Location | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
-  const [isProfileLocked, setIsProfileLocked] = useState(false); // New state for locking fields
+  const [isProfileLocked, setIsProfileLocked] = useState(false);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch, getValues, setValue, reset } = useForm<PartnerQuestionnaireFormInputs>({
     resolver: zodResolver(partnerQuestionnaireSchema),
@@ -85,6 +89,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       instagramUrl: '',
       facebookUrl: '',
       youtubeUrl: '',
+      whatsappPhone: '',
     },
   });
 
@@ -102,17 +107,16 @@ const PartnerQuestionnairePage: NextPage = () => {
             setIsProfileLocked(true);
             toast({
               title: "Modo de Edição Limitado",
-              description: "Você só pode editar as redes sociais. Para outras alterações, contate o suporte.",
+              description: "Você só pode editar contatos e mídias. Para outras alterações, contate o suporte.",
               variant: "default",
               duration: 5000,
             });
           } else {
             setIsProfileLocked(false);
           }
-          // Pre-fill form with existing data
           reset({
             venueName: userData.venueName || '',
-            venueType: userData.venueType as VenueType, // Ensure type safety
+            venueType: userData.venueType as VenueType,
             musicStyles: userData.musicStyles || [],
             phone: userData.phone || '',
             country: userData.address?.country || 'Brasil',
@@ -124,16 +128,13 @@ const PartnerQuestionnairePage: NextPage = () => {
             instagramUrl: userData.instagramUrl || '',
             facebookUrl: userData.facebookUrl || '',
             youtubeUrl: userData.youtubeUrl || '',
+            whatsappPhone: userData.whatsappPhone || '',
           });
           if (userData.location) {
             setVenueLocation(userData.location);
           }
-
         } else {
           setIsProfileLocked(false);
-          // This case might indicate a new user who hasn't gone through signup properly
-          // or an issue with data consistency.
-          // For now, we allow them to fill the form.
         }
       } else {
         router.push('/login');
@@ -176,12 +177,11 @@ const PartnerQuestionnairePage: NextPage = () => {
 
     let currentVenueLocation = venueLocation;
 
-    // If profile is not locked and location isn't set, try to geocode
     if (!isProfileLocked && !currentVenueLocation && (data.street && data.number && data.city && data.state && data.cep && data.country)) {
         setIsGeocoding(true);
         try {
             currentVenueLocation = await geocodeAddress(`${data.street}, ${data.number}, ${data.city}, ${data.state}, ${data.cep}, ${data.country}`);
-            setVenueLocation(currentVenueLocation); // Update state
+            setVenueLocation(currentVenueLocation);
         } catch (error) {
             toast({ title: "Localização Falhou", description: "Não foi possível geolocalizar o endereço fornecido. Verifique os dados.", variant: "destructive" });
             setIsGeocoding(false);
@@ -198,56 +198,57 @@ const PartnerQuestionnairePage: NextPage = () => {
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
       
-      const updateData: Partial<PartnerQuestionnaireFormInputs & { questionnaireCompleted: boolean, location?: Location | null, address?: any }> = {
-        instagramUrl: data.instagramUrl,
-        facebookUrl: data.facebookUrl,
-        youtubeUrl: data.youtubeUrl,
-      };
+      let dataToUpdate: any = {};
 
-      if (!isProfileLocked) {
-        updateData.venueName = data.venueName;
-        updateData.venueType = data.venueType;
-        updateData.musicStyles = data.musicStyles || [];
-        updateData.phone = data.phone;
-        updateData.address = {
-          street: data.street,
-          number: data.number,
-          city: data.city,
-          state: data.state,
-          cep: data.cep.replace(/\D/g, ''),
-          country: data.country,
+      if (isProfileLocked) {
+        dataToUpdate = {
+          instagramUrl: data.instagramUrl,
+          facebookUrl: data.facebookUrl,
+          youtubeUrl: data.youtubeUrl,
+          whatsappPhone: data.whatsappPhone,
+          questionnaireCompleted: true,
         };
-        updateData.location = currentVenueLocation; // Use the geocoded or existing location
-        updateData.questionnaireCompleted = true; // Mark as completed on first save
       } else {
-        // If profile is locked, we still need to ensure `questionnaireCompleted` remains true
-        // and other fields are not accidentally unset if they are not part of `data`
-        // However, `updateDoc` only updates specified fields.
-        // Fetch existing data to ensure we don't overwrite critical fields if they are not in `data`
-         const userDocSnap = await getDoc(userDocRef);
-         if (userDocSnap.exists()) {
-            const existingData = userDocSnap.data();
-             // These fields are not editable, so we ensure they are preserved
-            updateData.venueName = existingData.venueName;
-            updateData.venueType = existingData.venueType;
-            updateData.musicStyles = existingData.musicStyles;
-            updateData.phone = existingData.phone;
-            updateData.address = existingData.address;
-            updateData.location = existingData.location;
-            updateData.questionnaireCompleted = true;
-         }
+        dataToUpdate = {
+          venueName: data.venueName,
+          venueType: data.venueType,
+          musicStyles: data.musicStyles || [],
+          phone: data.phone,
+          address: {
+            street: data.street,
+            number: data.number,
+            city: data.city,
+            state: data.state,
+            cep: data.cep.replace(/\D/g, ''),
+            country: data.country,
+          },
+          location: currentVenueLocation,
+          instagramUrl: data.instagramUrl,
+          facebookUrl: data.facebookUrl,
+          youtubeUrl: data.youtubeUrl,
+          whatsappPhone: data.whatsappPhone,
+          questionnaireCompleted: true,
+        };
       }
       
-      await updateDoc(userDocRef, updateData);
+      // Set empty optional string fields to null for Firestore to potentially remove them or store as null
+      ['phone', 'instagramUrl', 'facebookUrl', 'youtubeUrl', 'whatsappPhone'].forEach(key => {
+        if (dataToUpdate[key] === '') {
+          dataToUpdate[key] = null; 
+        }
+      });
+      
+      await updateDoc(userDocRef, dataToUpdate);
 
       toast({
-        title: isProfileLocked ? "Redes Sociais Salvas!" : "Perfil do Local Salvo!",
-        description: isProfileLocked ? "Suas URLs de redes sociais foram atualizadas." : "Seu estabelecimento foi configurado com sucesso.",
+        title: isProfileLocked ? "Contatos e Mídias Salvos!" : "Perfil do Local Salvo!",
+        description: isProfileLocked ? "Suas URLs, vídeo e WhatsApp foram atualizados." : "Seu estabelecimento foi configurado com sucesso.",
         variant: "default", 
       });
       
-      if (!isProfileLocked) { // Only navigate to dashboard if it was the initial setup
-        router.push('/partner/dashboard');
+      if (!isProfileLocked) { 
+        setIsProfileLocked(true); // Lock after initial full save
+        // No automatic redirect to dashboard, user might want to stay on this page
       }
     } catch (error) {
       console.error("Error saving partner questionnaire:", error);
@@ -286,11 +287,11 @@ const PartnerQuestionnairePage: NextPage = () => {
         <Card className="w-full bg-card/95 backdrop-blur-sm">
           <CardHeader className="text-center">
             <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-destructive to-accent">
-              {isProfileLocked ? "Editar Redes Sociais" : "Configure seu Local!"}
+              {isProfileLocked ? "Editar Contatos e Mídia" : "Configure seu Local!"}
             </CardTitle>
             <CardDescription className="text-muted-foreground">
               {isProfileLocked 
-                ? "Atualize os links das suas redes sociais e vídeo de apresentação." 
+                ? "Atualize seus links de contato, redes sociais e vídeo de apresentação." 
                 : "Detalhes do seu estabelecimento para os usuários do Fervo App."}
             </CardDescription>
           </CardHeader>
@@ -367,8 +368,8 @@ const PartnerQuestionnairePage: NextPage = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="phone" className="text-destructive/90">Telefone (Opcional)</Label>
-                    <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXXX-XXXX" {...field} className={errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
+                    <Label htmlFor="phone" className="text-destructive/90">Telefone Fixo (Opcional)</Label>
+                    <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXX-XXXX" {...field} className={errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
                     {errors.phone && <p className="mt-1 text-sm text-destructive">{errors.phone.message}</p>}
                   </div>
                   <div>
@@ -438,9 +439,27 @@ const PartnerQuestionnairePage: NextPage = () => {
                 </div>
               </div>
               
-              {/* Social Links - Full Width */}
+              {/* Social Links & WhatsApp - Full Width */}
               <div className="pt-4 space-y-4 border-t border-border">
-                 <h3 className="text-lg font-semibold text-center text-destructive/90">Redes Sociais e Vídeo</h3>
+                 <h3 className="text-lg font-semibold text-center text-destructive/90">Contatos, Redes Sociais e Vídeo</h3>
+                  <div>
+                    <Label htmlFor="whatsappPhone" className="text-destructive/90">WhatsApp (Contato Principal)</Label>
+                    <Controller 
+                        name="whatsappPhone" 
+                        control={control} 
+                        render={({ field }) => 
+                            <Input 
+                                id="whatsappPhone" 
+                                type="tel" 
+                                placeholder="Ex: +5511987654321" 
+                                {...field} 
+                                className={errors.whatsappPhone ? 'border-destructive focus-visible:ring-destructive' : ''} 
+                            />
+                        } 
+                    />
+                    {errors.whatsappPhone && <p className="mt-1 text-sm text-destructive">{errors.whatsappPhone.message}</p>}
+                    <p className="mt-1 text-xs text-muted-foreground">Inclua código do país para melhor alcance (Ex: +55 para Brasil).</p>
+                  </div>
                  <div>
                     <Label htmlFor="instagramUrl" className="text-destructive/90">Instagram URL</Label>
                     <Controller name="instagramUrl" control={control} render={({ field }) => <Input id="instagramUrl" type="url" placeholder="https://instagram.com/seulocal" {...field} className={errors.instagramUrl ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
@@ -462,7 +481,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             <CardFooter>
               <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isSubmitting || isGeocoding}>
                 <Save className="w-4 h-4 mr-2"/> 
-                {isSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Redes Sociais' : 'Salvar e Continuar')}
+                {isSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Contatos e Mídia' : 'Salvar e Continuar')}
               </Button>
             </CardFooter>
           </form>
