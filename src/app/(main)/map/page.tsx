@@ -127,7 +127,7 @@ const MapContentAndLogic = () => {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(true);
 
-  const mapsApi = useMapsLibrary('maps'); // For google.maps.Point
+  const mapsApi = useMapsLibrary('maps'); 
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -346,7 +346,6 @@ const MapContentAndLogic = () => {
           <Marker position={userLocation} title="Sua Localização" />
           
           {mapsApi && filteredVenues.map((venue) => {
-            // const anchorPoint = new mapsApi.Point(12, 24); // For custom HTML markers if needed, not directly for AdvancedMarker icon
             return (
               <AdvancedMarker
                 key={venue.id}
@@ -365,9 +364,8 @@ const MapContentAndLogic = () => {
       {selectedVenue && (
         <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { if (!isOpen) setSelectedVenue(null); }}>
           <SheetContent 
-            side="left" 
-            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-r border-border overflow-y-auto"
-            // Prevent focus stealing from map
+            side="right" 
+            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto"
             onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
@@ -449,3 +447,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
