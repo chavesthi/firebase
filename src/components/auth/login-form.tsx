@@ -16,9 +16,9 @@ import { cn } from '@/lib/utils';
 import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore } from '@/lib/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; // Added googleAuthProvider
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; // Added signInWithPopup
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // Added serverTimestamp
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
@@ -38,6 +38,18 @@ const signupSchema = z.object({
 type LoginFormInputs = z.infer<typeof loginSchema>;
 type SignupFormInputs = z.infer<typeof signupSchema>;
 
+// Simple Google Icon SVG
+const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 48 48" width="20" height="20" {...props}>
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+    <path fill="none" d="M0 0h48v48H0z"></path>
+  </svg>
+);
+
+
 export function LoginForm() {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
@@ -45,6 +57,8 @@ export function LoginForm() {
   const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); // 'login' or 'signup'
   const router = useRouter();
   const { toast } = useToast();
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+
 
   const loginMethods = useForm<LoginFormInputs>({
     resolver: zodResolver(loginSchema),
@@ -54,58 +68,62 @@ export function LoginForm() {
     resolver: zodResolver(signupSchema),
   });
 
-  const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
-    loginMethods.formState.isSubmitting;
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
-      const user = userCredential.user;
+  const handleSuccessfulAuth = async (userCredential: UserCredential, role: UserRole, isGoogleSignIn: boolean = false, googleName?: string) => {
+    const user = userCredential.user;
+    const userDocRef = doc(firestore, "users", user.uid);
+    const userDoc = await getDoc(userDocRef);
 
-      // Check user role and questionnaire completion from Firestore
-      const userDocRef = doc(firestore, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
-
-      if (!userDoc.exists()) {
-        // This case should ideally not happen if signup creates the doc
-        toast({ title: "Erro", description: "Dados do usuário não encontrados.", variant: "destructive" });
-        return;
-      }
-
+    if (!userDoc.exists()) {
+      // New user (either via Google first time or regular signup which should have created this)
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        name: isGoogleSignIn ? (googleName || user.displayName || "Usuário") : signupMethods.getValues("name"),
+        email: user.email,
+        role: role,
+        createdAt: serverTimestamp(),
+        questionnaireCompleted: false,
+      });
+      toast({
+        title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
+        description: "Quase lá! Conte-nos um pouco mais sobre você.",
+        variant: role === UserRole.USER ? "default" : "destructive",
+      });
+      router.push(role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire');
+    } else {
+      // Existing user
       const userData = userDoc.data();
-      const userRoleInDb = userData.role || UserRole.USER; // Default to USER if role not set
+      const userRoleInDb = userData.role || UserRole.USER;
       const questionnaireCompleted = userData.questionnaireCompleted || false;
-      
-      // Ensure UI activeRole matches the role from DB for this user
-      // This is important if a user tries to log in as 'partner' but their account is 'user'
-      if (activeRole !== userRoleInDb) {
+
+      if (role !== userRoleInDb) {
         toast({
           title: "Tipo de Conta Incorreto",
-          description: `Este e-mail está registrado como ${userRoleInDb === UserRole.USER ? 'usuário' : 'parceiro'}. Por favor, use a aba correta.`,
+          description: `Este e-mail está registrado como ${userRoleInDb === UserRole.USER ? 'usuário comum' : 'parceiro'}. Por favor, use a aba correta.`,
           variant: "destructive",
         });
-        // Optionally, switch the tab for them: setActiveRole(userRoleInDb);
         return;
       }
-
-
+      
       toast({
         title: "Login Bem Sucedido!",
-        description: `Bem-vindo, ${activeRole === UserRole.USER ? 'Usuário' : 'Parceiro'}! Redirecionando...`,
-        variant: activeRole === UserRole.USER ? "default" : "destructive",
+        description: `Bem-vindo de volta, ${userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro')}! Redirecionando...`,
+        variant: role === UserRole.USER ? "default" : "destructive",
       });
 
-      if (activeRole === UserRole.USER) {
-        if (questionnaireCompleted) {
-          router.push('/map');
-        } else {
-          router.push('/questionnaire');
-        }
-      } else { // Partner
-        if (questionnaireCompleted) {
-          router.push('/partner/dashboard');
-        } else {
-          router.push('/partner-questionnaire');
-        }
+      if (role === UserRole.USER) {
+        router.push(questionnaireCompleted ? '/map' : '/questionnaire');
+      } else {
+        router.push(questionnaireCompleted ? '/partner/dashboard' : '/partner-questionnaire');
       }
+    }
+  };
+
+
+  const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
+    loginMethods.formState.isSubmitting; // Ensure isSubmitting is accessed
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      await handleSuccessfulAuth(userCredential, activeRole);
       loginMethods.reset();
     } catch (error: any) {
       console.error('Login error:', error);
@@ -122,33 +140,12 @@ export function LoginForm() {
   };
 
   const onSignupSubmit: SubmitHandler<SignupFormInputs> = async (data) => {
-    signupMethods.formState.isSubmitting;
+    signupMethods.formState.isSubmitting; // Ensure isSubmitting is accessed
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      const user = userCredential.user;
-
-      await setDoc(doc(firestore, "users", user.uid), {
-        uid: user.uid,
-        name: data.name,
-        email: data.email,
-        role: activeRole,
-        createdAt: new Date(),
-        questionnaireCompleted: false, // New users always start with incomplete questionnaire
-      });
-      
-      toast({
-        title: "Conta Criada com Sucesso!",
-        description: "Quase lá! Conte-nos um pouco mais sobre você.",
-        variant: activeRole === UserRole.USER ? "default" : "destructive",
-      });
+      // Firestore document will be created in handleSuccessfulAuth
+      await handleSuccessfulAuth(userCredential, activeRole, false, data.name);
       signupMethods.reset();
-      
-      if (activeRole === UserRole.USER) {
-        router.push('/questionnaire'); 
-      } else { 
-        router.push('/partner-questionnaire'); // Redirect partner to their questionnaire
-      }
-
     } catch (error: any) {
       console.error('Signup error:', error);
       let errorMessage = "Falha ao criar conta. Tente novamente.";
@@ -164,6 +161,30 @@ export function LoginForm() {
       });
     }
   };
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleSigningIn(true);
+    try {
+      const userCredential = await signInWithPopup(auth, googleAuthProvider);
+      await handleSuccessfulAuth(userCredential, activeRole, true, userCredential.user.displayName || undefined);
+    } catch (error: any) {
+      console.error("Google Sign-In error: ", error);
+      let errorMessage = "Falha ao fazer login com Google. Tente novamente.";
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        errorMessage = "Já existe uma conta com este e-mail usando um método de login diferente.";
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = "Login com Google cancelado.";
+      }
+      toast({
+        title: "Erro no Login com Google",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsGoogleSigningIn(false);
+    }
+  };
+
 
   const cardStyles = activeRole === UserRole.USER 
     ? 'border-primary/80 [--card-glow:hsl(var(--primary))] [--card-glow-soft:hsla(var(--primary),0.2)]' 
@@ -240,8 +261,17 @@ export function LoginForm() {
               </div>
             </CardContent>
             <CardFooter className="flex-col gap-4">
-              <Button type="submit" className={cn("w-full", buttonStyles)} disabled={loginMethods.formState.isSubmitting}>
+              <Button type="submit" className={cn("w-full", buttonStyles)} disabled={loginMethods.formState.isSubmitting || isGoogleSigningIn}>
                 {loginMethods.formState.isSubmitting ? 'Entrando...' : 'Entrar'} <LogIn size={18} className="ml-2"/>
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full border-border hover:bg-muted/50" 
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleSigningIn || loginMethods.formState.isSubmitting}
+              >
+                <GoogleIcon className="mr-2"/> {isGoogleSigningIn ? 'Conectando com Google...' : 'Entrar com Google'}
               </Button>
               <Button variant="link" type="button" onClick={() => setFormMode('signup')} className={cn("p-0 h-auto", activeRole === UserRole.USER ? "text-primary/80 hover:text-primary" : "text-destructive/80 hover:text-destructive")}>
                 Não tem uma conta? Cadastre-se
@@ -325,8 +355,17 @@ export function LoginForm() {
               </div>
             </CardContent>
             <CardFooter className="flex-col gap-4">
-              <Button type="submit" className={cn("w-full", buttonStyles)} disabled={signupMethods.formState.isSubmitting}>
+              <Button type="submit" className={cn("w-full", buttonStyles)} disabled={signupMethods.formState.isSubmitting || isGoogleSigningIn}>
                 {signupMethods.formState.isSubmitting ? 'Criando conta...' : 'Criar Conta'} <UserPlus size={18} className="ml-2"/>
+              </Button>
+               <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full border-border hover:bg-muted/50" 
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleSigningIn || signupMethods.formState.isSubmitting}
+              >
+                 <GoogleIcon className="mr-2"/> {isGoogleSigningIn ? 'Conectando com Google...' : 'Cadastrar com Google'}
               </Button>
               <Button variant="link" type="button" onClick={() => setFormMode('login')} className={cn("p-0 h-auto", activeRole === UserRole.USER ? "text-primary/80 hover:text-primary" : "text-destructive/80 hover:text-destructive")}>
                 Já tem uma conta? Faça login
