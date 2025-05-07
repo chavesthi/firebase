@@ -22,9 +22,10 @@ import {
   IconLGBT,
 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { firestore } from '@/lib/firebase';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+
 
 interface Venue {
   id: string;
@@ -33,7 +34,7 @@ interface Venue {
   musicStyles?: MusicStyle[];
   location: Location;
   description: string;
-  imageUrl?: string; // YouTube video ID could be stored here if we want to show thumbnails
+  imageUrl?: string; 
   youtubeUrl?: string;
 }
 
@@ -80,7 +81,7 @@ const MapUpdater = ({ center }: { center: Location }) => {
 // Custom marker component for venues
 const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName: string }) => {
   const IconComponent = venueTypeIcons[type];
-  const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; // Default color
+  const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
 
   return (
     <div className="flex flex-col items-center cursor-pointer" title={venueName}>
@@ -98,17 +99,35 @@ const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName:
   );
 };
 
+const getYouTubeEmbedUrl = (url?: string): string | null => {
+  if (!url) return null;
+  let videoId = null;
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname === 'www.youtube.com' || urlObj.hostname === 'youtube.com') {
+      videoId = urlObj.searchParams.get('v');
+    } else if (urlObj.hostname === 'youtu.be') {
+      const pathParts = urlObj.pathname.substring(1).split('/');
+      videoId = pathParts[0]; // Takes the first part like {videoId} from youtu.be/{videoId} or youtu.be/{videoId}?params
+    }
+  } catch (e) {
+    console.warn("Could not parse YouTube URL for embed: ", url, e);
+    return null;
+  }
+  return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+};
+
 
 const MapContentAndLogic = () => {
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
   const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(true);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(true);
 
-  const mapsApi = useMapsLibrary('maps');
+  const mapsApi = useMapsLibrary('maps'); // For google.maps.Point
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -121,12 +140,12 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
-          setUserLocation({ lat: -23.55052, lng: -46.633308 }); // Default to São Paulo
+          setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
         }
       );
     } else {
       console.error("Geolocation is not supported by this browser.");
-      setUserLocation({ lat: -23.55052, lng: -46.633308 }); // Default to São Paulo
+      setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
     }
   }, []);
 
@@ -143,21 +162,13 @@ const MapContentAndLogic = () => {
         const querySnapshot = await getDocs(q);
         const fetchedVenues: Venue[] = querySnapshot.docs.map(doc => {
           const data = doc.data();
-          // Basic YouTube URL to embeddable ID (very basic, improve if needed)
           let imageUrl;
           if (data.youtubeUrl) {
             try {
-                const url = new URL(data.youtubeUrl);
-                if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') {
-                    const videoId = url.searchParams.get('v');
-                    if (videoId) {
-                        imageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-                    }
-                } else if (url.hostname === 'youtu.be') {
-                    const videoId = url.pathname.substring(1);
-                     if (videoId) {
-                        imageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-                    }
+                const embedUrl = getYouTubeEmbedUrl(data.youtubeUrl);
+                if (embedUrl) {
+                    const videoId = embedUrl.split('/').pop()?.split('?')[0];
+                    if (videoId) imageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
                 }
             } catch (e) {
                 console.warn("Could not parse YouTube URL for thumbnail: ", data.youtubeUrl);
@@ -170,15 +181,14 @@ const MapContentAndLogic = () => {
             type: data.venueType as VenueType,
             musicStyles: data.musicStyles || [],
             location: data.location,
-            description: data.venueName || 'Visite este local!',
+            description: data.venueName || 'Visite este local!', 
             imageUrl: imageUrl,
             youtubeUrl: data.youtubeUrl,
           };
-        }).filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]); // Ensure location and type are valid
+        }).filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
         setVenues(fetchedVenues);
       } catch (error) {
         console.error("Error fetching venues:", error);
-        // Optionally, set an error state or show a toast
       } finally {
         setIsLoadingVenues(false);
       }
@@ -215,10 +225,10 @@ const MapContentAndLogic = () => {
     
     if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
     else if (type === VenueType.BAR) colorClass = "text-accent";
-    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; // Ensure this class exists or use HSL
+    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; 
     else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
-    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; // Ensure this class exists or use HSL
-    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; // Ensure this class exists or use HSL
+    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; 
+    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; 
     
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
@@ -243,11 +253,12 @@ const MapContentAndLogic = () => {
 
 
   return (
-    <div className="relative flex w-full h-[calc(100vh-4rem)]">
-      <Card className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}>
+    <div className="relative flex w-full h-[calc(100vh-4rem)]"> {/* Ensure full height for map */}
+      {/* Filter Sidebar */}
+      <Card className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-primary hover:text-primary/80">
+          <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
         </CardHeader>
@@ -288,12 +299,13 @@ const MapContentAndLogic = () => {
         </CardContent>
       </Card>
 
+      {/* Map Area */}
       <div className="flex-1 h-full">
-        {!sidebarOpen && (
+        {!filterSidebarOpen && (
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setSidebarOpen(true)}
+            onClick={() => setFilterSidebarOpen(true)}
             className="absolute z-20 p-2 rounded-full top-4 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
             aria-label="Abrir filtros"
           >
@@ -308,7 +320,7 @@ const MapContentAndLogic = () => {
           disableDefaultUI={true}
           className="w-full h-full"
           options={{
-            styles: [ 
+            styles: [ /* Dark Theme Map Styles */
               { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
               { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
               { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
@@ -333,70 +345,90 @@ const MapContentAndLogic = () => {
           <MapUpdater center={userLocation} />
           <Marker position={userLocation} title="Sua Localização" />
           
-          {filteredVenues.map((venue) => (
+          {mapsApi && filteredVenues.map((venue) => {
+            // const anchorPoint = new mapsApi.Point(12, 24); // For custom HTML markers if needed, not directly for AdvancedMarker icon
+            return (
               <AdvancedMarker
                 key={venue.id}
                 position={venue.location}
                 onClick={() => setSelectedVenue(venue)}
+                title={venue.name}
               >
                 <VenueCustomMapMarker type={venue.type} venueName={venue.name} />
               </AdvancedMarker>
-            ))}
+            );
+          })}
         </GoogleMap>
       </div>
 
+      {/* Venue Details Sidebar */}
       {selectedVenue && (
-        <Popover open={!!selectedVenue} onOpenChange={(isOpen) => !isOpen && setSelectedVenue(null)}>
-          <PopoverTrigger asChild>
-            <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-80 bg-background/90 backdrop-blur-md shadow-2xl border-secondary/70"
-            style={{
-              position: 'fixed', 
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 100 
-            }}
-            onCloseAutoFocus={(e) => e.preventDefault()} 
-            side="bottom" 
-            align="center" 
+        <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { if (!isOpen) setSelectedVenue(null); }}>
+          <SheetContent 
+            side="left" 
+            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-r border-border overflow-y-auto"
+            // Prevent focus stealing from map
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <h4 className="font-medium leading-none text-secondary">{selectedVenue.name}</h4>
-                <Badge variant="outline" className="border-secondary text-secondary">{venueTypeLabels[selectedVenue.type]}</Badge>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground z-10"
+              onClick={() => setSelectedVenue(null)}
+              aria-label="Fechar detalhes do local"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+
+            <ScrollArea className="h-full">
+              <div className="p-6 space-y-6">
+                {/* Video First */}
+                {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
+                  <div className="mb-6">
+                    <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' /* 16:9 Aspect Ratio */ }}>
+                      <iframe
+                        src={getYouTubeEmbedUrl(selectedVenue.youtubeUrl)!}
+                        title="YouTube video player"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        className="absolute top-0 left-0 w-full h-full"
+                      ></iframe>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Name and Type */}
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-bold text-secondary">{selectedVenue.name}</h2>
+                  <Badge variant="outline" className="border-secondary text-secondary">{venueTypeLabels[selectedVenue.type]}</Badge>
+                </div>
+
+                {/* Music Styles */}
                 {selectedVenue.musicStyles && selectedVenue.musicStyles.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedVenue.musicStyles.map(style => (
-                       <Badge key={style} variant="outline" className="text-xs border-accent text-accent">{musicStyleLabels[style]}</Badge>
-                    ))}
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">Estilos Musicais</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedVenue.musicStyles.map(style => (
+                         <Badge key={style} variant="outline" className="text-xs border-accent text-accent">{musicStyleLabels[style]}</Badge>
+                      ))}
+                    </div>
                   </div>
                 )}
-                <p className="text-sm text-muted-foreground">
-                  {selectedVenue.description}
-                </p>
-              </div>
-              {selectedVenue.imageUrl && (
-                <div className="relative w-full h-40 overflow-hidden rounded-md">
-                  <Image src={selectedVenue.imageUrl} alt={selectedVenue.name} layout="fill" objectFit="cover" data-ai-hint="event location" />
+                
+                {/* Events */}
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">Próximos Eventos</h3>
+                  <div className="p-4 border border-dashed rounded-md border-border">
+                    <p className="text-muted-foreground text-center">Sem Eventos Agendados</p>
+                    {/* Future: Map through selectedVenue.events here */}
+                  </div>
                 </div>
-              )}
-              {selectedVenue.youtubeUrl && !selectedVenue.imageUrl && ( // Fallback for youtube link if no specific image
-                <Button 
-                    variant="link" 
-                    className="justify-start p-0 text-accent" 
-                    onClick={() => window.open(selectedVenue.youtubeUrl, '_blank')}>
-                    Ver vídeo de apresentação
-                </Button>
-              )}
-              <Button variant="default" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                Ver Detalhes (Em breve)
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+              </div>
+            </ScrollArea>
+          </SheetContent>
+        </Sheet>
       )}
     </div>
   );
@@ -410,11 +442,10 @@ const MapPage: NextPage = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações em next.config.ts (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
-    <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic" libraries={['marker']}>
+    <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic" libraries={['marker', 'maps']}>
       <MapContentAndLogic />
     </APIProvider>
   );
 }
 
 export default MapPage;
-
