@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'FervoFinder',
+  title: 'Fervo App',
   description: 'Encontre os melhores eventos ao vivo perto de você!',
 };
 
@@ -27,3 +27,4 @@ export default function RootLayout({
     </html>
   );
 }
+

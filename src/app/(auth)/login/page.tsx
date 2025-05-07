@@ -16,7 +16,7 @@ export default function LoginPage() {
            style={{'--card-glow-primary': 'hsl(var(--primary))', '--card-glow-destructive': 'hsl(var(--destructive))'} as React.CSSProperties}>
         <Card className="w-full bg-card/95 backdrop-blur-sm"> {/* Slightly transparent card inside */}
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Bem-vindo ao FervoFinder!</CardTitle>
+            <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Bem-vindo ao Fervo App!</CardTitle>
             <CardDescription className="text-muted-foreground">
               Encontre os melhores fervos ou cadastre seu estabelecimento.
             </CardDescription>
@@ -39,3 +39,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

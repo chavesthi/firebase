@@ -283,7 +283,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             <CardDescription className="text-muted-foreground">
               {isProfileLocked 
                 ? "Atualize os links das suas redes sociais e vídeo de apresentação." 
-                : "Detalhes do seu estabelecimento para os usuários do FervoFinder."}
+                : "Detalhes do seu estabelecimento para os usuários do Fervo App."}
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
@@ -470,3 +470,4 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
+

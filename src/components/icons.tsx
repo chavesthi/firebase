@@ -1,6 +1,6 @@
 import type { SVGProps } from 'react';
 
-export const FervoFinderLogo = (props: SVGProps<SVGSVGElement>) => (
+export const FervoAppLogo = (props: SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 200 50"
@@ -10,7 +10,7 @@ export const FervoFinderLogo = (props: SVGProps<SVGSVGElement>) => (
     strokeLinecap="round"
     strokeLinejoin="round"
     {...props}
-    aria-label="FervoFinder Logo"
+    aria-label="Fervo App Logo"
   >
     <defs>
       <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -24,7 +24,7 @@ export const FervoFinderLogo = (props: SVGProps<SVGSVGElement>) => (
       Fervo
     </text>
     <text x="145" y="35" fontFamily="Arial, sans-serif" fontSize="30" fill="url(#neonGradient)">
-      Finder
+      App
     </text>
   </svg>
 );
@@ -88,3 +88,4 @@ export const IconMapPin = (props: SVGProps<SVGSVGElement>) => (
     <circle cx="12" cy="10" r="3" />
   </svg>
 );
+

@@ -82,6 +82,20 @@ const MapUpdater = ({ center }: { center: Location }) => {
 const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName: string }) => {
   const IconComponent = venueTypeIcons[type];
   const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
+  const [mapsLib, setMapsLib] = useState<typeof google.maps | null>(null);
+  const mapsApi = useMapsLibrary('maps');
+
+  useEffect(() => {
+    if (mapsApi) {
+      setMapsLib(mapsApi);
+    }
+  }, [mapsApi]);
+
+  const anchorPoint = useMemo(() => {
+    if (!mapsLib) return undefined;
+    return new mapsLib.Point(12, 24);
+  }, [mapsLib]);
+
 
   return (
     <div className="flex flex-col items-center cursor-pointer" title={venueName}>
@@ -315,7 +329,7 @@ const MapContentAndLogic = () => {
         <GoogleMap
           defaultCenter={userLocation}
           defaultZoom={15}
-          mapId="fervoFinderMap"
+          mapId="fervoAppMap"
           gestureHandling="greedy"
           disableDefaultUI={true}
           className="w-full h-full"
@@ -346,12 +360,15 @@ const MapContentAndLogic = () => {
           <Marker position={userLocation} title="Sua Localização" />
           
           {mapsApi && filteredVenues.map((venue) => {
+            const anchorPoint = mapsApi && new (mapsApi as any).Point(12, 24); 
+
             return (
               <AdvancedMarker
                 key={venue.id}
                 position={venue.location}
                 onClick={() => setSelectedVenue(venue)}
                 title={venue.name}
+                
               >
                 <VenueCustomMapMarker type={venue.type} venueName={venue.name} />
               </AdvancedMarker>
@@ -436,3 +453,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
