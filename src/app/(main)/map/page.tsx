@@ -237,6 +237,7 @@ const MapContentAndLogic = () => {
     if (selectedVenue && !selectedVenue.events) {
       fetchVenueEvents(selectedVenue.id);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVenue]);
 
 
@@ -390,6 +391,8 @@ const MapContentAndLogic = () => {
           <Marker position={userLocation} title="Sua Localização" />
           
           {mapsApi && filteredVenues.map((venue) => {
+            const anchorPoint = mapsApi && new (mapsApi as any).Point(12, 24); 
+
             return (
               <AdvancedMarker
                 key={venue.id}
@@ -420,6 +423,7 @@ const MapContentAndLogic = () => {
                 <SheetTitle className="text-2xl font-bold text-secondary mr-8">
                   {selectedVenue.name}
                 </SheetTitle>
+                {/* The SheetTitle above serves as the accessible title. This description is for screen readers if needed. */}
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
             
@@ -467,7 +471,7 @@ const MapContentAndLogic = () => {
                       <div className="space-y-3">
                         {selectedVenue.events.map(event => (
                           <Card key={event.id} className="p-3 bg-card/50 border-border/50">
-                            <CardTitle className="text-md text-secondary mb-1">{event.eventName}</CardTitle>
+                            <FilterCardTitle className="text-md text-secondary mb-1">{event.eventName}</FilterCardTitle>
                             <p className="text-xs text-muted-foreground flex items-center">
                               <CalendarClock className="w-3 h-3 mr-1.5"/>
                               {format(event.startDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })}
@@ -511,3 +515,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
