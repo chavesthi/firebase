@@ -508,7 +508,7 @@ const ManageEventsPage: NextPage = () => {
                     )}
                     {event.checkInToken && (
                       <div className="mt-2 flex items-center gap-2">
-                        <QrCode className="w-4 h-4 text-muted-foreground" /> {/* Smaller icon for input field context */}
+                        <QrCode className="w-4 h-4 text-muted-foreground" /> 
                         <Input 
                           type="text" 
                           readOnly 
@@ -520,11 +520,6 @@ const ManageEventsPage: NextPage = () => {
                             toast({ title: "Token Copiado!", description: "Token de Check-in copiado para a área de transferência." });
                           }}
                         />
-                         <Button size="sm" variant="outline" className="text-xs h-8 border-destructive text-destructive hover:bg-destructive/10"
-                          onClick={() => router.push(`/partner/qr-code/${event.id}`)}
-                         >
-                           Ver QR Code
-                         </Button>
                       </div>
                     )}
                   </Card>
