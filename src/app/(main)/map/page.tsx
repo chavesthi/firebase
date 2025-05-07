@@ -513,7 +513,7 @@ const MapContentAndLogic = () => {
             onOpenAutoFocus={(e) => e.preventDefault()} 
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-center">
+            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-start items-center gap-x-4">
                 <SheetTitle className="text-2xl font-bold text-secondary">
                   {selectedVenue.name}
                 </SheetTitle>
@@ -700,4 +700,5 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
 
