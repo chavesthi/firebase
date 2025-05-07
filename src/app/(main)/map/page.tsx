@@ -105,24 +105,47 @@ const MapUpdater = ({ center }: { center: Location }) => {
 // Custom marker component for venues
 const VenueCustomMapMarker = ({ type, venueName, isFilterActive }: { type: VenueType, venueName: string, isFilterActive: boolean }) => {
   const IconComponent = venueTypeIcons[type];
-  const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
+  const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
   
+  let effectiveBlinkHighlightColor = '#FACC15'; // Default: Tailwind yellow-400 for blinking
+  // Sanitize hex comparison by ensuring consistent casing and removing #
+  const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
+
+  if (normalizeHex(basePinColor) === normalizeHex(effectiveBlinkHighlightColor)) {
+    effectiveBlinkHighlightColor = 'white'; // Fallback to white if basePinColor is already yellow-400
+  }
+
+  const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
   return (
-    <div className="flex flex-col items-center cursor-pointer" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
-      <div
-        className={cn(
-          "flex items-center justify-center w-10 h-10 rounded-full",
-          isFilterActive ? 'shadow-xl ring-2 ring-yellow-300' : 'shadow-lg' // Highlight applied here
-        )}
-        style={{ backgroundColor: pinColor }}
-      >
-        {IconComponent ? <IconComponent className="w-6 h-6 text-white" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
+    <>
+      {isFilterActive && (
+        <style jsx global>{`
+          @keyframes ${animationName} {
+            0% { background-color: ${basePinColor}; }
+            100% { background-color: ${effectiveBlinkHighlightColor}; }
+          }
+        `}</style>
+      )}
+      <div className="flex flex-col items-center cursor-pointer" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
+        <div
+          className={cn(
+            "flex items-center justify-center w-10 h-10 rounded-full",
+            isFilterActive ? 'shadow-xl' : 'shadow-lg', 
+          )}
+          style={{ 
+            backgroundColor: isFilterActive ? undefined : basePinColor, 
+            ...(isFilterActive && { animation: `${animationName} 1s infinite alternate` }) 
+          }}
+        >
+          {IconComponent ? <IconComponent className="w-6 h-6 text-white" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
+        </div>
+        <div
+          className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px]"
+          style={{ borderTopColor: basePinColor }}
+        />
       </div>
-      <div
-        className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px]"
-        style={{ borderTopColor: pinColor }}
-      />
-    </div>
+    </>
   );
 };
 
@@ -284,16 +307,26 @@ const MapContentAndLogic = () => {
     );
   }, []);
 
+  const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
+
   const filteredVenues = useMemo(() => {
+    if (!isAnyFilterActive) return venues; // Return all venues if no filter is active
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
       const musicStyleMatch = activeMusicStyleFilters.length === 0 || 
                              (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
       return venueTypeMatch && musicStyleMatch;
     });
-  }, [venues, activeVenueTypeFilters, activeMusicStyleFilters]);
+  }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
-  const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
+  const displayedVenues = useMemo(() => {
+    // If filters are active, display only filtered venues.
+    // Otherwise, display all venues.
+    // This logic is now simpler: `filteredVenues` already holds the correct set.
+    // The markers themselves will decide if they are "active" for blinking.
+    return venues; // Always render all venue markers
+  }, [venues]);
+
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
@@ -431,7 +464,13 @@ const MapContentAndLogic = () => {
             </AdvancedMarker>
           )}
           
-          {mapsApi && filteredVenues.map((venue) => {
+          {mapsApi && displayedVenues.map((venue) => {
+            // Determine if this specific venue marker should be highlighted/blink
+            const isVenueFiltered = isAnyFilterActive && (
+                (activeVenueTypeFilters.length > 0 && activeVenueTypeFilters.includes(venue.type)) ||
+                (activeMusicStyleFilters.length > 0 && venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)))
+            );
+
             return (
               <AdvancedMarker
                 key={venue.id}
@@ -440,8 +479,9 @@ const MapContentAndLogic = () => {
                   setSelectedVenue(venue);
                 }}
                 title={venue.name}
+                zIndex={isVenueFiltered ? 100 : 1} // Bring filtered markers to front
               >
-                <VenueCustomMapMarker type={venue.type} venueName={venue.name} isFilterActive={isAnyFilterActive} />
+                <VenueCustomMapMarker type={venue.type} venueName={venue.name} isFilterActive={isVenueFiltered} />
               </AdvancedMarker>
             );
           })}
