@@ -1,4 +1,5 @@
-export const GOOGLE_MAPS_API_KEY = "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc";
+ts
+export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_DEFAULT_API_KEY_HERE";
 
 export enum UserRole {
   USER = 'user',
@@ -21,4 +22,30 @@ export const VENUE_TYPE_OPTIONS = [
   { value: VenueType.SHOW_HOUSE, label: 'Casa de Show' },
   { value: VenueType.ADULT_ENTERTAINMENT, label: 'Entretenimento Adulto' },
   { value: VenueType.LGBT, label: 'LGBTQIA+' },
+];
+
+export enum MusicStyle {
+  ELECTRONIC = 'electronic',
+  ROCK = 'rock',
+  SAMBA_PAGODE = 'samba_pagode',
+  SERTANEJO = 'sertanejo',
+  REGGAE = 'reggae',
+  FUNK_RAP = 'funk_rap',
+  POP = 'pop',
+  METAL = 'metal',
+  BLUES_JAZZ = 'blues_jazz',
+  OTHER = 'other',
+}
+
+export const MUSIC_STYLE_OPTIONS = [
+  { value: MusicStyle.ELECTRONIC, label: 'Eletrônica' },
+  { value: MusicStyle.ROCK, label: 'Rock' },
+  { value: MusicStyle.SAMBA_PAGODE, label: 'Samba/Pagode' },
+  { value: MusicStyle.SERTANEJO, label: 'Sertanejo' },
+  { value: MusicStyle.REGGAE, label: 'Reggae' },
+  { value: MusicStyle.FUNK_RAP, label: 'Funk/Rap' },
+  { value: MusicStyle.POP, label: 'Pop' },
+  { value: MusicStyle.METAL, label: 'Metal' },
+  { value: MusicStyle.BLUES_JAZZ, label: 'Blues/Jazz' },
+  { value: MusicStyle.OTHER, label: 'Outros' },
 ];

@@ -2,15 +2,15 @@
 'use client';
 
 import { APIProvider, Map as GoogleMap, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
-import { Filter, X } from 'lucide-react';
+import { Filter, X, Music2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { GOOGLE_MAPS_API_KEY, VenueType } from '@/lib/constants';
+import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
 import { 
   IconBar, 
@@ -22,23 +22,27 @@ import {
 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
 
 interface Venue {
   id: string;
   name: string;
   type: VenueType;
+  musicStyles?: MusicStyle[];
   location: Location;
   description: string;
   imageUrl?: string;
 }
 
 const mockVenues: Venue[] = [
-  { id: '1', name: 'Balada Neon Dreams', type: VenueType.NIGHTCLUB, location: { lat: -23.5505, lng: -46.6333 }, description: 'A melhor balada da cidade com luzes neon!', imageUrl: 'https://picsum.photos/seed/nightclub1/300/200' },
-  { id: '2', name: 'Bar do Zé', type: VenueType.BAR, location: { lat: -23.5550, lng: -46.6300 }, description: 'Cerveja gelada e bons petiscos.', imageUrl: 'https://picsum.photos/seed/bar1/300/200' },
+  { id: '1', name: 'Balada Neon Dreams', type: VenueType.NIGHTCLUB, musicStyles: [MusicStyle.ELECTRONIC, MusicStyle.POP], location: { lat: -23.5505, lng: -46.6333 }, description: 'A melhor balada da cidade com luzes neon!', imageUrl: 'https://picsum.photos/seed/nightclub1/300/200' },
+  { id: '2', name: 'Bar do Zé', type: VenueType.BAR, musicStyles: [MusicStyle.SAMBA_PAGODE, MusicStyle.SERTANEJO], location: { lat: -23.5550, lng: -46.6300 }, description: 'Cerveja gelada e bons petiscos.', imageUrl: 'https://picsum.photos/seed/bar1/300/200' },
   { id: '3', name: 'Risada Garantida Club', type: VenueType.STAND_UP, location: { lat: -23.5480, lng: -46.6390 }, description: 'Shows de stand-up todas as sextas.', imageUrl: 'https://picsum.photos/seed/standup1/300/200' },
-  { id: '4', name: 'Arena Shows SP', type: VenueType.SHOW_HOUSE, location: { lat: -23.5600, lng: -46.6400 }, description: 'Grandes shows nacionais e internacionais.', imageUrl: 'https://picsum.photos/seed/showhouse1/300/200' },
+  { id: '4', name: 'Arena Shows SP', type: VenueType.SHOW_HOUSE, musicStyles: [MusicStyle.ROCK, MusicStyle.POP], location: { lat: -23.5600, lng: -46.6400 }, description: 'Grandes shows nacionais e internacionais.', imageUrl: 'https://picsum.photos/seed/showhouse1/300/200' },
   { id: '5', name: 'Cabaret Rouge', type: VenueType.ADULT_ENTERTAINMENT, location: { lat: -23.5450, lng: -46.6250 }, description: 'Entretenimento adulto com discrição e elegância.', imageUrl: 'https://picsum.photos/seed/adult1/300/200' },
-  { id: '6', name: 'Point Arco-Íris', type: VenueType.LGBT, location: { lat: -23.5520, lng: -46.6350 }, description: 'O point da comunidade LGBTQIA+.', imageUrl: 'https://picsum.photos/seed/lgbt1/300/200' },
+  { id: '6', name: 'Point Arco-Íris', type: VenueType.LGBT, musicStyles: [MusicStyle.ELECTRONIC, MusicStyle.FUNK_RAP], location: { lat: -23.5520, lng: -46.6350 }, description: 'O point da comunidade LGBTQIA+.', imageUrl: 'https://picsum.photos/seed/lgbt1/300/200' },
+  { id: '7', name: 'Rock Cave', type: VenueType.BAR, musicStyles: [MusicStyle.ROCK, MusicStyle.METAL], location: { lat: -23.5620, lng: -46.6380 }, description: 'O melhor do rock e metal underground.', imageUrl: 'https://picsum.photos/seed/rockcave/300/200' },
+  { id: '8', name: 'Sertanejo Live', type: VenueType.SHOW_HOUSE, musicStyles: [MusicStyle.SERTANEJO], location: { lat: -23.5400, lng: -46.6200 }, description: 'Shows ao vivo de sertanejo.', imageUrl: 'https://picsum.photos/seed/sertanejo/300/200' },
 ];
 
 const venueTypeIcons: Record<VenueType, React.ElementType> = {
@@ -59,15 +63,21 @@ const venueTypeLabels: Record<VenueType, string> = {
   [VenueType.LGBT]: 'LGBTQIA+',
 };
 
+const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce((acc, curr) => {
+  acc[curr.value] = curr.label;
+  return acc;
+}, {} as Record<MusicStyle, string>);
+
+
 const MAP_PIN_SVG_PATH = "M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z";
 
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: '#7DF9FF', // Neon Blue
-  [VenueType.BAR]: '#1F51FF',       // Using a distinct blue for bars, as accent (neon green) might be too similar to other elements
+  [VenueType.BAR]: '#1F51FF',       // Using a distinct blue for bars
   [VenueType.STAND_UP]: '#FFFF00',  // Neon Yellow
   [VenueType.SHOW_HOUSE]: '#D400FF',// Neon Purple
   [VenueType.ADULT_ENTERTAINMENT]: '#FF4136', // Neon Red
-  [VenueType.LGBT]: '#FFA500',      // Orange (as part of rainbow colors for the icon, pin can be orange)
+  [VenueType.LGBT]: '#FFA500',      // Orange
 };
 
 const MapUpdater = ({ center }: { center: Location }) => {
@@ -80,11 +90,11 @@ const MapUpdater = ({ center }: { center: Location }) => {
   return null;
 };
 
-// This new component will contain the logic that depends on the mapsApi
 const MapContentAndLogic = () => {
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
-  const [activeFilters, setActiveFilters] = useState<VenueType[]>([]);
+  const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
+  const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const mapsApi = useMapsLibrary('maps');
@@ -109,27 +119,37 @@ const MapContentAndLogic = () => {
     }
   }, []);
 
-  const toggleFilter = (type: VenueType) => {
-    setActiveFilters(prev =>
+  const toggleVenueTypeFilter = useCallback((type: VenueType) => {
+    setActiveVenueTypeFilters(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
-  };
+  }, []);
+
+  const toggleMusicStyleFilter = useCallback((style: MusicStyle) => {
+    setActiveMusicStyleFilters(prev =>
+      prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]
+    );
+  }, []);
 
   const filteredVenues = useMemo(() => {
-    if (activeFilters.length === 0) return mockVenues;
-    return mockVenues.filter(venue => activeFilters.includes(venue.type));
-  }, [activeFilters]);
+    return mockVenues.filter(venue => {
+      const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
+      const musicStyleMatch = activeMusicStyleFilters.length === 0 || 
+                             (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
+      return venueTypeMatch && musicStyleMatch;
+    });
+  }, [activeVenueTypeFilters, activeMusicStyleFilters]);
 
   const VenueIconDisplay = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground";
+    let colorClass = "text-foreground"; // Default color
     switch (type) {
-      case VenueType.NIGHTCLUB: colorClass = "text-primary"; break;
-      case VenueType.BAR: colorClass = "text-accent"; break;
-      case VenueType.STAND_UP: colorClass = "text-yellow-400"; break;
-      case VenueType.SHOW_HOUSE: colorClass = "text-secondary"; break;
-      case VenueType.ADULT_ENTERTAINMENT: colorClass = "text-pink-500"; break;
-      case VenueType.LGBT: colorClass = "text-orange-400"; break;
+        case VenueType.NIGHTCLUB: colorClass = "text-primary"; break;
+        case VenueType.BAR: colorClass = "text-accent"; break; // Assuming accent is green
+        case VenueType.STAND_UP: colorClass = "text-yellow-400"; break; // Example, choose appropriate Tailwind class
+        case VenueType.SHOW_HOUSE: colorClass = "text-secondary"; break; // Assuming secondary is purple
+        case VenueType.ADULT_ENTERTAINMENT: colorClass = "text-pink-500"; break; // Example
+        case VenueType.LGBT: colorClass = "text-orange-400"; break; // Example
     }
     return <IconComponent className={`w-5 h-5 ${colorClass}`} />;
   };
@@ -144,25 +164,43 @@ const MapContentAndLogic = () => {
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
-      <Card className={`absolute z-10 top-4 left-4 w-72 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}>
+      <Card className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg text-primary">Filtrar Eventos</CardTitle>
+          <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-primary md:hidden hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-14rem)]">
+          <ScrollArea className="h-[calc(100vh-12rem)] pr-3">
             <div className="space-y-3">
+              <h3 className="text-md font-semibold text-primary/80">Tipo de Local</h3>
               {(Object.keys(venueTypeIcons) as VenueType[]).map((type) => (
                 <Button
                   key={type}
-                  variant={activeFilters.includes(type) ? "secondary" : "outline"}
-                  onClick={() => toggleFilter(type)}
-                  className={`w-full justify-start ${activeFilters.includes(type) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
+                  variant={activeVenueTypeFilters.includes(type) ? "secondary" : "outline"}
+                  onClick={() => toggleVenueTypeFilter(type)}
+                  className={`w-full justify-start ${activeVenueTypeFilters.includes(type) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
+                  aria-pressed={activeVenueTypeFilters.includes(type)}
                 >
                   <VenueIconDisplay type={type} />
                   <span className="ml-2">{venueTypeLabels[type]}</span>
+                </Button>
+              ))}
+            </div>
+            <Separator className="my-4 bg-primary/30" />
+            <div className="space-y-3">
+              <h3 className="text-md font-semibold text-primary/80">Estilo Musical</h3>
+              {MUSIC_STYLE_OPTIONS.map((option) => (
+                <Button
+                  key={option.value}
+                  variant={activeMusicStyleFilters.includes(option.value) ? "secondary" : "outline"}
+                  onClick={() => toggleMusicStyleFilter(option.value)}
+                  className={`w-full justify-start ${activeMusicStyleFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
+                  aria-pressed={activeMusicStyleFilters.includes(option.value)}
+                >
+                  <Music2 className="w-5 h-5 text-primary/70" />
+                  <span className="ml-2">{option.label}</span>
                 </Button>
               ))}
             </div>
@@ -176,7 +214,7 @@ const MapContentAndLogic = () => {
             variant="outline"
             size="icon"
             onClick={() => setSidebarOpen(true)}
-            className="absolute z-20 top-4 left-4 md:hidden text-primary border-primary bg-background/80 hover:bg-primary/10"
+            className="absolute z-20 p-2 rounded-full top-4 left-4 md:hidden text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
             aria-label="Abrir filtros"
           >
             <Filter className="w-5 h-5" />
@@ -215,10 +253,7 @@ const MapContentAndLogic = () => {
           <MapUpdater center={userLocation} />
           <Marker position={userLocation} title="Sua Localização" />
           {filteredVenues.map((venue) => {
-            // Ensure window.google.maps.Point is used as mapsApi.Point might not be a constructor
-            // This assumes google maps api is loaded and window.google is available,
-            // which is true if mapsApi is not null.
-            const anchorPoint = new window.google.maps.Point(12, 24); 
+            const anchorPoint = mapsApi && new mapsApi.Point(12, 24);
 
             return (
               <Marker
@@ -233,7 +268,7 @@ const MapContentAndLogic = () => {
                   strokeWeight: 1,
                   strokeColor: '#000000',
                   scale: 1.5,
-                  anchor: anchorPoint,
+                  anchor: anchorPoint || undefined, // Use undefined if mapsApi.Point couldn't be created
                 }}
               />
             );
@@ -242,30 +277,37 @@ const MapContentAndLogic = () => {
       </div>
 
       {selectedVenue && (
-        <Popover open={!!selectedVenue} onOpenChange={() => setSelectedVenue(null)}>
+        <Popover open={!!selectedVenue} onOpenChange={(isOpen) => !isOpen && setSelectedVenue(null)}>
           <PopoverTrigger asChild>
-            {/* The PopoverTrigger needs a child, even if it's not directly interacted with for map-based popovers */}
-            {/* Using a visually hidden div at the marker's logical position (not perfect for screen space, but works for trigger) */}
-            <div style={{ 
-                position: 'fixed', 
-                left: `${selectedVenue.location.lng}%`, // This won't be accurate screen coords
-                top: `${selectedVenue.location.lat}%`, // This won't be accurate screen coords
-                width: 0, 
-                height: 0, 
-                pointerEvents: 'none' 
-              }} />
+            {/* This div is only for logical association, not visual rendering for map pins. */}
+            <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
           </PopoverTrigger>
           <PopoverContent
             className="w-80 bg-background/90 backdrop-blur-md shadow-2xl border-secondary/70"
-            // Position the popover near the center of the map as an alternative to precise marker anchoring
-            style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
-            side="bottom" // Preferred side
-            align="center" // Preferred alignment
+            // Position fixed, near map center, or allow @vis.gl/react-google-maps to handle if integrated popover exists
+            // For this example, let's try to center it relative to the viewport as a fallback
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 100 // Ensure it's above map controls
+            }}
+            onCloseAutoFocus={(e) => e.preventDefault()} // Prevent map from refocusing undesirably
+            side="bottom" 
+            align="center" 
           >
             <div className="grid gap-4">
               <div className="space-y-2">
                 <h4 className="font-medium leading-none text-secondary">{selectedVenue.name}</h4>
                 <Badge variant="outline" className="border-secondary text-secondary">{venueTypeLabels[selectedVenue.type]}</Badge>
+                {selectedVenue.musicStyles && selectedVenue.musicStyles.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedVenue.musicStyles.map(style => (
+                       <Badge key={style} variant="outline" className="text-xs border-accent text-accent">{musicStyleLabels[style]}</Badge>
+                    ))}
+                  </div>
+                )}
                 <p className="text-sm text-muted-foreground">
                   {selectedVenue.description}
                 </p>
@@ -288,12 +330,15 @@ const MapContentAndLogic = () => {
 
 
 const MapPage: NextPage = () => {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!apiKey) {
+    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada.</div>;
+  }
   return (
-    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} solutionChannel="GMP_devsite_samples_v3_rgmbasic">
+    <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic">
       <MapContentAndLogic />
     </APIProvider>
   );
 }
 
 export default MapPage;
-
