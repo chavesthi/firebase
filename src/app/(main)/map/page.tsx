@@ -9,7 +9,7 @@ import { Filter, X, Music2, Loader2 } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle as FilterCardTitle } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore } from '@/lib/firebase';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'; // Added SheetHeader, SheetTitle
 
 
 interface Venue {
@@ -257,7 +257,7 @@ const MapContentAndLogic = () => {
       {/* Filter Sidebar */}
       <Card className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
+          <FilterCardTitle className="text-lg text-primary">Filtrar Locais</FilterCardTitle>
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
@@ -369,21 +369,15 @@ const MapContentAndLogic = () => {
             onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="absolute top-3 right-3 text-muted-foreground hover:text-foreground z-10"
-              onClick={() => setSelectedVenue(null)}
-              aria-label="Fechar detalhes do local"
-            >
-              <X className="w-5 h-5" />
-            </Button>
-
-            <ScrollArea className="h-full">
-              <div className="p-6 space-y-6">
-                {/* Video First */}
+            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md z-10 border-b border-border">
+                <SheetTitle className="text-2xl font-bold text-secondary mr-8">
+                  {selectedVenue.name}
+                </SheetTitle>
+            </SheetHeader>
+            
+            <div className="px-6 pb-6 pt-4 space-y-6">
                 {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
-                  <div className="mb-6">
+                  <div className="mb-4">
                     <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' /* 16:9 Aspect Ratio */ }}>
                       <iframe
                         src={getYouTubeEmbedUrl(selectedVenue.youtubeUrl)!}
@@ -397,13 +391,10 @@ const MapContentAndLogic = () => {
                   </div>
                 ) : null}
 
-                {/* Name and Type */}
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-bold text-secondary">{selectedVenue.name}</h2>
                   <Badge variant="outline" className="border-secondary text-secondary">{venueTypeLabels[selectedVenue.type]}</Badge>
                 </div>
 
-                {/* Music Styles */}
                 {selectedVenue.musicStyles && selectedVenue.musicStyles.length > 0 && (
                   <div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">Estilos Musicais</h3>
@@ -415,7 +406,6 @@ const MapContentAndLogic = () => {
                   </div>
                 )}
                 
-                {/* Events */}
                 <div>
                   <h3 className="text-lg font-semibold text-foreground mb-2">Próximos Eventos</h3>
                   <div className="p-4 border border-dashed rounded-md border-border">
@@ -423,8 +413,7 @@ const MapContentAndLogic = () => {
                     {/* Future: Map through selectedVenue.events here */}
                   </div>
                 </div>
-              </div>
-            </ScrollArea>
+            </div>
           </SheetContent>
         </Sheet>
       )}
@@ -447,4 +436,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
