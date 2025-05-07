@@ -76,7 +76,7 @@ const PartnerRatingsPage: NextPage = () => {
             const data = docSnap.data();
             setPartnerOverallRating({
                 averageVenueRating: data.averageVenueRating,
-                venueRatingCount: data.venueRatingCount,
+                venueRatingCount: data.venueRatingCount, // This is the total number of ratings across all events
             });
         } else {
             setPartnerOverallRating(null);
@@ -118,12 +118,14 @@ const PartnerRatingsPage: NextPage = () => {
         unsubscribePartnerRating();
     };
 
-  }, [currentUser, toast, selectedEventId]);
+  }, [currentUser, toast]); // Removed selectedEventId from dependencies to avoid re-fetching overall rating unnecessarily
 
 
   useEffect(() => {
     if (!selectedEventId || !currentUser) {
       setEventRatings([]); 
+      if (isLoading && !currentUser) setIsLoading(false); // Stop loading if no user
+      else if(isLoading && !selectedEventId && eventsWithRatings.length > 0) setIsLoading(false); // Stop loading if no event selected but list is there
       return;
     }
     
@@ -169,7 +171,7 @@ const PartnerRatingsPage: NextPage = () => {
   }, [selectedEventId, currentUser, toast, eventsWithRatings]);
 
 
-  if (!currentUser) {
+  if (!currentUser && !isLoading) { // Ensure loading stops if no user
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto">
         <Loader2 className="w-12 h-12 text-destructive animate-spin" />
@@ -195,7 +197,7 @@ const PartnerRatingsPage: NextPage = () => {
             Avaliações dos Eventos e do Local
           </CardTitle>
           <CardDescription>
-            Veja as avaliações e comentários dos usuários para seus eventos e a avaliação geral do seu local.
+            Veja as avaliações e comentários dos usuários para seus eventos e a avaliação geral do seu local (média das avaliações de todos os seus eventos).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -206,11 +208,11 @@ const PartnerRatingsPage: NextPage = () => {
                         <div className="flex items-center gap-2">
                             <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={24} readOnly fillColor="hsl(var(--destructive))" />
                             <span className="text-md text-muted-foreground">
-                                ({partnerOverallRating.averageVenueRating.toFixed(1)} de {partnerOverallRating.venueRatingCount} {partnerOverallRating.venueRatingCount === 1 ? 'avaliação' : 'avaliações'})
+                                ({partnerOverallRating.averageVenueRating.toFixed(1)} de {partnerOverallRating.venueRatingCount} {partnerOverallRating.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
                             </span>
                         </div>
                     ) : (
-                        <p className="text-muted-foreground">Seu local ainda não possui avaliações gerais.</p>
+                        <p className="text-muted-foreground">Seu local ainda não possui avaliações (nenhum de seus eventos foi avaliado).</p>
                     )}
                 </div>
             )}
@@ -230,7 +232,7 @@ const PartnerRatingsPage: NextPage = () => {
                                     key={event.id}
                                     variant={selectedEventId === event.id ? "secondary" : "ghost"}
                                     className={cn(
-                                        "w-full justify-start text-left p-3 rounded-none h-auto", // allow height to adjust
+                                        "w-full justify-start text-left p-3 rounded-none h-auto", 
                                         selectedEventId === event.id && "bg-destructive/20 text-destructive font-semibold"
                                     )}
                                     onClick={() => setSelectedEventId(event.id)}

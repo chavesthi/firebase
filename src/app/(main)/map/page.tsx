@@ -230,26 +230,28 @@ const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: Fire
 const updatePartnerOverallRating = async (partnerId: string) => {
     try {
         const eventsCollectionRef = collection(firestore, 'users', partnerId, 'events');
-        const q = query(eventsCollectionRef, where('ratingCount', '>', 0));
-        const eventsSnapshot = await getDocs(q);
+        // Query all events, not just those with ratingCount > 0, to correctly calculate if some events have no ratings
+        const eventsSnapshot = await getDocs(eventsCollectionRef);
 
         let totalWeightedSum = 0;
         let totalRatingsCount = 0;
 
         eventsSnapshot.forEach(eventDoc => {
             const eventData = eventDoc.data();
-            if (eventData.averageRating !== undefined && eventData.ratingCount !== undefined) {
+            // Ensure that averageRating and ratingCount are numbers and exist
+            if (typeof eventData.averageRating === 'number' && typeof eventData.ratingCount === 'number' && eventData.ratingCount > 0) {
                 totalWeightedSum += (eventData.averageRating * eventData.ratingCount);
                 totalRatingsCount += eventData.ratingCount;
             }
         });
 
         const averageVenueRating = totalRatingsCount > 0 ? parseFloat((totalWeightedSum / totalRatingsCount).toFixed(2)) : 0;
+        const venueRatingCount = totalRatingsCount; // This is the sum of all rating counts from all events
 
         const partnerDocRef = doc(firestore, 'users', partnerId);
         await updateDoc(partnerDocRef, {
             averageVenueRating: averageVenueRating,
-            venueRatingCount: totalRatingsCount,
+            venueRatingCount: venueRatingCount,
         });
         
     } catch (error) {
@@ -403,8 +405,8 @@ const MapContentAndLogic = () => {
             instagramUrl: partnerData.instagramUrl,
             facebookUrl: partnerData.facebookUrl,
             whatsappPhone: partnerData.whatsappPhone,
-            averageVenueRating: partnerData.averageVenueRating,
-            venueRatingCount: partnerData.venueRatingCount,
+            averageVenueRating: partnerData.averageVenueRating, // Ensure this is fetched
+            venueRatingCount: partnerData.venueRatingCount,     // Ensure this is fetched
             hasActiveEvent,
             activeEventName,
           };
@@ -553,7 +555,12 @@ const MapContentAndLogic = () => {
 
             if (existingRatingSnap.exists()) {
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
+                // Ensure oldRatingCount is not zero before division if it's the only rating
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { // special case for first rating being updated
+                    newAverageRating = currentRating; // if it's the only rating, new avg is just current rating
+                }
+
             } else {
                 newRatingCount = oldRatingCount + 1;
                 newAverageRating = newRatingCount > 0 ? ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount : currentRating;
@@ -773,10 +780,10 @@ const MapContentAndLogic = () => {
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly fillColor="hsl(var(--secondary))" />
-                            <span className="text-xs text-muted-foreground">({selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação geral' : 'avaliações gerais'})</span>
+                            <span className="text-xs text-muted-foreground">({selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação de eventos' : 'avaliações de eventos'})</span>
                         </div>
                     ): (
-                        <p className="text-xs text-muted-foreground mt-1">Nenhuma avaliação geral ainda.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Nenhuma avaliação de eventos ainda.</p>
                     )}
                 </div>
                  <SheetClose asChild>
