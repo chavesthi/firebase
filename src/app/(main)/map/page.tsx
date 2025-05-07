@@ -5,7 +5,7 @@ import { APIProvider, Map as GoogleMap, Marker, AdvancedMarker, useMap, useMapsL
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
-import { Filter, X, Music2, Loader2, CalendarClock } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, Map as MapIcon, Navigation2, Car, Navigation as NavigationIcon } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -27,6 +27,15 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore } from '@/lib/firebase';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from '@/hooks/use-toast';
 
 interface VenueEvent {
   id: string;
@@ -93,10 +102,14 @@ const MapUpdater = ({ center }: { center: Location }) => {
 };
 
 // Custom marker component for venues
-const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName: string }) => {
+const VenueCustomMapMarker = ({ type, venueName, mapsApi }: { type: VenueType, venueName: string, mapsApi: typeof google.maps | null }) => {
   const IconComponent = venueTypeIcons[type];
   const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
   
+  // Use mapsApi to create Point for anchor if needed by AdvancedMarker or custom logic,
+  // but for simple div transform, it's not directly used in this component's rendering.
+  // The anchor point for AdvancedMarker is set directly on it.
+
   return (
     <div className="flex flex-col items-center cursor-pointer" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
       <div
@@ -141,6 +154,7 @@ const MapContentAndLogic = () => {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(true);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const { toast } = useToast();
 
 
   const mapsApi = useMapsLibrary('maps'); 
@@ -391,6 +405,10 @@ const MapContentAndLogic = () => {
           <Marker position={userLocation} title="Sua Localização" />
           
           {mapsApi && filteredVenues.map((venue) => {
+            // Ensure mapsApi.Point is available before using.
+            // For AdvancedMarker, the anchor is typically handled internally or via different props.
+            // If VenueCustomMapMarker needed a mapsApi.Point for complex logic, it would be passed there.
+            // The current VenueCustomMapMarker uses CSS transform, so it doesn't strictly need google.maps.Point.
 
             return (
               <AdvancedMarker
@@ -401,8 +419,13 @@ const MapContentAndLogic = () => {
                   // Event fetching will be triggered by useEffect watching selectedVenue
                 }}
                 title={venue.name}
+                // The `AdvancedMarker` component from `@vis.gl/react-google-maps`
+                // might not directly use `anchor` in the same way as a raw Google Maps Marker's Icon object.
+                // It often simplifies marker creation. If specific anchor adjustments are needed,
+                // it might involve custom rendering within AdvancedMarker or ensuring its API supports it.
+                // For now, we rely on the default anchor or the CSS transform in VenueCustomMapMarker.
               >
-                <VenueCustomMapMarker type={venue.type} venueName={venue.name} />
+                <VenueCustomMapMarker type={venue.type} venueName={venue.name} mapsApi={mapsApi} />
               </AdvancedMarker>
             );
           })}
@@ -422,7 +445,6 @@ const MapContentAndLogic = () => {
                 <SheetTitle className="text-2xl font-bold text-secondary mr-8">
                   {selectedVenue.name}
                 </SheetTitle>
-                {/* The SheetTitle above serves as the accessible title. This description is for screen readers if needed. */}
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
             
@@ -490,6 +512,56 @@ const MapContentAndLogic = () => {
                       </div>
                     )}
                   </div>
+                   {selectedVenue.location && (
+                    <div className="pt-6 mt-6 border-t border-border">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+                            <NavigationIcon className="w-5 h-5 mr-2" />
+                            Vamos Lá!
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 bg-popover border-border shadow-md">
+                          <DropdownMenuLabel className="text-muted-foreground">Abrir rota em:</DropdownMenuLabel>
+                          <DropdownMenuSeparator className="bg-border" />
+                          <DropdownMenuItem
+                            className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
+                            onClick={() => {
+                              const { lat, lng } = selectedVenue.location!;
+                              window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+                            }}
+                          >
+                            <MapIcon className="w-4 h-4 mr-2 text-primary" /> Google Maps
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
+                            onClick={() => {
+                              const { lat, lng } = selectedVenue.location!;
+                              window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+                            }}
+                          >
+                            <Navigation2 className="w-4 h-4 mr-2 text-primary" /> Waze
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
+                            onClick={() => {
+                              const { lat, lng } = selectedVenue.location!;
+                              const venueName = encodeURIComponent(selectedVenue.name);
+                              window.open(`https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[formatted_address]=${venueName}`, '_blank');
+                              toast({
+                                title: "Uber (Redirecionando)",
+                                description: "Você será redirecionado para o app Uber. Confirme os detalhes da viagem lá.",
+                                variant: "default",
+                                duration: 5000,
+                              });
+                            }}
+                          >
+                            <Car className="w-4 h-4 mr-2 text-primary" /> Uber
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
               </div>
             </ScrollArea>
           </SheetContent>
