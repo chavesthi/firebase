@@ -86,6 +86,19 @@ export default function MainAppLayout({
   const router = useRouter();
   const pathname = usePathname();
 
+  useEffect(() => {
+    if (!loading && !user) {
+      // Redirect to login if user is not authenticated and not already on a public/auth page.
+      const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire'];
+      const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
+      
+      if (!isAllowedPath) {
+        router.push('/login');
+      }
+    }
+  }, [user, loading, router, pathname]);
+
+
   const handleLogout = async () => {
     try {
       await auth.signOut();
@@ -105,22 +118,30 @@ export default function MainAppLayout({
     );
   }
 
+  // If still loading or user is null and redirection is about to happen, show loading/redirecting.
+  // The useEffect above will handle the actual redirection.
   if (!user) {
-    // Redirect to login if user is not authenticated and not already on a public/auth page.
-    // This check might need refinement based on which paths are considered public.
-    if (!pathname.startsWith('/login') && !pathname.startsWith('/questionnaire') && !pathname.startsWith('/partner-questionnaire')) {
-      router.push('/login');
-    }
-    return (
-       <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-        Redirecionando para login...
-      </div>
-    );
+     const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire'];
+     const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
+     if (!isAllowedPath) {
+        return (
+         <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+            Redirecionando para login...
+          </div>
+        );
+     }
+     // If it's an allowed unauthenticated path, we might still render children if the page handles it.
+     // However, for a protected layout, it's typical to only render children if user exists.
+     // For this case, if user is null but on an allowed path like /login, the children of THIS layout won't be rendered.
+     // Login page itself is not part of this layout's children.
+     // This part of the condition might need adjustment based on how public routes are structured relative to this layout.
+     // For now, if !user, we assume children dependent on user context shouldn't render, and redirection or loading message is shown.
   }
   
   // Determine active color based on role
-  const activeColorClass = user.role === UserRole.PARTNER ? 'text-destructive' : 'text-primary';
-  const activeBorderColorClass = user.role === UserRole.PARTNER ? 'border-destructive' : 'border-primary';
+  // Ensure user object exists before trying to access user.role
+  const activeColorClass = user?.role === UserRole.PARTNER ? 'text-destructive' : 'text-primary';
+  const activeBorderColorClass = user?.role === UserRole.PARTNER ? 'border-destructive' : 'border-primary';
 
 
   return (
@@ -129,20 +150,21 @@ export default function MainAppLayout({
         <div className="container flex items-center h-16 max-w-screen-2xl">
           <Logo iconClassName={activeColorClass} />
           <nav className="flex items-center gap-4 ml-auto">
-            {user.role === UserRole.USER && (
+            {user?.role === UserRole.USER && (
               <Link href="/map" passHref>
                 <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={pathname === '/map' ? activeColorClass : ''}>
                   <Map className="w-4 h-4 mr-2" /> Mapa de Eventos
                 </Button>
               </Link>
             )}
-            {user.role === UserRole.PARTNER && (
+            {user?.role === UserRole.PARTNER && (
               <Link href="/partner/dashboard" passHref>
                 <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={pathname === '/partner/dashboard' ? activeColorClass : ''}>
                  <LayoutDashboard className="w-4 h-4 mr-2" /> Meu Painel
                 </Button>
               </Link>
             )}
+            {user && ( // Ensure user exists before rendering dropdown trigger
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2`}>
@@ -167,19 +189,19 @@ export default function MainAppLayout({
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {user.role === UserRole.USER && (
+                {user?.role === UserRole.USER && (
                   <DropdownMenuItem onClick={() => router.push('/user/profile')}>
                     <UserCircle className="w-4 h-4 mr-2" />
                     Meu Perfil
                   </DropdownMenuItem>
                 )}
-                 {user.role === UserRole.PARTNER && (
+                 {user?.role === UserRole.PARTNER && (
                   <DropdownMenuItem onClick={() => router.push('/partner-questionnaire')}>
                     <Settings className="w-4 h-4 mr-2" />
                     Configurações do Local
                   </DropdownMenuItem>
                 )}
-                 {user.role === UserRole.PARTNER && (
+                 {user?.role === UserRole.PARTNER && (
                   <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
                     <UserCircle className="w-4 h-4 mr-2" />
                     Configurações da Conta
@@ -192,10 +214,11 @@ export default function MainAppLayout({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
           </nav>
         </div>
       </header>
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">{user ? children : null}</main> {/* Only render children if user is authenticated */}
     </div>
   );
 }
