@@ -5,12 +5,13 @@ import { APIProvider, Map as GoogleMap, Marker, AdvancedMarker, useMap, useMapsL
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
-import { Filter, X, Music2 } from 'lucide-react';
+import { Filter, X, Music2, Loader2 } from 'lucide-react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS } from '@/lib/constants';
+import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
 import { 
   IconBar, 
@@ -23,6 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
+import { firestore } from '@/lib/firebase';
 
 interface Venue {
   id: string;
@@ -31,19 +33,10 @@ interface Venue {
   musicStyles?: MusicStyle[];
   location: Location;
   description: string;
-  imageUrl?: string;
+  imageUrl?: string; // YouTube video ID could be stored here if we want to show thumbnails
+  youtubeUrl?: string;
 }
 
-const mockVenues: Venue[] = [
-  { id: '1', name: 'Balada Neon Dreams', type: VenueType.NIGHTCLUB, musicStyles: [MusicStyle.ELECTRONIC, MusicStyle.POP], location: { lat: -23.5505, lng: -46.6333 }, description: 'A melhor balada da cidade com luzes neon!', imageUrl: 'https://picsum.photos/seed/nightclub1/300/200' },
-  { id: '2', name: 'Bar do Zé', type: VenueType.BAR, musicStyles: [MusicStyle.SAMBA_PAGODE, MusicStyle.SERTANEJO], location: { lat: -23.5550, lng: -46.6300 }, description: 'Cerveja gelada e bons petiscos.', imageUrl: 'https://picsum.photos/seed/bar1/300/200' },
-  { id: '3', name: 'Risada Garantida Club', type: VenueType.STAND_UP, location: { lat: -23.5480, lng: -46.6390 }, description: 'Shows de stand-up todas as sextas.', imageUrl: 'https://picsum.photos/seed/standup1/300/200' },
-  { id: '4', name: 'Arena Shows SP', type: VenueType.SHOW_HOUSE, musicStyles: [MusicStyle.ROCK, MusicStyle.POP], location: { lat: -23.5600, lng: -46.6400 }, description: 'Grandes shows nacionais e internacionais.', imageUrl: 'https://picsum.photos/seed/showhouse1/300/200' },
-  { id: '5', name: 'Cabaret Rouge', type: VenueType.ADULT_ENTERTAINMENT, location: { lat: -23.5450, lng: -46.6250 }, description: 'Entretenimento adulto com discrição e elegância.', imageUrl: 'https://picsum.photos/seed/adult1/300/200' },
-  { id: '6', name: 'Point Arco-Íris', type: VenueType.LGBT, musicStyles: [MusicStyle.ELECTRONIC, MusicStyle.FUNK_RAP], location: { lat: -23.5520, lng: -46.6350 }, description: 'O point da comunidade LGBTQIA+.', imageUrl: 'https://picsum.photos/seed/lgbt1/300/200' },
-  { id: '7', name: 'Rock Cave', type: VenueType.BAR, musicStyles: [MusicStyle.ROCK, MusicStyle.METAL], location: { lat: -23.5620, lng: -46.6380 }, description: 'O melhor do rock e metal underground.', imageUrl: 'https://picsum.photos/seed/rockcave/300/200' },
-  { id: '8', name: 'Sertanejo Live', type: VenueType.SHOW_HOUSE, musicStyles: [MusicStyle.SERTANEJO], location: { lat: -23.5400, lng: -46.6200 }, description: 'Shows ao vivo de sertanejo.', imageUrl: 'https://picsum.photos/seed/sertanejo/300/200' },
-];
 
 const venueTypeIcons: Record<VenueType, React.ElementType> = {
   [VenueType.NIGHTCLUB]: IconNightclub,
@@ -112,8 +105,10 @@ const MapContentAndLogic = () => {
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
   const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [isLoadingVenues, setIsLoadingVenues] = useState(true);
 
-  const mapsApi = useMapsLibrary('maps'); // For any direct maps API usage if needed
+  const mapsApi = useMapsLibrary('maps');
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -135,6 +130,64 @@ const MapContentAndLogic = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const fetchVenues = async () => {
+      setIsLoadingVenues(true);
+      try {
+        const usersCollectionRef = collection(firestore, 'users');
+        const q = query(
+          usersCollectionRef,
+          where('role', '==', UserRole.PARTNER),
+          where('questionnaireCompleted', '==', true)
+        );
+        const querySnapshot = await getDocs(q);
+        const fetchedVenues: Venue[] = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          // Basic YouTube URL to embeddable ID (very basic, improve if needed)
+          let imageUrl;
+          if (data.youtubeUrl) {
+            try {
+                const url = new URL(data.youtubeUrl);
+                if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') {
+                    const videoId = url.searchParams.get('v');
+                    if (videoId) {
+                        imageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                    }
+                } else if (url.hostname === 'youtu.be') {
+                    const videoId = url.pathname.substring(1);
+                     if (videoId) {
+                        imageUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not parse YouTube URL for thumbnail: ", data.youtubeUrl);
+            }
+          }
+
+          return {
+            id: doc.id,
+            name: data.venueName || 'Nome Indisponível',
+            type: data.venueType as VenueType,
+            musicStyles: data.musicStyles || [],
+            location: data.location,
+            description: data.venueName || 'Visite este local!',
+            imageUrl: imageUrl,
+            youtubeUrl: data.youtubeUrl,
+          };
+        }).filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]); // Ensure location and type are valid
+        setVenues(fetchedVenues);
+      } catch (error) {
+        console.error("Error fetching venues:", error);
+        // Optionally, set an error state or show a toast
+      } finally {
+        setIsLoadingVenues(false);
+      }
+    };
+
+    fetchVenues();
+  }, []);
+
+
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
     setActiveVenueTypeFilters(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
@@ -148,27 +201,24 @@ const MapContentAndLogic = () => {
   }, []);
 
   const filteredVenues = useMemo(() => {
-    return mockVenues.filter(venue => {
+    return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
       const musicStyleMatch = activeMusicStyleFilters.length === 0 || 
                              (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
       return venueTypeMatch && musicStyleMatch;
     });
-  }, [activeVenueTypeFilters, activeMusicStyleFilters]);
+  }, [venues, activeVenueTypeFilters, activeMusicStyleFilters]);
 
-  // This component is used for filter buttons, not map markers directly.
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
     let colorClass = "text-foreground"; 
-    const typeOption = VENUE_TYPE_OPTIONS.find(option => option.value === type);
-
-    // Using defined colors for consistency, with fallbacks
+    
     if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
     else if (type === VenueType.BAR) colorClass = "text-accent";
-    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
+    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; // Ensure this class exists or use HSL
     else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
-    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
-    else if (type === VenueType.LGBT) colorClass = "text-orange-400";
+    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; // Ensure this class exists or use HSL
+    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; // Ensure this class exists or use HSL
     
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
@@ -178,11 +228,17 @@ const MapContentAndLogic = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
-  // mapsApi check is good for features that might depend on it, like drawing or services.
-  // AdvancedMarker and Marker components manage their own loading of the API.
   if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
-     // Only show loading if API key is present, otherwise a different message is shown by MapPage
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa...</div>;
+  }
+
+  if (isLoadingVenues) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground">
+        <Loader2 className="w-12 h-12 mb-4 text-primary animate-spin" />
+        Carregando locais...
+      </div>
+    );
   }
 
 
@@ -252,7 +308,7 @@ const MapContentAndLogic = () => {
           disableDefaultUI={true}
           className="w-full h-full"
           options={{
-            styles: [ // Dark theme for map
+            styles: [ 
               { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
               { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
               { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
@@ -275,10 +331,8 @@ const MapContentAndLogic = () => {
           }}
         >
           <MapUpdater center={userLocation} />
-          {/* Standard marker for user location */}
           <Marker position={userLocation} title="Sua Localização" />
           
-          {/* Custom markers for venues */}
           {filteredVenues.map((venue) => (
               <AdvancedMarker
                 key={venue.id}
@@ -294,21 +348,20 @@ const MapContentAndLogic = () => {
       {selectedVenue && (
         <Popover open={!!selectedVenue} onOpenChange={(isOpen) => !isOpen && setSelectedVenue(null)}>
           <PopoverTrigger asChild>
-            {/* This div is only for logical association, not visual rendering for map pins. */}
             <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
           </PopoverTrigger>
           <PopoverContent
             className="w-80 bg-background/90 backdrop-blur-md shadow-2xl border-secondary/70"
             style={{
-              position: 'fixed', // Using fixed to overlay on map correctly
+              position: 'fixed', 
               top: '50%',
               left: '50%',
-              transform: 'translate(-50%, -50%)', // Center it
-              zIndex: 100 // Ensure it's above map and other elements
+              transform: 'translate(-50%, -50%)',
+              zIndex: 100 
             }}
-            onCloseAutoFocus={(e) => e.preventDefault()} // Prevent map pan on close
-            side="bottom" // Preferred side, may adjust based on space
-            align="center" // Preferred align
+            onCloseAutoFocus={(e) => e.preventDefault()} 
+            side="bottom" 
+            align="center" 
           >
             <div className="grid gap-4">
               <div className="space-y-2">
@@ -330,8 +383,16 @@ const MapContentAndLogic = () => {
                   <Image src={selectedVenue.imageUrl} alt={selectedVenue.name} layout="fill" objectFit="cover" data-ai-hint="event location" />
                 </div>
               )}
+              {selectedVenue.youtubeUrl && !selectedVenue.imageUrl && ( // Fallback for youtube link if no specific image
+                <Button 
+                    variant="link" 
+                    className="justify-start p-0 text-accent" 
+                    onClick={() => window.open(selectedVenue.youtubeUrl, '_blank')}>
+                    Ver vídeo de apresentação
+                </Button>
+              )}
               <Button variant="default" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-                Ver Detalhes
+                Ver Detalhes (Em breve)
               </Button>
             </div>
           </PopoverContent>
@@ -349,7 +410,7 @@ const MapPage: NextPage = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações em next.config.ts (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
-    <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic">
+    <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic" libraries={['marker']}>
       <MapContentAndLogic />
     </APIProvider>
   );
