@@ -24,7 +24,7 @@ import { auth, firestore } from '@/lib/firebase';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS, GOOGLE_MAPS_API_KEY } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { geocodeAddress, type Location } from '@/services/geocoding';
-import { MapPin, Save } from 'lucide-react';
+import { MapPin, Save, ArrowLeft } from 'lucide-react';
 
 const cepRegex = /^\d{5}-?\d{3}$/;
 
@@ -198,7 +198,7 @@ const PartnerQuestionnairePage: NextPage = () => {
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
       
-      const updateData: Partial<PartnerQuestionnaireFormInputs & { questionnaireCompleted: boolean, location?: Location | null }> = {
+      const updateData: Partial<PartnerQuestionnaireFormInputs & { questionnaireCompleted: boolean, location?: Location | null, address?: any }> = {
         instagramUrl: data.instagramUrl,
         facebookUrl: data.facebookUrl,
         youtubeUrl: data.youtubeUrl,
@@ -274,6 +274,14 @@ const PartnerQuestionnairePage: NextPage = () => {
       <div className="absolute top-8 left-8">
         <Logo iconClassName="text-destructive" />
       </div>
+      {isProfileLocked && (
+        <div className="w-full max-w-3xl mb-4">
+          <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Voltar ao Painel
+          </Button>
+        </div>
+      )}
       <Card className="w-full max-w-3xl p-px rounded-lg shadow-2xl bg-gradient-to-b from-destructive/50 to-secondary/50">
         <Card className="w-full bg-card/95 backdrop-blur-sm">
           <CardHeader className="text-center">
