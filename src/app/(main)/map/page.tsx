@@ -145,11 +145,11 @@ const MapContentAndLogic = () => {
     let colorClass = "text-foreground"; // Default color
     switch (type) {
         case VenueType.NIGHTCLUB: colorClass = "text-primary"; break;
-        case VenueType.BAR: colorClass = "text-accent"; break; // Assuming accent is green
-        case VenueType.STAND_UP: colorClass = "text-yellow-400"; break; // Example, choose appropriate Tailwind class
-        case VenueType.SHOW_HOUSE: colorClass = "text-secondary"; break; // Assuming secondary is purple
-        case VenueType.ADULT_ENTERTAINMENT: colorClass = "text-pink-500"; break; // Example
-        case VenueType.LGBT: colorClass = "text-orange-400"; break; // Example
+        case VenueType.BAR: colorClass = "text-accent"; break; 
+        case VenueType.STAND_UP: colorClass = "text-yellow-400"; break; 
+        case VenueType.SHOW_HOUSE: colorClass = "text-secondary"; break; 
+        case VenueType.ADULT_ENTERTAINMENT: colorClass = "text-pink-500"; break; 
+        case VenueType.LGBT: colorClass = "text-orange-400"; break; 
     }
     return <IconComponent className={`w-5 h-5 ${colorClass}`} />;
   };
@@ -253,7 +253,18 @@ const MapContentAndLogic = () => {
           <MapUpdater center={userLocation} />
           <Marker position={userLocation} title="Sua Localização" />
           {filteredVenues.map((venue) => {
-            const anchorPoint = mapsApi && new mapsApi.Point(12, 24);
+            let anchorPoint: google.maps.Point | undefined = undefined;
+            if (mapsApi && typeof mapsApi.Point === 'function') {
+              try {
+                anchorPoint = new mapsApi.Point(12, 24);
+              } catch (e) {
+                console.error("Error creating google.maps.Point with mapsApi:", e);
+                // Fallback or error handling if needed
+              }
+            } else if (mapsApi && typeof mapsApi.Point !== 'function') {
+              console.warn("mapsApi.Point is not a constructor. mapsApi:", mapsApi);
+            }
+
 
             return (
               <Marker
@@ -268,7 +279,7 @@ const MapContentAndLogic = () => {
                   strokeWeight: 1,
                   strokeColor: '#000000',
                   scale: 1.5,
-                  anchor: anchorPoint || undefined, // Use undefined if mapsApi.Point couldn't be created
+                  anchor: anchorPoint, 
                 }}
               />
             );
@@ -284,16 +295,14 @@ const MapContentAndLogic = () => {
           </PopoverTrigger>
           <PopoverContent
             className="w-80 bg-background/90 backdrop-blur-md shadow-2xl border-secondary/70"
-            // Position fixed, near map center, or allow @vis.gl/react-google-maps to handle if integrated popover exists
-            // For this example, let's try to center it relative to the viewport as a fallback
             style={{
               position: 'fixed',
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              zIndex: 100 // Ensure it's above map controls
+              zIndex: 100 
             }}
-            onCloseAutoFocus={(e) => e.preventDefault()} // Prevent map from refocusing undesirably
+            onCloseAutoFocus={(e) => e.preventDefault()} 
             side="bottom" 
             align="center" 
           >
@@ -330,9 +339,9 @@ const MapContentAndLogic = () => {
 
 
 const MapPage: NextPage = () => {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!apiKey) {
-    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada.</div>;
+  const apiKey = GOOGLE_MAPS_API_KEY;
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
+    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente.</div>;
   }
   return (
     <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic">
