@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/constants';
@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import { auth, firestore } from '@/lib/firebase';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface AppUser {
@@ -85,6 +86,7 @@ export default function MainAppLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -103,10 +105,10 @@ export default function MainAppLayout({
     try {
       await auth.signOut();
       router.push('/login');
-      // toast({ title: "Logout", description: "Você foi desconectado." });
+      toast({ title: "Logout", description: "Você foi desconectado." });
     } catch (error) {
       console.error("Logout error:", error);
-      // toast({ title: "Erro no Logout", description: "Não foi possível desconectar.", variant: "destructive" });
+      toast({ title: "Erro no Logout", description: "Não foi possível desconectar.", variant: "destructive" });
     }
   };
 
@@ -149,13 +151,27 @@ export default function MainAppLayout({
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex items-center h-16 max-w-screen-2xl">
           <Logo iconClassName={activeColorClass} />
-          <nav className="flex items-center gap-4 ml-auto">
+          <nav className="flex items-center gap-2 ml-auto md:gap-4">
             {user?.role === UserRole.USER && (
-              <Link href="/map" passHref>
-                <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={pathname === '/map' ? activeColorClass : ''}>
-                  <Map className="w-4 h-4 mr-2" /> Mapa de Eventos
+              <>
+                <Link href="/map" passHref>
+                  <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={pathname === '/map' ? activeColorClass : ''}>
+                    <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
+                  </Button>
+                </Link>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Notificações", description: "Recurso em breve!", variant: "default"})}>
+                  <Bell className="w-5 h-5" />
+                  <span className="sr-only">Notificações</span>
                 </Button>
-              </Link>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Moedas", description: "Recurso em breve!", variant: "default"})}>
+                  <Coins className="w-5 h-5" />
+                  <span className="sr-only">Moedas</span>
+                </Button>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Cupons", description: "Recurso em breve!", variant: "default"})}>
+                  <TicketPercent className="w-5 h-5" />
+                  <span className="sr-only">Cupons de Desconto</span>
+                </Button>
+              </>
             )}
             {user?.role === UserRole.PARTNER && (
               <Link href="/partner/dashboard" passHref>
@@ -167,11 +183,11 @@ export default function MainAppLayout({
             {user && ( // Ensure user exists before rendering dropdown trigger
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2`}>
+                <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0`}>
                   <Avatar className="w-9 h-9">
                     <AvatarImage 
                       src={user?.photoURL || `https://picsum.photos/seed/${user?.email}/40/40`} 
-                      alt="configurações icone" 
+                      alt={user?.name || "Avatar do usuário"} 
                       data-ai-hint="configurações icone" />
                     <AvatarFallback className={activeColorClass}>
                       {user?.name ? user.name.charAt(0).toUpperCase() : <UserCircle />}
@@ -182,7 +198,7 @@ export default function MainAppLayout({
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user?.name || "aqui deve aparecer o nome do usuario"}</p>
+                    <p className="text-sm font-medium leading-none">{user?.name || "Nome do Usuário"}</p>
                     <p className="text-xs leading-none text-muted-foreground">
                       {user?.email}
                     </p>
