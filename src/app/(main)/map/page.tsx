@@ -1,10 +1,11 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -58,6 +59,8 @@ interface Venue {
   description: string; // Could be venue description
   imageUrl?: string; 
   youtubeUrl?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
   events?: VenueEvent[]; // Loaded dynamically
 }
 
@@ -253,6 +256,8 @@ const MapContentAndLogic = () => {
             description: data.venueName || 'Visite este local!', 
             imageUrl: imageUrl,
             youtubeUrl: data.youtubeUrl,
+            instagramUrl: data.instagramUrl,
+            facebookUrl: data.facebookUrl,
           };
         }).filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
         setVenues(fetchedVenues);
@@ -548,6 +553,29 @@ const MapContentAndLogic = () => {
                         {selectedVenue.musicStyles.map(style => (
                            <Badge key={style} variant="outline" className="text-xs border-accent text-accent">{musicStyleLabels[style]}</Badge>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(selectedVenue.instagramUrl || selectedVenue.facebookUrl || selectedVenue.youtubeUrl) && (
+                    <div className="pt-4 mt-4 border-t border-border">
+                      <h3 className="text-lg font-semibold text-foreground mb-3">Redes Sociais</h3>
+                      <div className="flex items-center space-x-4">
+                        {selectedVenue.instagramUrl && (
+                          <a href={selectedVenue.instagramUrl} target="_blank" rel="noopener noreferrer" aria-label="Instagram do local" title="Instagram" className="text-muted-foreground hover:text-primary transition-colors">
+                            <Instagram className="w-6 h-6" />
+                          </a>
+                        )}
+                        {selectedVenue.facebookUrl && (
+                          <a href={selectedVenue.facebookUrl} target="_blank" rel="noopener noreferrer" aria-label="Facebook do local" title="Facebook" className="text-muted-foreground hover:text-primary transition-colors">
+                            <Facebook className="w-6 h-6" />
+                          </a>
+                        )}
+                        {selectedVenue.youtubeUrl && ( 
+                          <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
+                            <Youtube className="w-6 h-6" />
+                          </a>
+                        )}
                       </div>
                     </div>
                   )}
