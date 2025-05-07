@@ -7,7 +7,7 @@ import type { NextPage } from 'next';
 // import Image from 'next/image'; // No longer used directly for venue image
 import { useRouter } from 'next/navigation'; 
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send } from 'lucide-react';
-import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, getDoc, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, getDoc, orderBy, updateDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -62,18 +62,18 @@ interface Venue {
   type: VenueType;
   musicStyles?: MusicStyle[]; 
   location: Location;
-  // description: string; // Potentially remove if not used
-  // imageUrl?: string; // Replaced by youtube embed logic
   youtubeUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
   whatsappPhone?: string; 
   events?: VenueEvent[]; 
   hasActiveEvent?: boolean; 
-  activeEventName?: string | null; 
+  activeEventName?: string | null;
+  averageVenueRating?: number; 
+  venueRatingCount?: number;   
 }
 
-interface UserRatingData { // Renamed from UserRating to avoid conflict with component
+interface UserRatingData {
   rating: number;
   comment?: string;
   createdAt: FirebaseTimestamp;
@@ -227,6 +227,37 @@ const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: Fire
   return now >= startTime && now <= endTime;
 };
 
+const updatePartnerOverallRating = async (partnerId: string) => {
+    try {
+        const eventsCollectionRef = collection(firestore, 'users', partnerId, 'events');
+        const q = query(eventsCollectionRef, where('ratingCount', '>', 0));
+        const eventsSnapshot = await getDocs(q);
+
+        let totalWeightedSum = 0;
+        let totalRatingsCount = 0;
+
+        eventsSnapshot.forEach(eventDoc => {
+            const eventData = eventDoc.data();
+            if (eventData.averageRating !== undefined && eventData.ratingCount !== undefined) {
+                totalWeightedSum += (eventData.averageRating * eventData.ratingCount);
+                totalRatingsCount += eventData.ratingCount;
+            }
+        });
+
+        const averageVenueRating = totalRatingsCount > 0 ? parseFloat((totalWeightedSum / totalRatingsCount).toFixed(2)) : 0;
+
+        const partnerDocRef = doc(firestore, 'users', partnerId);
+        await updateDoc(partnerDocRef, {
+            averageVenueRating: averageVenueRating,
+            venueRatingCount: totalRatingsCount,
+        });
+        
+    } catch (error) {
+        console.error("Error updating partner overall rating:", error);
+        // Do not toast here to avoid spamming the user for a background task failure
+    }
+};
+
 
 const MapContentAndLogic = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -372,6 +403,8 @@ const MapContentAndLogic = () => {
             instagramUrl: partnerData.instagramUrl,
             facebookUrl: partnerData.facebookUrl,
             whatsappPhone: partnerData.whatsappPhone,
+            averageVenueRating: partnerData.averageVenueRating,
+            venueRatingCount: partnerData.venueRatingCount,
             hasActiveEvent,
             activeEventName,
           };
@@ -514,25 +547,20 @@ const MapContentAndLogic = () => {
             const oldRatingCount = eventData.ratingCount || 0;
             const oldAverageRating = eventData.averageRating || 0;
 
-            // Check if user has already rated this specific event via this transaction path
-            // This is a safeguard, main check happens via userRatings state
             const existingRatingSnap = await transaction.get(ratingDocRef);
             let newRatingCount = oldRatingCount;
             let newAverageRating = oldAverageRating;
 
             if (existingRatingSnap.exists()) {
-                 // User is updating their rating
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
-                newAverageRating = ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount;
-                // ratingCount does not change if user updates rating
+                newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
             } else {
-                // New rating
                 newRatingCount = oldRatingCount + 1;
-                newAverageRating = ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount;
+                newAverageRating = newRatingCount > 0 ? ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount : currentRating;
             }
             
             transaction.update(eventDocRef, {
-                averageRating: newAverageRating,
+                averageRating: parseFloat(newAverageRating.toFixed(2)),
                 ratingCount: newRatingCount,
             });
 
@@ -544,7 +572,7 @@ const MapContentAndLogic = () => {
                 rating: currentRating,
                 comment: currentComment || null,
                 createdAt: serverTimestamp(),
-            }, { merge: true }); // Use merge true to update if exists or create new
+            }, { merge: true }); 
 
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
             transaction.update(userCheckedInEventRef, { hasRated: true });
@@ -554,7 +582,23 @@ const MapContentAndLogic = () => {
         setCurrentRating(0);
         setCurrentComment('');
         setCurrentlyRatingEventId(null);
-        // UI should update due to onSnapshot listeners for both events and userRatings
+        
+        if (selectedVenue) {
+            await updatePartnerOverallRating(selectedVenue.id);
+            // Refresh selected venue data to show updated overall rating
+            const updatedVenueDoc = await getDoc(doc(firestore, 'users', selectedVenue.id));
+            if (updatedVenueDoc.exists()) {
+                const updatedData = updatedVenueDoc.data();
+                setSelectedVenue(prev => prev ? {
+                    ...prev,
+                    averageVenueRating: updatedData.averageVenueRating,
+                    venueRatingCount: updatedData.venueRatingCount
+                } : null);
+                 // Update the venue in the main list as well
+                setVenues(prevVenues => prevVenues.map(v => v.id === selectedVenue.id ? {...v, averageVenueRating: updatedData.averageVenueRating, venueRatingCount: updatedData.venueRatingCount} : v));
+            }
+        }
+
     } catch (error: any) {
         console.error("Error submitting rating:", error);
         toast({ title: "Erro ao Avaliar", description: error.message || "Não foi possível enviar sua avaliação.", variant: "destructive" });
@@ -569,7 +613,6 @@ const MapContentAndLogic = () => {
   }
 
   if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
-    // This indicates an issue with Google Maps API loading, not just the key itself
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
@@ -646,7 +689,6 @@ const MapContentAndLogic = () => {
             <Filter className="w-5 h-5" />
           </Button>
         )}
-        {/* Ensure GoogleMap only renders if API Key is valid and mapsApi is loaded to prevent Point error */}
         {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
             <GoogleMap
                 defaultCenter={userLocation}
@@ -723,12 +765,22 @@ const MapContentAndLogic = () => {
             onOpenAutoFocus={(e) => e.preventDefault()} 
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-center gap-x-4">
-                <SheetTitle className="text-2xl font-bold text-secondary">
-                  {selectedVenue.name}
-                </SheetTitle>
+            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4">
+                <div className="flex-1">
+                    <SheetTitle className="text-2xl font-bold text-secondary">
+                    {selectedVenue.name}
+                    </SheetTitle>
+                    {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
+                        <div className="flex items-center gap-1 mt-1">
+                            <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly fillColor="hsl(var(--secondary))" />
+                            <span className="text-xs text-muted-foreground">({selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação geral' : 'avaliações gerais'})</span>
+                        </div>
+                    ): (
+                        <p className="text-xs text-muted-foreground mt-1">Nenhuma avaliação geral ainda.</p>
+                    )}
+                </div>
                  <SheetClose asChild>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground flex-shrink-0">
                     <X className="w-5 h-5" />
                     <span className="sr-only">Fechar</span>
                   </Button>
@@ -891,7 +943,7 @@ const MapContentAndLogic = () => {
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
                                     onChange={(e) => {
-                                      setCurrentlyRatingEventId(event.id); // Ensure we are editing the right event's comment
+                                      setCurrentlyRatingEventId(event.id); 
                                       setCurrentComment(e.target.value);
                                     }}
                                     className="mt-2 text-xs"
@@ -901,7 +953,7 @@ const MapContentAndLogic = () => {
                                     size="sm" 
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
-                                        if(currentlyRatingEventId !== event.id) { // if user starts rating another event
+                                        if(currentlyRatingEventId !== event.id) { 
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
@@ -1004,3 +1056,5 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
+    

@@ -18,6 +18,7 @@ import { auth, firestore } from '@/lib/firebase';
 import { ArrowLeft, Loader2, MessageCircle, Star as StarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
 
 interface EventRating {
   id: string; // rating document id: eventId_userId
@@ -37,6 +38,11 @@ interface EventDetails {
   ratingCount?: number;
 }
 
+interface PartnerOverallRating {
+    averageVenueRating?: number;
+    venueRatingCount?: number;
+}
+
 const PartnerRatingsPage: NextPage = () => {
   const router = useRouter();
   const { toast } = useToast();
@@ -45,6 +51,8 @@ const PartnerRatingsPage: NextPage = () => {
   const [eventRatings, setEventRatings] = useState<EventRating[]>([]);
   const [eventsWithRatings, setEventsWithRatings] = useState<EventDetails[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [partnerOverallRating, setPartnerOverallRating] = useState<PartnerOverallRating | null>(null);
+
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -61,6 +69,24 @@ const PartnerRatingsPage: NextPage = () => {
     if (!currentUser) return;
 
     setIsLoading(true);
+    // Fetch partner's overall rating
+    const partnerDocRef = doc(firestore, `users/${currentUser.uid}`);
+    const unsubscribePartnerRating = onSnapshot(partnerDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            setPartnerOverallRating({
+                averageVenueRating: data.averageVenueRating,
+                venueRatingCount: data.venueRatingCount,
+            });
+        } else {
+            setPartnerOverallRating(null);
+        }
+    }, (error) => {
+        console.error("Error fetching partner overall rating:", error);
+        toast({ title: "Erro ao buscar avaliação geral", variant: "destructive" });
+    });
+
+
     // Fetch all events created by the partner to list them for selection
     const partnerEventsRef = collection(firestore, `users/${currentUser.uid}/events`);
     const qEvents = query(partnerEventsRef, orderBy('startDateTime', 'desc'));
@@ -69,8 +95,7 @@ const PartnerRatingsPage: NextPage = () => {
         const fetchedEvents: EventDetails[] = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            // Only include events that might have ratings or are relevant
-             fetchedEvents.push({
+            fetchedEvents.push({
                 id: doc.id,
                 eventName: data.eventName,
                 averageRating: data.averageRating,
@@ -79,7 +104,7 @@ const PartnerRatingsPage: NextPage = () => {
         });
         setEventsWithRatings(fetchedEvents);
         if (!selectedEventId && fetchedEvents.length > 0) {
-            setSelectedEventId(fetchedEvents[0].id); // Auto-select the first event
+            setSelectedEventId(fetchedEvents[0].id); 
         }
         setIsLoading(false);
     }, (error) => {
@@ -88,37 +113,33 @@ const PartnerRatingsPage: NextPage = () => {
         setIsLoading(false);
     });
 
-    return () => unsubscribeEvents();
+    return () => {
+        unsubscribeEvents();
+        unsubscribePartnerRating();
+    };
 
-  }, [currentUser, toast]);
+  }, [currentUser, toast, selectedEventId]);
 
 
   useEffect(() => {
     if (!selectedEventId || !currentUser) {
-      setEventRatings([]); // Clear ratings if no event is selected or no user
+      setEventRatings([]); 
       return;
     }
     
     setIsLoading(true);
-    // Fetch ratings for the selected event
     const ratingsRef = collection(firestore, 'eventRatings');
-    
-    // INFO: The following query requires a composite index in Firestore.
-    // If you encounter an error message like "The query requires an index. You can create it here: ...",
-    // please create the index using the link provided in the error message.
-    // Example link from a similar error: https://console.firebase.google.com/v1/r/project/fervoappusuarioeparceiro/firestore/indexes?create_composite=Cl1wcm9qZWN0cy9mZXJ2b2FwcHVzdWFyaW9lcGFyY2Vpcm8vZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL2V2ZW50UmF0aW5ncy9pbmRleGVzL18QARoLCgdldmVudElkEAEaDQoJcGFydG5lcklkEAEaDQoJY3JlYXRlZEF0EAIaDAoIX19uYW1lX18QAg
     const qRatings = query(
         ratingsRef, 
         where('eventId', '==', selectedEventId),
-        where('partnerId', '==', currentUser.uid), // Ensure partner only sees their own event ratings
+        where('partnerId', '==', currentUser.uid), 
         orderBy('createdAt', 'desc')
     );
 
     const unsubscribeRatings = onSnapshot(qRatings, async (snapshot) => {
         const fetchedRatings: EventRating[] = [];
-        // We might need eventName if not directly stored in eventRatings, could fetch once or denormalize
         let eventName = eventsWithRatings.find(e => e.id === selectedEventId)?.eventName;
-        if (!eventName) { // Fallback if eventName not in current list (should be rare)
+        if (!eventName) { 
             const eventDoc = await getDoc(doc(firestore, `users/${currentUser.uid}/events/${selectedEventId}`));
             if (eventDoc.exists()) eventName = eventDoc.data()?.eventName;
         }
@@ -171,38 +192,58 @@ const PartnerRatingsPage: NextPage = () => {
         <CardHeader>
           <CardTitle className="text-2xl text-destructive flex items-center">
             <StarIcon className="w-7 h-7 mr-3" />
-            Avaliações dos Eventos
+            Avaliações dos Eventos e do Local
           </CardTitle>
           <CardDescription>
-            Selecione um evento para ver as avaliações e comentários dos usuários.
+            Veja as avaliações e comentários dos usuários para seus eventos e a avaliação geral do seu local.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+            {partnerOverallRating && (
+                <div className="p-4 mb-6 border rounded-lg border-destructive/30 bg-card/80">
+                    <h3 className="mb-2 text-lg font-semibold text-destructive">Sua Avaliação Geral do Local</h3>
+                    {partnerOverallRating.averageVenueRating !== undefined && partnerOverallRating.venueRatingCount !== undefined && partnerOverallRating.venueRatingCount > 0 ? (
+                        <div className="flex items-center gap-2">
+                            <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={24} readOnly fillColor="hsl(var(--destructive))" />
+                            <span className="text-md text-muted-foreground">
+                                ({partnerOverallRating.averageVenueRating.toFixed(1)} de {partnerOverallRating.venueRatingCount} {partnerOverallRating.venueRatingCount === 1 ? 'avaliação' : 'avaliações'})
+                            </span>
+                        </div>
+                    ) : (
+                        <p className="text-muted-foreground">Seu local ainda não possui avaliações gerais.</p>
+                    )}
+                </div>
+            )}
+            <Separator className="my-4 border-destructive/20" />
+
+
             {isLoading && eventsWithRatings.length === 0 && <p className="text-center text-muted-foreground">Carregando seus eventos...</p>}
             {!isLoading && eventsWithRatings.length === 0 && <p className="text-center text-muted-foreground">Você ainda não criou nenhum evento.</p>}
             
             {eventsWithRatings.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="md:col-span-1">
-                        <h3 className="mb-2 text-lg font-medium text-destructive/90">Seus Eventos</h3>
+                        <h3 className="mb-2 text-lg font-medium text-destructive/90">Avaliações por Evento</h3>
                         <ScrollArea className="h-72 border rounded-md border-input">
                             {eventsWithRatings.map(event => (
                                 <Button
                                     key={event.id}
                                     variant={selectedEventId === event.id ? "secondary" : "ghost"}
                                     className={cn(
-                                        "w-full justify-start text-left p-3 rounded-none",
+                                        "w-full justify-start text-left p-3 rounded-none h-auto", // allow height to adjust
                                         selectedEventId === event.id && "bg-destructive/20 text-destructive font-semibold"
                                     )}
                                     onClick={() => setSelectedEventId(event.id)}
                                 >
                                     <div className="flex flex-col">
-                                      <span>{event.eventName}</span>
-                                      {event.averageRating !== undefined && event.ratingCount !== undefined && (
+                                      <span className="truncate">{event.eventName}</span>
+                                      {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
                                         <div className="flex items-center gap-1 mt-0.5">
                                             <StarRating rating={event.averageRating} totalStars={5} size={12} readOnly fillColor="hsl(var(--destructive))" />
                                             <span className="text-xs text-muted-foreground">({event.ratingCount})</span>
                                         </div>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground mt-0.5">Sem avaliações</span>
                                       )}
                                     </div>
                                 </Button>
@@ -211,7 +252,7 @@ const PartnerRatingsPage: NextPage = () => {
                     </div>
                     <div className="md:col-span-2">
                         <h3 className="mb-2 text-lg font-medium text-destructive/90">
-                            Avaliações para: {selectedEventDetails?.eventName || "Selecione um Evento"}
+                            Comentários para: {selectedEventDetails?.eventName || "Selecione um Evento"}
                         </h3>
                         {isLoading && selectedEventId && <div className="flex justify-center items-center h-60"><Loader2 className="w-8 h-8 text-destructive animate-spin" /></div>}
                         {!isLoading && selectedEventId && eventRatings.length === 0 && (
@@ -246,7 +287,7 @@ const PartnerRatingsPage: NextPage = () => {
                         )}
                          {!selectedEventId && !isLoading && eventsWithRatings.length > 0 && (
                              <div className="flex items-center justify-center h-60 p-4 border border-dashed rounded-md border-border">
-                                <p className="text-muted-foreground">Selecione um evento à esquerda para ver as avaliações.</p>
+                                <p className="text-muted-foreground">Selecione um evento à esquerda para ver os comentários e avaliações.</p>
                             </div>
                         )}
                     </div>
@@ -260,3 +301,4 @@ const PartnerRatingsPage: NextPage = () => {
 
 export default PartnerRatingsPage;
 
+    
