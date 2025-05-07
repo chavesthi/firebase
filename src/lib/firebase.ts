@@ -1,6 +1,8 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -11,7 +13,7 @@ const firebaseConfig = {
   authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
   databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
   projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected storageBucket domain
+  storageBucket: "fervoappusuarioeparceiro.appspot.com",
   messagingSenderId: "762698655248",
   appId: "1:762698655248:web:ef79742c8b4e53eccb0c95",
   measurementId: "G-GXSK4Y4P7V"
@@ -19,16 +21,22 @@ const firebaseConfig = {
 
 // Initialize Firebase
 let app: FirebaseApp;
+let auth: Auth;
+let firestore: Firestore;
 let analytics: Analytics | null = null;
 
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  firestore = getFirestore(app);
   if (typeof window !== 'undefined') {
     // Initialize Analytics only on the client side
     analytics = getAnalytics(app);
   }
 } else {
   app = getApps()[0];
+  auth = getAuth(app);
+  firestore = getFirestore(app);
   if (typeof window !== 'undefined') {
      // Get Analytics instance if already initialized (e.g. HMR)
     try {
@@ -40,4 +48,4 @@ if (!getApps().length) {
 }
 
 
-export { app, analytics };
+export { app, auth, firestore, analytics };

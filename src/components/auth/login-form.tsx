@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -11,54 +12,117 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { UserRole } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-
+import { auth, firestore } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
   password: z.string().min(6, { message: 'A senha deve ter pelo menos 6 caracteres.' }),
 });
 
+const signupSchema = z.object({
+  name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
+  email: z.string().email({ message: 'E-mail inválido.' }),
+  password: z.string().min(6, { message: 'A senha deve ter pelo menos 6 caracteres.' }),
+  confirmPassword: z.string().min(6, { message: 'A confirmação da senha deve ter pelo menos 6 caracteres.' }),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "As senhas não coincidem.",
+  path: ["confirmPassword"],
+});
+
 type LoginFormInputs = z.infer<typeof loginSchema>;
+type SignupFormInputs = z.infer<typeof signupSchema>;
 
 export function LoginForm() {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); // 'login' or 'signup'
   const router = useRouter();
   const { toast } = useToast();
 
-  const methods = useForm<LoginFormInputs>({
+  const loginMethods = useForm<LoginFormInputs>({
     resolver: zodResolver(loginSchema),
   });
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    reset,
-  } = methods;
+  const signupMethods = useForm<SignupFormInputs>({
+    resolver: zodResolver(signupSchema),
+  });
 
-  const onSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    console.log('Login data:', data, 'Role:', activeRole);
-    
-    toast({
-      title: "Login Bem Sucedido!",
-      description: `Bem-vindo, ${activeRole === UserRole.USER ? 'Usuário' : 'Parceiro'}! Redirecionando...`,
-      variant: activeRole === UserRole.USER ? "default" : "destructive", // Default is blue-ish, destructive is red-ish
-    });
+  const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
+    loginMethods.formState.isSubmitting;
+    try {
+      // Simulate API call for login if needed, or directly use Firebase
+      // await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      await signInWithEmailAndPassword(auth, data.email, data.password);
 
-    // TODO: Implement actual authentication logic here
-    // For demonstration, redirect based on role
-    if (activeRole === UserRole.USER) {
-      router.push('/map');
-    } else {
-      router.push('/partner/dashboard');
+      toast({
+        title: "Login Bem Sucedido!",
+        description: `Bem-vindo, ${activeRole === UserRole.USER ? 'Usuário' : 'Parceiro'}! Redirecionando...`,
+        variant: activeRole === UserRole.USER ? "default" : "destructive",
+      });
+
+      if (activeRole === UserRole.USER) {
+        router.push('/map');
+      } else {
+        router.push('/partner/dashboard');
+      }
+      loginMethods.reset();
+    } catch (error: any) {
+      console.error('Login error:', error);
+      let errorMessage = "Falha no login. Verifique suas credenciais.";
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = "E-mail ou senha inválidos.";
+      }
+      toast({
+        title: "Erro no Login",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
-    reset();
+  };
+
+  const onSignupSubmit: SubmitHandler<SignupFormInputs> = async (data) => {
+    signupMethods.formState.isSubmitting;
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      // Store additional user info in Firestore
+      await setDoc(doc(firestore, "users", user.uid), {
+        uid: user.uid,
+        name: data.name,
+        email: data.email,
+        role: activeRole, // UserRole.USER or UserRole.PARTNER
+        createdAt: new Date(),
+      });
+      
+      toast({
+        title: "Conta Criada com Sucesso!",
+        description: "Você já pode fazer login com suas novas credenciais.",
+        variant: "default",
+      });
+      signupMethods.reset();
+      setFormMode('login'); // Switch to login form
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      let errorMessage = "Falha ao criar conta. Tente novamente.";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "Este e-mail já está em uso.";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres.";
+      }
+      toast({
+        title: "Erro no Cadastro",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   };
 
   const cardStyles = activeRole === UserRole.USER 
@@ -68,6 +132,9 @@ export function LoginForm() {
   const buttonStyles = activeRole === UserRole.USER 
     ? 'bg-primary hover:bg-primary/90 text-primary-foreground' 
     : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground';
+
+  const commonLabelStyle = activeRole === UserRole.PARTNER ? "text-destructive/80" : "";
+  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive";
 
   return (
     <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as UserRole)} className="w-full">
@@ -92,52 +159,143 @@ export function LoginForm() {
         </TabsTrigger>
       </TabsList>
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <Card className={cn("transition-all duration-300 ease-in-out", cardStyles)}>
-          <CardHeader/>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className={cn(activeRole === UserRole.PARTNER && "text-destructive/80")}>E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seuemail@exemplo.com"
-                {...register('email')}
-                className={cn(errors.email && "border-destructive focus-visible:ring-destructive")}
-              />
-              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className={cn(activeRole === UserRole.PARTNER && "text-destructive/80")}>Senha</Label>
-              <div className="relative">
+      {formMode === 'login' && (
+        <form onSubmit={loginMethods.handleSubmit(onLoginSubmit)}>
+          <Card className={cn("transition-all duration-300 ease-in-out", cardStyles)}>
+            <CardHeader/>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="login-email" className={commonLabelStyle}>E-mail</Label>
                 <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="********"
-                  {...register('password')}
-                  className={cn(errors.password && "border-destructive focus-visible:ring-destructive")}
+                  id="login-email"
+                  type="email"
+                  placeholder="seuemail@exemplo.com"
+                  {...loginMethods.register('email')}
+                  className={cn(loginMethods.formState.errors.email && commonErrorBorderStyle)}
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
-                </Button>
+                {loginMethods.formState.errors.email && <p className="text-sm text-destructive">{loginMethods.formState.errors.email.message}</p>}
               </div>
-              {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className={cn("w-full", buttonStyles)} disabled={isSubmitting}>
-              {isSubmitting ? 'Entrando...' : 'Entrar'} <LogIn size={18} className="ml-2"/>
-            </Button>
-          </CardFooter>
-        </Card>
-      </form>
+              <div className="space-y-2">
+                <Label htmlFor="login-password" className={commonLabelStyle}>Senha</Label>
+                <div className="relative">
+                  <Input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="********"
+                    {...loginMethods.register('password')}
+                    className={cn(loginMethods.formState.errors.password && commonErrorBorderStyle)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </Button>
+                </div>
+                {loginMethods.formState.errors.password && <p className="text-sm text-destructive">{loginMethods.formState.errors.password.message}</p>}
+              </div>
+            </CardContent>
+            <CardFooter className="flex-col gap-4">
+              <Button type="submit" className={cn("w-full", buttonStyles)} disabled={loginMethods.formState.isSubmitting}>
+                {loginMethods.formState.isSubmitting ? 'Entrando...' : 'Entrar'} <LogIn size={18} className="ml-2"/>
+              </Button>
+              <Button variant="link" type="button" onClick={() => setFormMode('signup')} className={cn("p-0 h-auto", activeRole === UserRole.USER ? "text-primary/80 hover:text-primary" : "text-destructive/80 hover:text-destructive")}>
+                Não tem uma conta? Cadastre-se
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      )}
+
+      {formMode === 'signup' && (
+        <form onSubmit={signupMethods.handleSubmit(onSignupSubmit)}>
+          <Card className={cn("transition-all duration-300 ease-in-out", cardStyles)}>
+            <CardHeader/>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="signup-name" className={commonLabelStyle}>Nome Completo</Label>
+                <Input
+                  id="signup-name"
+                  placeholder="Seu nome"
+                  {...signupMethods.register('name')}
+                  className={cn(signupMethods.formState.errors.name && commonErrorBorderStyle)}
+                />
+                {signupMethods.formState.errors.name && <p className="text-sm text-destructive">{signupMethods.formState.errors.name.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-email" className={commonLabelStyle}>E-mail</Label>
+                <Input
+                  id="signup-email"
+                  type="email"
+                  placeholder="seuemail@exemplo.com"
+                  {...signupMethods.register('email')}
+                  className={cn(signupMethods.formState.errors.email && commonErrorBorderStyle)}
+                />
+                {signupMethods.formState.errors.email && <p className="text-sm text-destructive">{signupMethods.formState.errors.email.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-password" className={commonLabelStyle}>Senha</Label>
+                <div className="relative">
+                  <Input
+                    id="signup-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Crie uma senha"
+                    {...signupMethods.register('password')}
+                    className={cn(signupMethods.formState.errors.password && commonErrorBorderStyle)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </Button>
+                </div>
+                {signupMethods.formState.errors.password && <p className="text-sm text-destructive">{signupMethods.formState.errors.password.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-confirmPassword" className={commonLabelStyle}>Confirmar Senha</Label>
+                 <div className="relative">
+                  <Input
+                    id="signup-confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Confirme sua senha"
+                    {...signupMethods.register('confirmPassword')}
+                    className={cn(signupMethods.formState.errors.confirmPassword && commonErrorBorderStyle)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? "Esconder confirmação de senha" : "Mostrar confirmação de senha"}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </Button>
+                </div>
+                {signupMethods.formState.errors.confirmPassword && <p className="text-sm text-destructive">{signupMethods.formState.errors.confirmPassword.message}</p>}
+              </div>
+            </CardContent>
+            <CardFooter className="flex-col gap-4">
+              <Button type="submit" className={cn("w-full", buttonStyles)} disabled={signupMethods.formState.isSubmitting}>
+                {signupMethods.formState.isSubmitting ? 'Criando conta...' : 'Criar Conta'} <UserPlus size={18} className="ml-2"/>
+              </Button>
+              <Button variant="link" type="button" onClick={() => setFormMode('login')} className={cn("p-0 h-auto", activeRole === UserRole.USER ? "text-primary/80 hover:text-primary" : "text-destructive/80 hover:text-destructive")}>
+                Já tem uma conta? Faça login
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      )}
+
        <style jsx global>{`
         .border-primary\\/80 { border-color: hsla(var(--primary), 0.8); }
         .border-destructive\\/80 { border-color: hsla(var(--destructive), 0.8); }
@@ -148,6 +306,7 @@ export function LoginForm() {
         .text-primary { color: hsl(var(--primary)); }
         .text-destructive { color: hsl(var(--destructive)); }
         .text-destructive\\/80 { color: hsla(var(--destructive), 0.8); }
+        .text-primary\\/80 { color: hsla(var(--primary), 0.8); }
       `}</style>
     </Tabs>
   );
