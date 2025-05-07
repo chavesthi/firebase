@@ -163,7 +163,7 @@ export default function MainAppLayout({
                   <Bell className="w-5 h-5" />
                   <span className="sr-only">Notificações</span>
                 </Button>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Moedas", description: "Recurso em breve! Você ganhará moedas ao compartilhar eventos.", variant: "default"})}>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Suas FervoCoins!", description: "Recurso em breve! Você ganhará FervoCoins ao compartilhar eventos com amigos. Cada compartilhamento vale 2 moedas!", variant: "default"})}>
                   <Coins className="w-5 h-5" />
                   <span className="sr-only">Moedas</span>
                 </Button>
@@ -237,4 +237,5 @@ export default function MainAppLayout({
     </div>
   );
 }
+
 
