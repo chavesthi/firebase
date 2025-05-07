@@ -163,7 +163,7 @@ const MapContentAndLogic = () => {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
   const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
-  const [filterSidebarOpen, setFilterSidebarOpen] = useState(true); 
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false); 
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(true);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -426,6 +426,10 @@ const MapContentAndLogic = () => {
           )}
           
           {mapsApi && filteredVenues.map((venue) => {
+            // const anchorPoint = mapsApi && new (mapsApi as any).Point(12, 24); 
+            // The AdvancedMarker component from @vis.gl/react-google-maps
+            // handles its own anchor positioning internally.
+            // We directly pass the VenueCustomMapMarker as children.
             return (
               <AdvancedMarker
                 key={venue.id}
