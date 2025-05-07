@@ -167,7 +167,7 @@ const MapContentAndLogic = () => {
       <Card className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-primary md:hidden hover:text-primary/80">
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-primary hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
         </CardHeader>
@@ -214,7 +214,7 @@ const MapContentAndLogic = () => {
             variant="outline"
             size="icon"
             onClick={() => setSidebarOpen(true)}
-            className="absolute z-20 p-2 rounded-full top-4 left-4 md:hidden text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
+            className="absolute z-20 p-2 rounded-full top-4 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
             aria-label="Abrir filtros"
           >
             <Filter className="w-5 h-5" />
@@ -259,10 +259,18 @@ const MapContentAndLogic = () => {
                 anchorPoint = new mapsApi.Point(12, 24);
               } catch (e) {
                 console.error("Error creating google.maps.Point with mapsApi:", e);
-                // Fallback or error handling if needed
               }
-            } else if (mapsApi && typeof mapsApi.Point !== 'function') {
-              console.warn("mapsApi.Point is not a constructor. mapsApi:", mapsApi);
+            } else if (mapsApi && typeof window.google?.maps?.Point === 'function') {
+                // Fallback to window.google.maps.Point if mapsApi.Point is not a constructor
+                // This might happen due to how the library exposes the API
+                try {
+                    anchorPoint = new window.google.maps.Point(12, 24);
+                } catch (e) {
+                    console.error("Error creating google.maps.Point with window.google.maps.Point:", e);
+                }
+            } else {
+                 if(mapsApi) console.warn("mapsApi.Point is not a constructor. mapsApi:", mapsApi, "window.google.maps.Point:", window.google?.maps?.Point);
+                 else console.warn("mapsApi is not available, window.google.maps.Point:", window.google?.maps?.Point);
             }
 
 
@@ -340,8 +348,8 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
-    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente.</div>;
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE" || apiKey === "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc") {
+    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações.</div>;
   }
   return (
     <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic">
@@ -351,3 +359,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
