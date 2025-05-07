@@ -28,7 +28,9 @@ const questionnaireSchema = z.object({
     .int({ message: 'Idade deve ser um número inteiro.' })
     .positive({ message: 'Idade deve ser um número positivo.' })
     .min(12, { message: 'Você deve ter pelo menos 12 anos.' })
-    .max(120, { message: 'Idade inválida.' }),
+    .max(120, { message: 'Idade inválida.' })
+    .optional() // Allow undefined to clear errors when input is empty
+    .or(z.literal(undefined)), // Explicitly allow undefined for initial state
   preferredVenueTypes: z.array(z.nativeEnum(VenueType))
     .max(4, { message: "Selecione no máximo 4 tipos de local." })
     .optional().default([]),
@@ -74,6 +76,11 @@ const QuestionnairePage: NextPage = () => {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
     }
+    if (data.age === undefined) { // Ensure age is provided if schema doesn't make it optional for submission
+        toast({ title: "Erro", description: "Idade é obrigatória.", variant: "destructive" });
+        return;
+    }
+
 
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
@@ -139,13 +146,20 @@ const QuestionnairePage: NextPage = () => {
                 <Controller
                   name="age"
                   control={control}
-                  render={({ field }) => (
+                  render={({ field: { onChange, onBlur, value, name, ref } }) => (
                     <Input
                       id="age"
                       type="number"
                       placeholder="Sua idade"
-                      {...field}
-                      onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
+                      name={name}
+                      ref={ref}
+                      value={value ?? ''} // Ensures value is never undefined for the input element
+                      onChange={e => {
+                        const val = e.target.value;
+                        // Pass undefined to RHF if empty, otherwise parse to int
+                        onChange(val === '' ? undefined : parseInt(val, 10));
+                      }}
+                      onBlur={onBlur}
                       className={errors.age ? 'border-destructive focus-visible:ring-destructive' : ''}
                     />
                   )}
