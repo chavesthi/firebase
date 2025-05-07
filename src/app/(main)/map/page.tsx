@@ -391,7 +391,6 @@ const MapContentAndLogic = () => {
           <Marker position={userLocation} title="Sua Localização" />
           
           {mapsApi && filteredVenues.map((venue) => {
-            const anchorPoint = mapsApi && new (mapsApi as any).Point(12, 24); 
 
             return (
               <AdvancedMarker
