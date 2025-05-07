@@ -159,7 +159,7 @@ export default function MainAppLayout({
                     <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
                   </Button>
                 </Link>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Notificações", description: "Recurso em breve!", variant: "default"})}>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Notificações", description: "Nada Por aqui Ainda", variant: "default"})}>
                   <Bell className="w-5 h-5" />
                   <span className="sr-only">Notificações</span>
                 </Button>
@@ -188,7 +188,7 @@ export default function MainAppLayout({
                     <AvatarImage 
                       src={user?.photoURL || `https://picsum.photos/seed/${user?.email}/40/40`} 
                       alt={user?.name || "Avatar do usuário"} 
-                      data-ai-hint="configurações icone" />
+                      data-ai-hint="user avatar" />
                     <AvatarFallback className={activeColorClass}>
                       {user?.name ? user.name.charAt(0).toUpperCase() : <UserCircle />}
                     </AvatarFallback>
