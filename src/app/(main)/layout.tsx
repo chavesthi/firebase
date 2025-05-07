@@ -3,7 +3,7 @@
 
 import { Logo } from '@/components/shared/logo';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+// Removed Avatar, AvatarFallback, AvatarImage imports
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,17 +17,17 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/constants';
 import { useEffect, useState } from 'react';
-import { auth, firestore } from '@/lib/firebase';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { auth, firestore } from '@/lib/firebase';
 
 
 interface AppUser {
   name: string;
   email: string | null;
   role: UserRole | null;
-  photoURL?: string | null;
+  // photoURL removed
 }
 
 // Updated auth hook to use Firebase
@@ -63,7 +63,7 @@ const useAuth = () => {
           name: userName,
           email: firebaseUser.email,
           role: userRole,
-          photoURL: firebaseUser.photoURL,
+          // photoURL removed
         });
       } else {
         setAppUser(null);
@@ -183,16 +183,15 @@ export default function MainAppLayout({
             {user && ( // Ensure user exists before rendering dropdown trigger
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0`}>
-                  <Avatar className="w-9 h-9">
-                    <AvatarImage 
-                      src={user?.photoURL || `https://picsum.photos/seed/${user?.email}/40/40`} 
-                      alt={user?.name || "Avatar do usuário"} 
-                      data-ai-hint="user avatar" />
-                    <AvatarFallback className={activeColorClass}>
-                      {user?.name ? user.name.charAt(0).toUpperCase() : <UserCircle />}
-                    </AvatarFallback>
-                  </Avatar>
+                <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
+                  {/* Replaced Avatar with simple text or icon */}
+                  {user?.name ? (
+                    <span className={`text-lg font-semibold ${activeColorClass}`}>
+                      {user.name.charAt(0).toUpperCase()}
+                    </span>
+                  ) : (
+                    <UserCircle className={`w-6 h-6 ${activeColorClass}`} />
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>

@@ -1,17 +1,18 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+// Removed Avatar, AvatarFallback, AvatarImage imports
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit3 } from 'lucide-react';
+import { Edit3, UserCircle } from 'lucide-react'; // Added UserCircle for placeholder
 
-// Mock user data
+// Mock user data updated
 const mockUser = {
   name: "Usuário Fervoso",
   email: "usuario@fervo.com",
-  profilePictureUrl: "https://picsum.photos/seed/userprofile/100/100",
+  // profilePictureUrl removed
   preferences: ["Balada", "Bar"],
 };
 
@@ -24,14 +25,18 @@ export default function UserProfilePage() {
           <CardDescription>Gerencie suas informações e preferências.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col items-center space-y-4">
-            <Avatar className="w-24 h-24 border-2 border-primary">
-              <AvatarImage src={mockUser.profilePictureUrl} alt={mockUser.name} data-ai-hint="user avatar"/>
-              <AvatarFallback className="text-3xl text-primary">{mockUser.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <Button variant="outline" size="sm" className="border-primary text-primary hover:bg-primary/10">
-              <Edit3 className="w-4 h-4 mr-2" /> Alterar Foto
-            </Button>
+          {/* Avatar and photo upload button removed */}
+          <div className="flex flex-col items-center space-y-2">
+            <div className="w-24 h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted">
+              {mockUser.name ? (
+                <span className="text-3xl text-primary font-semibold">
+                  {mockUser.name.charAt(0).toUpperCase()}
+                </span>
+              ) : (
+                <UserCircle className="w-16 h-16 text-primary" />
+              )}
+            </div>
+             <p className="text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
           </div>
 
           <div className="space-y-2">
@@ -61,3 +66,4 @@ export default function UserProfilePage() {
     </div>
   );
 }
+

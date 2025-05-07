@@ -1,19 +1,20 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+// Removed Avatar, AvatarFallback, AvatarImage imports
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Edit3 } from 'lucide-react';
+import { Edit3, UserCircle } from 'lucide-react'; // Added UserCircle for placeholder
 
-// Mock partner data
+// Mock partner data updated
 const mockPartner = {
   contactName: "Parceiro Fervo",
   email: "parceiro@fervo.com",
   companyName: "FervoTop Eventos Ltda.",
-  profilePictureUrl: "https://picsum.photos/seed/partnersettings/100/100",
+  // profilePictureUrl removed
   notificationsEnabled: true,
 };
 
@@ -26,14 +27,18 @@ export default function PartnerSettingsPage() {
           <CardDescription>Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col items-center space-y-4">
-            <Avatar className="w-24 h-24 border-2 border-destructive">
-              <AvatarImage src={mockPartner.profilePictureUrl} alt={mockPartner.contactName} data-ai-hint="partner avatar" />
-              <AvatarFallback className="text-3xl text-destructive">{mockPartner.contactName.charAt(0)}</AvatarFallback>
-            </Avatar>
-             <Button variant="outline" size="sm" className="border-destructive text-destructive hover:bg-destructive/10">
-              <Edit3 className="w-4 h-4 mr-2" /> Alterar Foto
-            </Button>
+          {/* Avatar and photo upload button removed */}
+          <div className="flex flex-col items-center space-y-2">
+             <div className="w-24 h-24 border-2 border-destructive rounded-full flex items-center justify-center bg-muted">
+              {mockPartner.contactName ? (
+                <span className="text-3xl text-destructive font-semibold">
+                  {mockPartner.contactName.charAt(0).toUpperCase()}
+                </span>
+              ) : (
+                <UserCircle className="w-16 h-16 text-destructive" />
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
           </div>
 
           <div className="space-y-2">
@@ -60,3 +65,4 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
