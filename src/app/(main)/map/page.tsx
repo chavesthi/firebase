@@ -844,11 +844,13 @@ const MapContentAndLogic = () => {
                                 {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
                                 {event.pricingType !== PricingType.FREE && event.pricingValue ? `: R$ ${event.pricingValue.toFixed(2)}` : ''}
                               </p>
-                               {event.averageRating !== undefined && event.ratingCount !== undefined && (
+                               {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
                                 <div className="flex items-center gap-1 mt-1">
                                     <StarRating rating={event.averageRating} totalStars={5} size={14} readOnly />
                                     <span className="text-xs text-muted-foreground">({event.ratingCount} {event.ratingCount === 1 ? 'avaliação' : 'avaliações'})</span>
                                 </div>
+                               ): (
+                                <p className="text-xs text-muted-foreground mt-1">Nenhuma avaliação ainda.</p>
                                )}
                               {event.musicStyles && event.musicStyles.length > 0 && (
                                 <p className="text-xs text-muted-foreground mt-1">
