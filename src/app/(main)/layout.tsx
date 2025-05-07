@@ -147,7 +147,10 @@ export default function MainAppLayout({
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2`}>
                   <Avatar className="w-9 h-9">
-                    <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.email}/40/40`} alt={user?.name || 'Avatar'} data-ai-hint="user avatar" />
+                    <AvatarImage 
+                      src={user?.photoURL || `https://picsum.photos/seed/${user?.email}/40/40`} 
+                      alt="coloque aqui um icone de configurações" 
+                      data-ai-hint="configurações icone" />
                     <AvatarFallback className={activeColorClass}>
                       {user?.name ? user.name.charAt(0).toUpperCase() : <UserCircle />}
                     </AvatarFallback>
@@ -196,3 +199,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
