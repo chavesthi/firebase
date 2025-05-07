@@ -258,19 +258,27 @@ const MapContentAndLogic = () => {
               try {
                 anchorPoint = new mapsApi.Point(12, 24);
               } catch (e) {
-                console.error("Error creating google.maps.Point with mapsApi:", e);
+                // If mapsApi.Point is not a constructor, it might be because the google.maps object is not fully loaded or structured as expected.
+                // Try accessing via window.google.maps.Point as a fallback.
+                if (typeof window.google?.maps?.Point === 'function') {
+                    try {
+                        anchorPoint = new window.google.maps.Point(12, 24);
+                    } catch (e2) {
+                         console.error("Error creating google.maps.Point with window.google.maps.Point after mapsApi.Point failed:", e2);
+                    }
+                } else {
+                    console.error("Error creating google.maps.Point with mapsApi.Point, and window.google.maps.Point is not available:", e);
+                }
               }
-            } else if (mapsApi && typeof window.google?.maps?.Point === 'function') {
-                // Fallback to window.google.maps.Point if mapsApi.Point is not a constructor
-                // This might happen due to how the library exposes the API
+            } else if (typeof window.google?.maps?.Point === 'function') {
                 try {
                     anchorPoint = new window.google.maps.Point(12, 24);
                 } catch (e) {
                     console.error("Error creating google.maps.Point with window.google.maps.Point:", e);
                 }
             } else {
-                 if(mapsApi) console.warn("mapsApi.Point is not a constructor. mapsApi:", mapsApi, "window.google.maps.Point:", window.google?.maps?.Point);
-                 else console.warn("mapsApi is not available, window.google.maps.Point:", window.google?.maps?.Point);
+                 if(mapsApi) console.warn("mapsApi.Point is not a constructor and window.google.maps.Point is not available. mapsApi:", mapsApi);
+                 else console.warn("mapsApi is not available and window.google.maps.Point is not available.");
             }
 
 
@@ -348,8 +356,11 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE" || apiKey === "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc") {
-    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações.</div>;
+  // The API key "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc" is a placeholder from Google itself,
+  // but for this app, if it's configured, it means the user intends to use it or replace it later.
+  // The main error is if it's still the template "YOUR_DEFAULT_API_KEY_HERE" or truly empty.
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
+    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações em next.config.ts (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
     <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic">
