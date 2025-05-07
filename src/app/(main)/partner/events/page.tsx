@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -180,7 +181,6 @@ const ManageEventsPage: NextPage = () => {
 
     const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
     // Generate checkInToken if it's a new event or if an existing event doesn't have one.
-    // Normally, an existing event should retain its token unless explicitly regenerated.
     const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10);
 
 
@@ -492,6 +492,11 @@ const ManageEventsPage: NextPage = () => {
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(event.id)} title="Excluir evento">
                           <Trash2 className="w-5 h-5 text-red-500" />
                         </Button>
+                        {event.checkInToken && (
+                          <Button variant="ghost" size="icon" onClick={() => router.push(`/partner/qr-code/${event.id}`)} title="Ver QR Code do Evento">
+                            <QrCode className="w-5 h-5 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                     {event.description && <p className="mt-2 text-sm text-foreground/80">{event.description}</p>}
@@ -503,19 +508,19 @@ const ManageEventsPage: NextPage = () => {
                     )}
                     {event.checkInToken && (
                       <div className="mt-2 flex items-center gap-2">
-                        <QrCode className="w-5 h-5 text-destructive" />
+                        <QrCode className="w-4 h-4 text-muted-foreground" /> {/* Smaller icon for input field context */}
                         <Input 
                           type="text" 
                           readOnly 
                           value={event.checkInToken} 
-                          className="text-xs flex-1 bg-muted/50 border-dashed"
+                          className="text-xs flex-1 bg-muted/50 border-dashed h-8"
                           onClick={(e) => {
                             (e.target as HTMLInputElement).select();
                             navigator.clipboard.writeText(event.checkInToken || "");
                             toast({ title: "Token Copiado!", description: "Token de Check-in copiado para a área de transferência." });
                           }}
                         />
-                         <Button size="sm" variant="outline" className="text-xs border-destructive text-destructive hover:bg-destructive/10"
+                         <Button size="sm" variant="outline" className="text-xs h-8 border-destructive text-destructive hover:bg-destructive/10"
                           onClick={() => router.push(`/partner/qr-code/${event.id}`)}
                          >
                            Ver QR Code
@@ -534,3 +539,4 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
+
