@@ -1,6 +1,7 @@
+
 'use client';
 
-import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map as GoogleMap, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,7 @@ import {
   IconShowHouse, 
   IconAdultEntertainment, 
   IconLGBT,
-  IconMapPin
+  // IconMapPin is not used directly for path anymore, path string is used
 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -57,6 +58,9 @@ const venueTypeLabels: Record<VenueType, string> = {
   [VenueType.LGBT]: 'LGBTQIA+',
 };
 
+// SVG path for the map pin icon (teardrop shape)
+const MAP_PIN_SVG_PATH = "M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z";
+
 const MapUpdater = ({ center }: { center: Location }) => {
   const map = useMap();
   useEffect(() => {
@@ -72,6 +76,8 @@ export default function MapPage() {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeFilters, setActiveFilters] = useState<VenueType[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true); // Default open on desktop
+
+  const mapsApi = useMapsLibrary('maps'); // Get the google.maps namespace
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -120,7 +126,12 @@ export default function MapPage() {
   };
 
   if (!userLocation) {
-    return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando mapa...</div>;
+    return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
+  }
+
+  if (!mapsApi) {
+    // mapsApi (google.maps namespace) is not yet available
+    return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa...</div>;
   }
 
   return (
@@ -261,21 +272,22 @@ export default function MapPage() {
                 {/* Custom user marker if needed, otherwise default Google marker */}
             </Marker>
             {filteredVenues.map((venue) => {
-              const IconComponent = venueTypeIcons[venue.type];
+              const anchorPoint = new mapsApi.Point(12, 24); // Use mapsApi.Point
+
               return (
                 <Marker
                   key={venue.id}
                   position={venue.location}
                   onClick={() => setSelectedVenue(venue)}
                   title={venue.name}
-                  icon={{ // Custom icon using SVG path or URL
-                    path: IconMapPin({}).props.children.find((c: any) => c.type === 'path').props.d, // Basic pin shape for now
+                  icon={{ 
+                    path: MAP_PIN_SVG_PATH, // Use defined SVG path string
                     fillColor: venueTypeColors[venue.type] || '#7DF9FF', // Neon Blue default
                     fillOpacity: 1,
                     strokeWeight: 1,
                     strokeColor: '#000000',
                     scale: 1.5,
-                    anchor: new google.maps.Point(12, 24), // Adjust anchor as needed
+                    anchor: anchorPoint, // Adjust anchor as needed
                   }}
                 />
               );
@@ -323,9 +335,9 @@ export default function MapPage() {
 
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: '#7DF9FF', // Neon Blue
-  [VenueType.BAR]: '#1F51FF', // Neon Green
+  [VenueType.BAR]: '#1F51FF', // Neon Green for interactive elements, but used as Bar color here
   [VenueType.STAND_UP]: '#FFFF00', // Neon Yellow
   [VenueType.SHOW_HOUSE]: '#D400FF', // Neon Purple
   [VenueType.ADULT_ENTERTAINMENT]: '#FF4136', // Neon Red (using for variety)
-  [VenueType.LGBT]: '#FFA500', // Orange (as part of rainbow)
+  [VenueType.LGBT]: '#FFA500', // Orange (as part of rainbow colors)
 };
