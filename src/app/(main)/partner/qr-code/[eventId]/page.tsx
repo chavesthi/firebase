@@ -27,33 +27,43 @@ const EventQrCodePage: NextPage = () => {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const { eventId } = params;
+  const eventIdParam = params.eventId; // Can be string or string[]
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [eventLoading, setEventLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const eventId = typeof eventIdParam === 'string' ? eventIdParam : null;
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setCurrentUser(user);
       } else {
-        router.push('/login');
-        setLoading(false);
+        setError("Usuário não autenticado. Faça login para continuar.");
+        router.push('/login'); // Redirect if not authenticated
       }
+      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, [router]);
 
   useEffect(() => {
-    if (!currentUser || typeof eventId !== 'string') {
-      if(!currentUser && !loading) setError("Usuário não autenticado.");
+    if (authLoading || !currentUser || !eventId) {
+      if (!authLoading && !currentUser && !error) { // if auth is done, no user, and no prior error
+        setError("Usuário não autenticado. Faça login para continuar.");
+      }
+      if (!authLoading && !eventId && !error) {
+        setError("ID do evento inválido.");
+      }
+      if (!authLoading) setEventLoading(false); // Stop event loading if prerequisites fail
       return;
     }
 
     const fetchEventDetails = async () => {
-      setLoading(true);
+      setEventLoading(true);
       setError(null);
       try {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
@@ -82,15 +92,16 @@ const EventQrCodePage: NextPage = () => {
 
       } catch (err: any) {
         console.error("Error fetching event details for QR code:", err);
-        setError(err.message || 'Não foi possível carregar os detalhes do evento.');
-        toast({ title: "Erro", description: err.message || 'Não foi possível carregar os QR Code do evento.', variant: "destructive" });
+        const errorMessage = err.message || 'Não foi possível carregar os detalhes do evento.';
+        setError(errorMessage);
+        toast({ title: "Erro", description: `Não foi possível carregar o QR Code do evento: ${errorMessage}`, variant: "destructive" });
       } finally {
-        setLoading(false);
+        setEventLoading(false);
       }
     };
 
     fetchEventDetails();
-  }, [currentUser, eventId, toast, router, loading]);
+  }, [currentUser, eventId, toast, authLoading]);
 
   const handlePrint = () => {
     window.print();
@@ -115,7 +126,7 @@ const EventQrCodePage: NextPage = () => {
   };
 
 
-  if (loading) {
+  if (authLoading || eventLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background text-foreground">
         <Loader2 className="w-12 h-12 mb-4 text-destructive animate-spin" />
@@ -154,7 +165,7 @@ const EventQrCodePage: NextPage = () => {
             )}
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
-            {error && (
+            {error && !eventDetails && ( // Only show general error if no event details could be loaded
               <div className="p-4 text-center text-destructive-foreground bg-destructive/80 rounded-md print:hidden">
                 <p>{error}</p>
               </div>
@@ -176,7 +187,8 @@ const EventQrCodePage: NextPage = () => {
                  />
               </div>
             )}
-            {!error && eventDetails && !eventDetails.checkInToken && (
+            {/* Specific error for missing token if event was loaded but token is missing */}
+            {!error && eventDetails && !eventDetails.checkInToken && ( 
                  <p className="text-destructive text-center">Token de check-in não encontrado para este evento.</p>
             )}
 
@@ -184,7 +196,7 @@ const EventQrCodePage: NextPage = () => {
                 Apresente este QR Code na entrada do evento para realizar o check-in dos participantes através do Fervo App (função de scanner do usuário).
             </p>
 
-            {!error && eventDetails && (
+            {!error && eventDetails && eventDetails.checkInToken && (
                 <div className="flex flex-col w-full gap-3 pt-4 sm:flex-row sm:justify-center print:hidden">
                     <Button onClick={handlePrint} className="w-full sm:w-auto bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                         <Printer className="w-4 h-4 mr-2" /> Imprimir
