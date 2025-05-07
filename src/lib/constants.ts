@@ -1,4 +1,4 @@
-ts
+
 export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_DEFAULT_API_KEY_HERE";
 
 export enum UserRole {
@@ -49,3 +49,4 @@ export const MUSIC_STYLE_OPTIONS = [
   { value: MusicStyle.BLUES_JAZZ, label: 'Blues/Jazz' },
   { value: MusicStyle.OTHER, label: 'Outros' },
 ];
+
