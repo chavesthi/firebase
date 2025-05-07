@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -181,6 +180,7 @@ const ManageEventsPage: NextPage = () => {
 
     const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
     // Generate checkInToken if it's a new event or if an existing event doesn't have one.
+    // Ensures token is a random string of 10 characters, good enough for uniqueness per partner.
     const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10);
 
 

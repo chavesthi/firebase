@@ -144,12 +144,14 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
       
       // 3. Record check-in
       const checkInCollectionRef = collection(firestore, `users/${parsedData.partnerId}/events/${parsedData.eventId}/checkIns`);
-      await addDoc(checkInCollectionRef, { // Using addDoc to create a new doc with auto-ID under checkIns subcollection for the user
+      // Store the check-in document with the user's ID as the document ID for easy lookup.
+      const userCheckInSpecificDocRef = doc(checkInCollectionRef, userId);
+      await updateDoc(userCheckInSpecificDocRef, {
         userId: userId,
         checkedInAt: serverTimestamp(),
         eventId: parsedData.eventId,
         partnerId: parsedData.partnerId,
-      });
+      }, { merge: true }); // Use merge: true to create if not exists, or update if it somehow does
       
       // Optionally, add this event to a user's personal list of checked-in events
       const userEventsRef = doc(firestore, `users/${userId}/checkedInEvents/${parsedData.eventId}`);
@@ -247,12 +249,12 @@ const QrScannerModal = ({ isOpen, onClose, userId }: QrScannerModalProps) => {
           )}
 
           {processingResult && (
-            <div className={`flex flex-col items-center justify-center h-64 p-4 rounded-md ${processingResult.success ? 'bg-green-100' : 'bg-red-100'}`}>
+            <div className={`flex flex-col items-center justify-center h-64 p-4 rounded-md ${processingResult.success ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
                 {processingResult.success ? 
                     <CheckCircle2 className="w-16 h-16 mb-4 text-green-600" /> : 
                     <XCircle className="w-16 h-16 mb-4 text-red-600" />
                 }
-                <p className={`text-lg font-semibold text-center ${processingResult.success ? 'text-green-700' : 'text-red-700'}`}>
+                <p className={`text-lg font-semibold text-center ${processingResult.success ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                     {processingResult.message}
                 </p>
             </div>
