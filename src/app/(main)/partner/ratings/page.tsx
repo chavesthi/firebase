@@ -102,6 +102,11 @@ const PartnerRatingsPage: NextPage = () => {
     setIsLoading(true);
     // Fetch ratings for the selected event
     const ratingsRef = collection(firestore, 'eventRatings');
+    
+    // INFO: The following query requires a composite index in Firestore.
+    // If you encounter an error message like "The query requires an index. You can create it here: ...",
+    // please create the index using the link provided in the error message.
+    // Example link from a similar error: https://console.firebase.google.com/v1/r/project/fervoappusuarioeparceiro/firestore/indexes?create_composite=Cl1wcm9qZWN0cy9mZXJ2b2FwcHVzdWFyaW9lcGFyY2Vpcm8vZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL2V2ZW50UmF0aW5ncy9pbmRleGVzL18QARoLCgdldmVudElkEAEaDQoJcGFydG5lcklkEAEaDQoJY3JlYXRlZEF0EAIaDAoIX19uYW1lX18QAg
     const qRatings = query(
         ratingsRef, 
         where('eventId', '==', selectedEventId),
@@ -254,3 +259,4 @@ const PartnerRatingsPage: NextPage = () => {
 };
 
 export default PartnerRatingsPage;
+
