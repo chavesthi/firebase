@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, updateDoc, getDoc } from 'firebase/firestore'; // Added getDoc
+import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -206,7 +207,7 @@ const PartnerQuestionnairePage: NextPage = () => {
           facebookUrl: data.facebookUrl,
           youtubeUrl: data.youtubeUrl,
           whatsappPhone: data.whatsappPhone,
-          questionnaireCompleted: true,
+          questionnaireCompleted: true, // Ensure this is always true if profile was locked
         };
       } else {
         dataToUpdate = {
