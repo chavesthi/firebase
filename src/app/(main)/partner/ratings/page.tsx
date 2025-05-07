@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { ArrowLeft, Loader2, MessageCircle, Star as StarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface EventRating {
   id: string; // rating document id: eventId_userId
