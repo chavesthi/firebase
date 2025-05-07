@@ -159,11 +159,11 @@ export default function MainAppLayout({
                     <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
                   </Button>
                 </Link>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Notificações", description: "Nada Por aqui Ainda", variant: "default"})}>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Notificações", description: "Aqui ficaram as notificações ativadas pelo usuário. Se não tiver nenhuma, mostre Nada Por aqui Ainda.", variant: "default"})}>
                   <Bell className="w-5 h-5" />
                   <span className="sr-only">Notificações</span>
                 </Button>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Moedas", description: "Recurso em breve!", variant: "default"})}>
+                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Moedas", description: "Recurso em breve! Você ganhará moedas ao compartilhar eventos.", variant: "default"})}>
                   <Coins className="w-5 h-5" />
                   <span className="sr-only">Moedas</span>
                 </Button>
@@ -218,7 +218,7 @@ export default function MainAppLayout({
                 )}
                  {user?.role === UserRole.PARTNER && (
                   <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
-                    <UserCircle className="w-4 h-4 mr-2" />
+                    <Settings className="w-4 h-4 mr-2" /> {/* Changed icon to Settings */}
                     Configurações da Conta
                   </DropdownMenuItem>
                 )}
