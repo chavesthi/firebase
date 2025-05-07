@@ -205,7 +205,7 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
     console.warn("Could not parse YouTube URL for embed: ", url, e);
     return null;
   }
-  return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null; // Added autoplay=1
 };
 
 const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: FirebaseTimestamp): boolean => {
@@ -790,6 +790,7 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
 
 
 
