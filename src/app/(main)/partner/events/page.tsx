@@ -81,6 +81,7 @@ interface EventDocument extends EventFormInputs {
   createdAt: Timestamp;
   updatedAt?: Timestamp;
   checkInToken?: string; 
+  pricingValue?: number | null; // Allow null for Firestore
 }
 
 const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
@@ -184,30 +185,38 @@ const ManageEventsPage: NextPage = () => {
     const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10);
 
 
-    const eventPayload: Omit<EventDocument, 'id' | 'createdAt'> & { createdAt?: Timestamp } = {
+    const eventPayload: Omit<EventDocument, 'id' | 'createdAt'> & { createdAt?: Timestamp, pricingValue?: number | null } = {
       partnerId: currentUser.uid,
       eventName: data.eventName,
       startDateTime: combineDateAndTime(data.startDate, data.startTime),
       endDateTime: combineDateAndTime(data.endDate, data.endTime),
       musicStyles: data.musicStyles || [],
       pricingType: data.pricingType,
-      pricingValue: data.pricingType === PricingType.FREE ? undefined : data.pricingValue, // Store undefined for Firestore
+      pricingValue: data.pricingType === PricingType.FREE ? null : (data.pricingValue ?? null),
       description: data.description || '',
       visibility: data.visibility,
       checkInToken: checkInToken,
       updatedAt: serverTimestamp(),
     };
+    
+    // Remove pricingValue if it's null and we don't want to store nulls explicitly,
+    // though storing null is generally fine and preferred over undefined for addDoc/setDoc.
+    // For this fix, we'll keep it as null to explicitly indicate no value.
+    // if (eventPayload.pricingValue === null) {
+    //   delete eventPayload.pricingValue;
+    // }
+
 
     try {
       if (editingEventId) {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', editingEventId);
         // Retain original createdAt if editing
         eventPayload.createdAt = existingEvent?.createdAt;
-        await updateDoc(eventDocRef, eventPayload);
+        await updateDoc(eventDocRef, eventPayload as any); // Use 'as any' to bypass strict type checking for optional fields if needed
         toast({ title: "Evento Atualizado!", description: "O evento foi atualizado com sucesso." });
       } else {
         eventPayload.createdAt = serverTimestamp();
-        await addDoc(eventsCollectionRef, eventPayload as EventDocument); // Cast needed due to optional createdAt
+        await addDoc(eventsCollectionRef, eventPayload as any); 
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
       reset(); 
