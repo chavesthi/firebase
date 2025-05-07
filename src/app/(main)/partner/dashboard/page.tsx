@@ -109,12 +109,21 @@ export default function PartnerDashboardPage() {
             <CardDescription>Crie, edite e visualize seus próximos eventos.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-3">
-            <Button className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-              <PlusCircle className="w-5 h-5 mr-2" /> Adicionar Novo Evento
+            <Button 
+              className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              onClick={() => router.push('/partner/events')}
+            >
+              <PlusCircle className="w-5 h-5 mr-2" /> Adicionar/Gerenciar Eventos
             </Button>
-            <Button variant="outline" className="w-full border-destructive text-destructive hover:bg-destructive/10">
+            {/* 
+            <Button 
+                variant="outline" 
+                className="w-full border-destructive text-destructive hover:bg-destructive/10"
+                onClick={() => router.push('/partner/events')} // Can also go to same page or a dedicated view page
+            >
               Ver Meus Eventos
             </Button>
+             */}
           </CardContent>
         </Card>
 

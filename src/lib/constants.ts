@@ -50,3 +50,14 @@ export const MUSIC_STYLE_OPTIONS = [
   { value: MusicStyle.OTHER, label: 'Outros' },
 ];
 
+export enum PricingType {
+  FREE = 'free',
+  ENTRY_FEE = 'entry_fee',
+  CONSUMPTION = 'consumption',
+}
+
+export const PRICING_TYPE_OPTIONS = [
+  { value: PricingType.FREE, label: 'Entrada Grátis' },
+  { value: PricingType.ENTRY_FEE, label: 'Taxa de Entrada' },
+  { value: PricingType.CONSUMPTION, label: 'Consumação Mínima' },
+];
