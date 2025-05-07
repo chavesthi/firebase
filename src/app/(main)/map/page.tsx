@@ -5,7 +5,7 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import Image from 'next/image';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -314,21 +314,33 @@ const MapContentAndLogic = () => {
   const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
 
   const filteredVenues = useMemo(() => {
-    if (!isAnyFilterActive) return venues; // Return all venues if no filter is active
+    // This variable is used to determine which venues should *blink* if filters are active.
+    // It does not filter out venues from being displayed on the map.
+    if (!isAnyFilterActive) return []; // No active filters, so no venues are "filtered" for blinking.
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
       const musicStyleMatch = activeMusicStyleFilters.length === 0 || 
                              (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
-      return venueTypeMatch && musicStyleMatch;
+      
+      // A venue is considered "filtered" (and should blink) if it matches *all* active filter categories.
+      if (activeVenueTypeFilters.length > 0 && activeMusicStyleFilters.length > 0) {
+        return venueTypeMatch && musicStyleMatch;
+      }
+      // If only one category of filter is active, match against that.
+      if (activeVenueTypeFilters.length > 0) {
+        return venueTypeMatch;
+      }
+      if (activeMusicStyleFilters.length > 0) {
+        return musicStyleMatch;
+      }
+      return false; // Should not reach here if isAnyFilterActive is true
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
   const displayedVenues = useMemo(() => {
-    // If filters are active, display only filtered venues.
-    // Otherwise, display all venues.
-    // This logic is now simpler: `filteredVenues` already holds the correct set.
-    // The markers themselves will decide if they are "active" for blinking.
-    return venues; // Always render all venue markers
+    // Always display all venues on the map.
+    // The blinking effect is handled by `isVenueFiltered` within the marker mapping.
+    return venues;
   }, [venues]);
 
 
@@ -472,19 +484,8 @@ const MapContentAndLogic = () => {
           )}
           
           {mapsApi && displayedVenues.map((venue) => {
-            let isVenueFiltered = false;
-            if (isAnyFilterActive) {
-                const typeMatch = activeVenueTypeFilters.length > 0 ? activeVenueTypeFilters.includes(venue.type) : true;
-                const musicMatch = activeMusicStyleFilters.length > 0 ? (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style))) : true;
-
-                if (activeVenueTypeFilters.length > 0 && activeMusicStyleFilters.length > 0) {
-                    isVenueFiltered = typeMatch && musicMatch;
-                } else if (activeVenueTypeFilters.length > 0) {
-                    isVenueFiltered = typeMatch;
-                } else if (activeMusicStyleFilters.length > 0) {
-                    isVenueFiltered = musicMatch;
-                }
-            }
+            // Check if this venue is part of the `filteredVenues` (i.e., should blink)
+            const isVenueFilteredForBlinking = filteredVenues.some(fv => fv.id === venue.id);
             
             return (
               <AdvancedMarker
@@ -494,9 +495,9 @@ const MapContentAndLogic = () => {
                   setSelectedVenue(venue);
                 }}
                 title={venue.name}
-                zIndex={isVenueFiltered ? 100 : 1} 
+                zIndex={isVenueFilteredForBlinking ? 100 : 1} 
               >
-                <VenueCustomMapMarker type={venue.type} venueName={venue.name} isFilterActive={isVenueFiltered} />
+                <VenueCustomMapMarker type={venue.type} venueName={venue.name} isFilterActive={isVenueFilteredForBlinking} />
               </AdvancedMarker>
             );
           })}
@@ -592,7 +593,18 @@ const MapContentAndLogic = () => {
                       <div className="space-y-3">
                         {selectedVenue.events.map(event => (
                           <Card key={event.id} className="p-3 bg-card/50 border-border/50">
-                            <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
+                            <div className="flex justify-between items-start">
+                                <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="text-primary hover:text-primary/80 -mr-2 -mt-1" // Adjust margins if needed
+                                    onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
+                                    title="Ativar notificação para este evento"
+                                >
+                                    <Bell className="w-5 h-5" />
+                                </Button>
+                            </div>
                             <p className="text-xs text-muted-foreground flex items-center">
                               <CalendarClock className="w-3 h-3 mr-1.5"/>
                               {format(event.startDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM HH:mm", { locale: ptBR })}
@@ -688,3 +700,4 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+
