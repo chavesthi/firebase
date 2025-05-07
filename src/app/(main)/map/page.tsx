@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'; // Added SheetHeader, SheetTitle
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 
 interface Venue {
@@ -82,23 +82,23 @@ const MapUpdater = ({ center }: { center: Location }) => {
 const VenueCustomMapMarker = ({ type, venueName }: { type: VenueType, venueName: string }) => {
   const IconComponent = venueTypeIcons[type];
   const pinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
-  const [mapsLib, setMapsLib] = useState<typeof google.maps | null>(null);
-  const mapsApi = useMapsLibrary('maps');
+  // const [mapsLib, setMapsLib] = useState<typeof google.maps | null>(null);
+  // const mapsApi = useMapsLibrary('maps'); // This mapsApi is local to VenueCustomMapMarker
 
-  useEffect(() => {
-    if (mapsApi) {
-      setMapsLib(mapsApi);
-    }
-  }, [mapsApi]);
+  // useEffect(() => {
+  //   if (mapsApi) {
+  //     setMapsLib(mapsApi);
+  //   }
+  // }, [mapsApi]);
 
-  const anchorPoint = useMemo(() => {
-    if (!mapsLib) return undefined;
-    return new mapsLib.Point(12, 24);
-  }, [mapsLib]);
+  // const anchorPoint = useMemo(() => {
+  //   if (!mapsLib) return undefined;
+  //   return new mapsLib.Point(12, 24);
+  // }, [mapsLib]);
 
 
   return (
-    <div className="flex flex-col items-center cursor-pointer" title={venueName}>
+    <div className="flex flex-col items-center cursor-pointer" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
       <div
         className="flex items-center justify-center w-10 h-10 rounded-full shadow-lg"
         style={{ backgroundColor: pinColor }}
@@ -137,7 +137,7 @@ const MapContentAndLogic = () => {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
   const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
-  const [filterSidebarOpen, setFilterSidebarOpen] = useState(true);
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(true); // Default to true (visible)
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(true);
 
@@ -269,7 +269,9 @@ const MapContentAndLogic = () => {
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]"> {/* Ensure full height for map */}
       {/* Filter Sidebar */}
-      <Card className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}>
+      <Card 
+        className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}
+      >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <FilterCardTitle className="text-lg text-primary">Filtrar Locais</FilterCardTitle>
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
@@ -277,7 +279,7 @@ const MapContentAndLogic = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-12rem)] pr-3">
+          <ScrollArea className="h-[calc(100vh-12rem)] pr-3"> {/* Adjust height as needed */}
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Tipo de Local</h3>
               {VENUE_TYPE_OPTIONS.map((option) => (
@@ -360,7 +362,7 @@ const MapContentAndLogic = () => {
           <Marker position={userLocation} title="Sua Localização" />
           
           {mapsApi && filteredVenues.map((venue) => {
-            const anchorPoint = mapsApi && new (mapsApi as any).Point(12, 24); 
+            // const anchorPoint = mapsApi && new (mapsApi as any).Point(12, 24); // This line was causing the error and is not used by AdvancedMarker
 
             return (
               <AdvancedMarker
@@ -368,7 +370,6 @@ const MapContentAndLogic = () => {
                 position={venue.location}
                 onClick={() => setSelectedVenue(venue)}
                 title={venue.name}
-                
               >
                 <VenueCustomMapMarker type={venue.type} venueName={venue.name} />
               </AdvancedMarker>
@@ -383,13 +384,15 @@ const MapContentAndLogic = () => {
           <SheetContent 
             side="right" 
             className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={(e) => e.preventDefault()}
+            onOpenAutoFocus={(e) => e.preventDefault()} // Prevent focus trap issues with map
+            onCloseAutoFocus={(e) => e.preventDefault()} // Prevent focus trap issues with map
           >
             <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md z-10 border-b border-border">
                 <SheetTitle className="text-2xl font-bold text-secondary mr-8">
                   {selectedVenue.name}
                 </SheetTitle>
+                {/* Visually hidden description for accessibility if title is sufficient, or add a real one */}
+                <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
             
             <div className="px-6 pb-6 pt-4 space-y-6">
@@ -445,6 +448,7 @@ const MapPage: NextPage = () => {
   if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações em next.config.ts (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
+  // It's important that 'marker' is included for AdvancedMarker, and 'maps' for core functionalities.
   return (
     <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic" libraries={['marker', 'maps']}>
       <MapContentAndLogic />
