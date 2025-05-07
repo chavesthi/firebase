@@ -171,7 +171,7 @@ export default function MainAppLayout({
                   <Avatar className="w-9 h-9">
                     <AvatarImage 
                       src={user?.photoURL || `https://picsum.photos/seed/${user?.email}/40/40`} 
-                      alt="coloque aqui um icone de configurações" 
+                      alt="configurações icone" 
                       data-ai-hint="configurações icone" />
                     <AvatarFallback className={activeColorClass}>
                       {user?.name ? user.name.charAt(0).toUpperCase() : <UserCircle />}
