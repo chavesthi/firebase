@@ -25,7 +25,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -364,7 +364,10 @@ const MapContentAndLogic = () => {
     <div className="relative flex w-full h-[calc(100vh-4rem)]"> 
       {/* Filter Sidebar */}
       <Card 
-        className={`absolute z-10 top-4 left-4 w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out ${filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'} border-primary/50`}
+        className={cn(
+          "absolute z-10 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
+          filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'
+        )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
@@ -464,11 +467,6 @@ const MapContentAndLogic = () => {
           )}
           
           {mapsApi && displayedVenues.map((venue) => {
-            // Determine if this specific venue marker should be highlighted/blink
-            // A venue is considered "filtered" if ANY active filter matches it.
-            // If venue type filters are active, it must match one of them.
-            // OR if music style filters are active, it must match one of them.
-            // If BOTH filter categories are active, it must match BOTH (implicitly handled by the logic below).
             let isVenueFiltered = false;
             if (isAnyFilterActive) {
                 const typeMatch = activeVenueTypeFilters.length > 0 ? activeVenueTypeFilters.includes(venue.type) : true;
@@ -491,7 +489,7 @@ const MapContentAndLogic = () => {
                   setSelectedVenue(venue);
                 }}
                 title={venue.name}
-                zIndex={isVenueFiltered ? 100 : 1} // Bring filtered markers to front
+                zIndex={isVenueFiltered ? 100 : 1} 
               >
                 <VenueCustomMapMarker type={venue.type} venueName={venue.name} isFilterActive={isVenueFiltered} />
               </AdvancedMarker>
@@ -509,10 +507,16 @@ const MapContentAndLogic = () => {
             onOpenAutoFocus={(e) => e.preventDefault()} 
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border">
-                <SheetTitle className="text-2xl font-bold text-secondary mr-8">
+            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-center">
+                <SheetTitle className="text-2xl font-bold text-secondary">
                   {selectedVenue.name}
                 </SheetTitle>
+                 <SheetClose asChild>
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                    <X className="w-5 h-5" />
+                    <span className="sr-only">Fechar</span>
+                  </Button>
+                </SheetClose>
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
             
@@ -654,3 +658,5 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
+    
