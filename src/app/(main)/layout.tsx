@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -11,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2 } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -22,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/theme-provider';
 
 
 interface AppUser {
@@ -62,6 +62,7 @@ export default function MainAppLayout({
   const { firebaseUser, loading: authLoading } = useAuthSubscription();
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [userDocLoading, setUserDocLoading] = useState(true);
+  const { theme, setTheme } = useTheme();
 
   const router = useRouter();
   const pathname = usePathname();
@@ -85,7 +86,9 @@ export default function MainAppLayout({
             uid: firebaseUser.uid,
             name: userData.name || firebaseUser.displayName || (userData.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
             email: firebaseUser.email,
-            role: userData.role as UserRole || (pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER), // Default role based on path if not in DB
+            // Ensure role from DB is primary, fallback to USER if missing/undefined for an existing doc.
+            // Pathname-based inference should only be for truly new users if doc doesn't exist at all.
+            role: userData.role as UserRole || UserRole.USER, 
             preferredVenueTypes: userData.preferredVenueTypes || [],
             preferredMusicStyles: userData.preferredMusicStyles || [],
             questionnaireCompleted: userData.questionnaireCompleted || false,
@@ -93,17 +96,18 @@ export default function MainAppLayout({
             fervoCoins: userData.fervoCoins || 0,
           });
         } else {
-          // This case might happen if the user signed up but the document creation is pending
-          // Or if it's a very new user navigating before doc is fully written.
-          // Set a default structure, questionnaire will guide them.
-           const defaultRole = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
+          // This case might happen if the user signed up (e.g. Google) but the document creation by loginForm is slightly delayed,
+          // or if it's a very new user navigating before doc is fully written by loginForm.
+          // loginForm's handleSuccessfulAuth should create the doc with the correct role.
+          // If it's still not found, create a default appUser for questionnaire flow.
+           const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
            setAppUser({
              uid: firebaseUser.uid,
-             name: firebaseUser.displayName || (defaultRole === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
+             name: firebaseUser.displayName || (defaultRoleBasedOnInitialAuthAttempt === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
              email: firebaseUser.email,
-             role: defaultRole,
+             role: defaultRoleBasedOnInitialAuthAttempt, // Role based on path is a temporary guess until questionnaire
              fervoCoins: 0,
-             questionnaireCompleted: false,
+             questionnaireCompleted: false, // This is critical, will send to questionnaire
            });
         }
         setUserDocLoading(false);
@@ -123,11 +127,11 @@ export default function MainAppLayout({
         unsubscribeUserDoc();
       }
     };
-  }, [firebaseUser, pathname, toast]);
+  }, [firebaseUser]); // Removed pathname and toast from dependencies
 
 
   useEffect(() => {
-    if (!loading && !appUser) { // Check appUser derived from firebaseUser and its doc
+    if (!loading && !appUser) { 
       const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
       const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
       
@@ -399,6 +403,10 @@ export default function MainAppLayout({
                     Configurações da Conta
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+                    {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+                    {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                   <LogOut className="w-4 h-4 mr-2" />
@@ -421,3 +429,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
