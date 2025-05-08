@@ -34,7 +34,7 @@ interface AppUser {
   preferredMusicStyles?: MusicStyle[];
   questionnaireCompleted?: boolean;
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
-  fervoCoins?: number;
+  fervoCoins: number; // Ensure fervoCoins is always a number
 }
 
 const useAuthAndUserSubscription = () => {
@@ -63,7 +63,7 @@ const useAuthAndUserSubscription = () => {
               preferredMusicStyles: userData.preferredMusicStyles || [],
               questionnaireCompleted: userData.questionnaireCompleted || false,
               lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
-              fervoCoins: userData.fervoCoins || 0,
+              fervoCoins: userData.fervoCoins || 0, // Default to 0 if not present
             });
           } else {
             // User exists in Auth, but not in Firestore. Create a default appUser for questionnaire flow.
@@ -74,7 +74,7 @@ const useAuthAndUserSubscription = () => {
               name: user.displayName || (defaultRoleBasedOnInitialAuthAttempt === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
               email: user.email,
               role: defaultRoleBasedOnInitialAuthAttempt,
-              fervoCoins: 0,
+              fervoCoins: 0, // Default to 0 for new/uninitialized users
               questionnaireCompleted: false,
             });
           }
@@ -327,11 +327,11 @@ export default function MainAppLayout({
                     <span className="sr-only">Notificações</span>
                   </Button>
                   <div className="relative">
-                      <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${appUser.fervoCoins || 0} moedas. Ganhe mais compartilhando eventos!`, variant: "default"})}>
+                      <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${appUser.fervoCoins} moedas. Ganhe mais compartilhando eventos!`, variant: "default"})}>
                       <Coins className="w-5 h-5" />
                       <span className="sr-only">Moedas</span>
                       </Button>
-                      {appUser.fervoCoins !== undefined && appUser.fervoCoins > 0 && (
+                      {appUser.fervoCoins > 0 && (
                           <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-accent-foreground text-[10px] font-bold">
                           {appUser.fervoCoins > 9 ? '9+' : appUser.fervoCoins}
                           </span>
@@ -418,3 +418,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
