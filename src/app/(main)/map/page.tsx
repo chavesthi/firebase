@@ -41,6 +41,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
+import { Logo } from '@/components/shared/logo'; // Import Logo
 
 interface VenueEvent {
   id: string;
@@ -625,9 +626,12 @@ const MapContentAndLogic = () => {
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]"> 
+      <div className="absolute top-4 left-4 z-30">
+          <Logo iconClassName="text-primary" />
+      </div>
       <Card 
         className={cn(
-          "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
+          "absolute z-20 top-16 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
           filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'
         )}
       >
@@ -638,7 +642,7 @@ const MapContentAndLogic = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-12rem)] pr-3"> 
+          <ScrollArea className="h-[calc(100vh-15rem)] pr-3"> 
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Tipo de Local</h3>
               {VENUE_TYPE_OPTIONS.map((option) => (
@@ -680,7 +684,7 @@ const MapContentAndLogic = () => {
             variant="outline"
             size="icon"
             onClick={() => setFilterSidebarOpen(true)}
-            className="absolute z-20 p-2 rounded-full top-4 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
+            className="absolute z-20 p-2 rounded-full top-16 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg" // Adjusted top to avoid overlap with logo
             aria-label="Abrir filtros"
           >
             <Filter className="w-5 h-5" />
