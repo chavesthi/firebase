@@ -17,7 +17,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs } from 'firebase/firestore'; // Added getDocs
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
@@ -44,7 +44,7 @@ const useAuth = () => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         const userDocRef = doc(firestore, "users", firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef); // Changed from userDoc to userDocSnap for consistency
+        const userDocSnap = await getDoc(userDocRef); 
         let userRole: UserRole | null = null;
         let userName: string = firebaseUser.displayName || "Usuário";
         let preferredVenueTypes: VenueType[] = [];
@@ -53,7 +53,7 @@ const useAuth = () => {
         let lastNotificationCheckTimestamp: FirebaseTimestamp | undefined = undefined;
 
 
-        if (userDocSnap.exists()) { // Changed from userDoc to userDocSnap
+        if (userDocSnap.exists()) { 
           const userData = userDocSnap.data();
           userRole = userData.role as UserRole || null;
           userName = userData.name || userName; 
@@ -103,7 +103,7 @@ export default function MainAppLayout({
   const pathname = usePathname();
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
-  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); // Used for click action, not for bell pulsing
+  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); 
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function MainAppLayout({
     }
   }, [user, loading, router, pathname]);
 
-  // Real-time check for new partner notifications
+  
   useEffect(() => {
     if (loading || !user || !user.uid || !user.questionnaireCompleted || user.role !== UserRole.USER) {
       setHasNewNotifications(false);
@@ -156,7 +156,7 @@ export default function MainAppLayout({
       setHasNewNotifications(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener on component unmount or when dependencies change
+    return () => unsubscribe(); 
   }, [user, loading]);
 
 
@@ -192,17 +192,15 @@ export default function MainAppLayout({
        return;
     }
 
-    setIsFetchingNotifications(true); // For the click action spinner
-    // The actual new venues list for the toast will be fetched here on click, 
-    // as the `hasNewNotifications` state is now just for the bell icon.
+    setIsFetchingNotifications(true); 
+    
     try {
       const partnersRef = collection(firestore, 'users');
       const q = query(partnersRef,
         where('role', '==', UserRole.PARTNER),
         where('questionnaireCompleted', '==', true),
-        // We fetch all and filter client-side for the toast message to show names
       );
-      const querySnapshot = await getDocs(q); // Using getDocs for the click action
+      const querySnapshot = await getDocs(q); 
       const allVenues: Array<{ id: string, venueName: string, venueType: VenueType, musicStyles: MusicStyle[] }> = [];
       
       querySnapshot.forEach((doc) => {
@@ -239,13 +237,11 @@ export default function MainAppLayout({
           }
       }
 
-      // Update last check timestamp and this will make the bell stop pulsing via the onSnapshot listener
       const userDocRef = doc(firestore, "users", user.uid);
       await updateDoc(userDocRef, {
         lastNotificationCheckTimestamp: serverTimestamp()
       });
-      // setHasNewNotifications(false); // This will be handled by the onSnapshot listener reacting to the timestamp update
-
+     
     } catch (error) {
       console.error("Error fetching notifications data or updating timestamp:", error);
       toast({ title: "Erro ao Buscar Sugestões", description: "Não foi possível verificar novos Fervos.", variant: "destructive" });
@@ -267,7 +263,7 @@ export default function MainAppLayout({
      const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
      const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
      if (!isAllowedPath) {
-        // Router push is handled by useEffect above, this is a fallback UI
+        
         return (
          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
             Redirecionando para login...
@@ -289,14 +285,14 @@ export default function MainAppLayout({
             {user?.role === UserRole.USER && (
               <>
                 <Link href="/map" passHref>
-                  <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={pathname === '/map' ? activeColorClass : ''}>
+                  <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={cn(pathname === '/map' ? activeColorClass : '', 'hover:bg-primary/10')}>
                     <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
                   </Button>
                 </Link>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className={activeColorClass} 
+                  className={cn(activeColorClass, 'hover:bg-primary/10')} 
                   onClick={() => setIsQrScannerOpen(true)} 
                   title="Check-in com QR Code"
                   disabled={isFetchingNotifications}
@@ -307,7 +303,7 @@ export default function MainAppLayout({
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className={cn(activeColorClass, hasNewNotifications && 'animate-pulse')}
+                  className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', 'hover:bg-primary/10')}
                   onClick={handleNotificationsClick}
                   disabled={isFetchingNotifications}
                   title="Verificar novos Fervos"
@@ -315,11 +311,11 @@ export default function MainAppLayout({
                   {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
                   <span className="sr-only">Notificações</span>
                 </Button>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Suas FervoCoins!", description: "Recurso em breve! Você ganhará FervoCoins ao compartilhar eventos com amigos. Cada compartilhamento vale 2 moedas!", variant: "default"})}>
+                <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: "Recurso em breve! Você ganhará FervoCoins ao compartilhar eventos com amigos. Cada compartilhamento vale 2 moedas!", variant: "default"})}>
                   <Coins className="w-5 h-5" />
                   <span className="sr-only">Moedas</span>
                 </Button>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Cupons", description: "Recurso em breve!", variant: "default"})}>
+                <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Cupons", description: "Recurso em breve!", variant: "default"})}>
                   <TicketPercent className="w-5 h-5" />
                   <span className="sr-only">Cupons de Desconto</span>
                 </Button>
@@ -327,7 +323,7 @@ export default function MainAppLayout({
             )}
             {user?.role === UserRole.PARTNER && (
               <Link href="/partner/dashboard" passHref>
-                <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={pathname === '/partner/dashboard' ? activeColorClass : ''}>
+                <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={cn(pathname === '/partner/dashboard' ? activeColorClass : '', 'hover:bg-destructive/10')}>
                  <LayoutDashboard className="w-4 h-4 mr-2" /> Meu Painel
                 </Button>
               </Link>
@@ -348,7 +344,7 @@ export default function MainAppLayout({
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user?.name || "Nome do Usuário"}</p>
+                    <p className="text-sm font-medium leading-none">{user?.name || (user?.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo")}</p>
                     <p className="text-xs leading-none text-muted-foreground">
                       {user?.email}
                     </p>
