@@ -16,14 +16,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { UserCircle, Edit3, Save, Loader2, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
+import { UserCircle, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch'; // Added Switch
-import { useTheme } from '@/contexts/theme-provider'; // Added useTheme
-import { Separator } from '@/components/ui/separator';
+// Switch, useTheme, and Separator are no longer needed here
 
 const userProfileSchema = z.object({
   name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
@@ -51,7 +49,7 @@ const UserProfilePage: NextPage = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const { theme, setTheme, toggleTheme } = useTheme(); // Theme hook
+  // const { theme, setTheme, toggleTheme } = useTheme(); // Theme hook no longer needed
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<UserProfileFormInputs>({
     resolver: zodResolver(userProfileSchema),
@@ -76,13 +74,22 @@ const UserProfilePage: NextPage = () => {
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
             reset({
-              name: userData.name || '',
+              name: userData.name || user.displayName || '',
               age: userData.age || undefined,
               preferredVenueTypes: userData.preferredVenueTypes || [],
               preferredMusicStyles: userData.preferredMusicStyles || [],
             });
           } else {
-            toast({ title: "Dados não encontrados", description: "Não foi possível carregar seus dados de perfil.", variant: "destructive" });
+             // If doc doesn't exist but user is auth'd (e.g. Google Sign In first time direct to profile)
+            reset({ 
+              name: user.displayName || '',
+              age: undefined,
+              preferredVenueTypes: [],
+              preferredMusicStyles: [],
+            });
+            // Optionally create the doc here if it's truly missing for an authenticated user
+            // await setDoc(userDocRef, { name: user.displayName || '', email: user.email, createdAt: serverTimestamp() }, { merge: true });
+            toast({ title: "Perfil Incompleto", description: "Alguns dados não foram carregados. Por favor, complete e salve seu perfil.", variant: "default" });
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
@@ -113,6 +120,9 @@ const UserProfilePage: NextPage = () => {
         age: data.age,
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
+        // Ensure questionnaireCompleted is marked true if profile is saved successfully
+        // and age is provided (as it's a key part of the "questionnaire")
+        questionnaireCompleted: !!data.age, 
       });
 
       toast({
@@ -282,28 +292,7 @@ const UserProfilePage: NextPage = () => {
               {errors.preferredMusicStyles && <p className="mt-1 text-sm text-destructive">{errors.preferredMusicStyles.message}</p>}
             </div>
             
-            <Separator className="my-6" />
-
-            <div className="space-y-2">
-                <h3 className="text-lg font-medium text-primary/90">Configurações de Tema</h3>
-                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                        <Label htmlFor="dark-mode-switch" className="text-base text-primary/80">
-                            Modo Noturno
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                            Ative para uma experiência visual escura.
-                        </p>
-                    </div>
-                    <Switch
-                        id="dark-mode-switch"
-                        checked={theme === 'dark'}
-                        onCheckedChange={toggleTheme}
-                        aria-label="Alternar modo noturno"
-                    />
-                </div>
-            </div>
-
+            {/* Removed Theme Settings Section */}
 
           </CardContent>
           <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">

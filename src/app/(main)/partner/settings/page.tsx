@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Edit3, UserCircle, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
-import { useTheme } from '@/contexts/theme-provider'; // Added useTheme
-import { Separator } from '@/components/ui/separator';
+import { UserCircle } from 'lucide-react'; // Edit3, Moon, Sun removed
+// import { useTheme } from '@/contexts/theme-provider'; // Removed useTheme
+// import { Separator } from '@/components/ui/separator'; // Removed Separator
 
 // Mock partner data updated
 const mockPartner = {
@@ -19,7 +19,7 @@ const mockPartner = {
 };
 
 export default function PartnerSettingsPage() {
-  const { theme, setTheme, toggleTheme } = useTheme(); // Theme hook
+  // const { theme, setTheme, toggleTheme } = useTheme(); // Theme hook no longer needed
 
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
@@ -60,29 +60,7 @@ export default function PartnerSettingsPage() {
             <Switch id="notifications" defaultChecked={mockPartner.notificationsEnabled} className="data-[state=checked]:bg-destructive data-[state=unchecked]:bg-input"/>
           </div>
 
-          <Separator className="my-6 bg-destructive/30" />
-
-           <div className="space-y-2">
-                <h3 className="text-lg font-medium text-destructive/90">Configurações de Tema</h3>
-                <div className="flex items-center justify-between rounded-lg border border-input p-3 shadow-sm">
-                    <div className="space-y-0.5">
-                        <Label htmlFor="dark-mode-switch-partner" className="text-base text-destructive/80">
-                            Modo Noturno
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                            Ative para uma experiência visual escura.
-                        </p>
-                    </div>
-                    <Switch
-                        id="dark-mode-switch-partner"
-                        checked={theme === 'dark'}
-                        onCheckedChange={toggleTheme}
-                        aria-label="Alternar modo noturno"
-                        className="data-[state=checked]:bg-destructive data-[state=unchecked]:bg-input"
-                    />
-                </div>
-            </div>
-
+          {/* Removed Theme Settings Section */}
 
           <Button className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm sm:text-base">Salvar Alterações</Button>
         </CardContent>
