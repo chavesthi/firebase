@@ -1,9 +1,11 @@
+
 'use client';
 
 import type { NextPage } from 'next';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth'; // Import onAuthStateChanged
 import { collection, query, where, onSnapshot, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { auth, firestore } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
