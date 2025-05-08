@@ -3,7 +3,6 @@
 
 import { Logo } from '@/components/shared/logo';
 import { Button } from '@/components/ui/button';
-// Removed Avatar, AvatarFallback, AvatarImage imports
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,27 +11,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { UserRole } from '@/lib/constants';
+import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 
 
 interface AppUser {
+  uid: string;
   name: string;
   email: string | null;
   role: UserRole | null;
-  uid: string; 
-  // photoURL removed
+  preferredVenueTypes?: VenueType[];
+  preferredMusicStyles?: MusicStyle[];
+  questionnaireCompleted?: boolean;
 }
 
-// Updated auth hook to use Firebase
 const useAuth = () => {
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,19 +45,24 @@ const useAuth = () => {
         const userDoc = await getDoc(userDocRef);
         let userRole: UserRole | null = null;
         let userName: string = firebaseUser.displayName || "Usuário";
+        let preferredVenueTypes: VenueType[] = [];
+        let preferredMusicStyles: MusicStyle[] = [];
+        let questionnaireCompleted: boolean = false;
+
 
         if (userDoc.exists()) {
           const userData = userDoc.data();
           userRole = userData.role as UserRole || null;
-          userName = userData.name || userName; // Prefer Firestore name if available
+          userName = userData.name || userName; 
+          preferredVenueTypes = userData.preferredVenueTypes || [];
+          preferredMusicStyles = userData.preferredMusicStyles || [];
+          questionnaireCompleted = userData.questionnaireCompleted || false;
         } else {
-          // Fallback if user doc doesn't exist, try to infer from path or default
            if (pathname.includes('/partner')) {
             userRole = UserRole.PARTNER;
             userName = "Parceiro Fervo";
           } else {
             userRole = UserRole.USER;
-            // userName will be "Usuário Fervoso" or similar if set during signup, else "Usuário"
           }
         }
         
@@ -66,7 +71,9 @@ const useAuth = () => {
           name: userName,
           email: firebaseUser.email,
           role: userRole,
-          // photoURL removed
+          preferredVenueTypes,
+          preferredMusicStyles,
+          questionnaireCompleted,
         });
       } else {
         setAppUser(null);
@@ -91,10 +98,10 @@ export default function MainAppLayout({
   const pathname = usePathname();
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
-      // Redirect to login if user is not authenticated and not already on a public/auth page.
       const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
       const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
       
@@ -115,6 +122,79 @@ export default function MainAppLayout({
       toast({ title: "Erro no Logout", description: "Não foi possível desconectar.", variant: "destructive" });
     }
   };
+
+  const handleNotificationsClick = async () => {
+    if (!user || !user.uid) {
+      toast({ title: "Login Necessário", description: "Faça login para ver notificações." });
+      return;
+    }
+
+    if (!user.questionnaireCompleted) {
+      toast({ title: "Complete seu Perfil", description: "Preencha suas preferências para receber sugestões de Fervos!", duration: 5000 });
+      return;
+    }
+
+    const userPrefs = {
+      venueTypes: user.preferredVenueTypes || [],
+      musicStyles: user.preferredMusicStyles || [],
+    };
+
+    if (userPrefs.venueTypes.length === 0 && userPrefs.musicStyles.length === 0) {
+       toast({ title: "Defina suas Preferências", description: "Adicione seus tipos de locais e estilos musicais favoritos no seu perfil para receber sugestões.", duration: 7000 });
+       return;
+    }
+
+    setIsFetchingNotifications(true);
+    try {
+      const partnersRef = collection(firestore, 'users');
+      const q = query(partnersRef,
+        where('role', '==', UserRole.PARTNER),
+        where('questionnaireCompleted', '==', true)
+      );
+      const querySnapshot = await getDocs(q);
+      const allVenues: Array<{ id: string, venueName: string, venueType: VenueType, musicStyles: MusicStyle[] }> = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if(data.venueName && data.venueType) { // Ensure essential data exists
+            allVenues.push({
+                id: doc.id,
+                venueName: data.venueName,
+                venueType: data.venueType as VenueType,
+                musicStyles: (data.musicStyles || []) as MusicStyle[],
+            });
+        }
+      });
+
+      if (allVenues.length === 0) {
+        toast({ title: "Nenhum Fervo Encontrado", description: "Ainda não há locais parceiros cadastrados." });
+        return;
+      }
+
+      const matchingVenues = allVenues.filter(venue => {
+        const typeMatch = userPrefs.venueTypes.includes(venue.venueType);
+        const styleMatch = Array.isArray(venue.musicStyles) && venue.musicStyles.some(style => userPrefs.musicStyles.includes(style));
+        return typeMatch || styleMatch;
+      });
+
+      if (matchingVenues.length > 0) {
+        const venueNames = matchingVenues.slice(0, 2).map(v => v.venueName).join(', ');
+        const andMore = matchingVenues.length > 2 ? ` e mais ${matchingVenues.length - 2}!` : '.';
+        toast({
+          title: "Novos Fervos que Combinam com Você!",
+          description: `Encontramos: ${venueNames}${andMore} Explore no mapa!`,
+          duration: 7000,
+        });
+      } else {
+        toast({ title: "Nada de Novo por Enquanto", description: "Nenhum Fervo encontrado que corresponda às suas preferências atuais. Explore o mapa para descobrir mais!", duration: 7000 });
+      }
+    } catch (error) {
+      console.error("Error fetching notifications data:", error);
+      toast({ title: "Erro ao Buscar Sugestões", description: "Não foi possível verificar novos Fervos.", variant: "destructive" });
+    } finally {
+      setIsFetchingNotifications(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -153,12 +233,26 @@ export default function MainAppLayout({
                     <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
                   </Button>
                 </Link>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => setIsQrScannerOpen(true)} title="Check-in com QR Code">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className={activeColorClass} 
+                  onClick={() => setIsQrScannerOpen(true)} 
+                  title="Check-in com QR Code"
+                  disabled={isFetchingNotifications}
+                >
                   <ScanLine className="w-5 h-5" />
                   <span className="sr-only">Check-in QR Code</span>
                 </Button>
-                <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Notificações", description: "Aqui ficaram as notificações ativadas pelo usuário. Se não tiver nenhuma, mostre Nada Por aqui Ainda.", variant: "default"})}>
-                  <Bell className="w-5 h-5" />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className={activeColorClass} 
+                  onClick={handleNotificationsClick}
+                  disabled={isFetchingNotifications}
+                  title="Verificar novos Fervos"
+                >
+                  {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
                   <span className="sr-only">Notificações</span>
                 </Button>
                 <Button variant="ghost" size="icon" className={activeColorClass} onClick={() => toast({ title: "Suas FervoCoins!", description: "Recurso em breve! Você ganhará FervoCoins ao compartilhar eventos com amigos. Cada compartilhamento vale 2 moedas!", variant: "default"})}>
