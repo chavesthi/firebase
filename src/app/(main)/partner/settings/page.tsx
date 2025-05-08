@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -14,10 +15,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2 } from 'lucide-react';
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff } from 'lucide-react'; // Added Eye, EyeOff
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator'; // Import Separator
 
 // Schema for partner settings form
 const partnerSettingsSchema = z.object({
@@ -25,7 +27,21 @@ const partnerSettingsSchema = z.object({
   companyName: z.string().min(3, { message: 'Nome da empresa deve ter pelo menos 3 caracteres.' }),
   email: z.string().email({ message: 'E-mail inválido.' }),
   notificationsEnabled: z.boolean().default(true),
+  // Optional password fields for coupon report clearing
+  couponReportClearPassword: z.string().optional(),
+  confirmCouponReportClearPassword: z.string().optional(),
+}).refine(data => {
+    // If one password field is filled, the other must be too, and they must match
+    if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
+        return data.couponReportClearPassword === data.confirmCouponReportClearPassword &&
+               (data.couponReportClearPassword?.length ?? 0) >= 6;
+    }
+    return true; // If both are empty, it's valid
+}, {
+    message: "Senhas não coincidem ou são muito curtas (mínimo 6 caracteres). Ambas devem ser preenchidas ou ambas vazias.",
+    path: ["confirmCouponReportClearPassword"], // Apply error message to the confirmation field
 });
+
 
 type PartnerSettingsFormInputs = z.infer<typeof partnerSettingsSchema>;
 
@@ -34,7 +50,10 @@ export default function PartnerSettingsPage() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialEmail, setInitialEmail] = useState<string | null>(null); // Store initial email for comparison
+  const [initialEmail, setInitialEmail] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<PartnerSettingsFormInputs>({
     resolver: zodResolver(partnerSettingsSchema),
@@ -43,6 +62,8 @@ export default function PartnerSettingsPage() {
       companyName: '',
       email: '',
       notificationsEnabled: true,
+      couponReportClearPassword: '', // Initialize as empty
+      confirmCouponReportClearPassword: '', // Initialize as empty
     },
   });
 
@@ -61,17 +82,21 @@ export default function PartnerSettingsPage() {
             const userData = userDocSnap.data();
             reset({
               contactName: userData.name || user.displayName || '', // Use 'name' field from Firestore
-              companyName: userData.venueName || '', // Use venueName for company name? Adjust if different field
-              email: user.email || '', // Primarily use auth email, fallback to Firestore if needed
-              notificationsEnabled: userData.notificationsEnabled ?? true, // Use ?? for default
+              companyName: userData.venueName || '', // Use venueName for company name
+              email: user.email || '', // Primarily use auth email
+              notificationsEnabled: userData.notificationsEnabled ?? true,
+              // Do not load the password itself for security
+              couponReportClearPassword: '',
+              confirmCouponReportClearPassword: '',
             });
           } else {
-            // Handle case where Firestore doc might be missing unexpectedly
             reset({
               contactName: user.displayName || '',
-              companyName: '', // No venue name if doc is missing
+              companyName: '',
               email: user.email || '',
               notificationsEnabled: true,
+              couponReportClearPassword: '',
+              confirmCouponReportClearPassword: '',
             });
              toast({ title: "Perfil Incompleto", description: "Dados não encontrados. Preencha e salve para criar.", variant: "destructive" });
           }
@@ -97,21 +122,38 @@ export default function PartnerSettingsPage() {
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
 
-      // Update Firestore document
-      await updateDoc(userDocRef, {
-        name: data.contactName, // Update 'name' field in Firestore
-        venueName: data.companyName, // Assuming venueName holds the company name
+       // Prepare data for Firestore update
+      const dataToUpdate: { [key: string]: any } = {
+        name: data.contactName,
+        venueName: data.companyName,
         notificationsEnabled: data.notificationsEnabled,
-        settingsUpdatedAt: serverTimestamp(), // Track when settings were last updated
-      });
+        settingsUpdatedAt: serverTimestamp(),
+      };
+
+      // **SECURITY WARNING:** Storing plain text passwords is not recommended for production.
+      // This should ideally be hashed server-side.
+      // Only update password if it's provided and validated (schema handles validation)
+      if (data.couponReportClearPassword && data.couponReportClearPassword === data.confirmCouponReportClearPassword) {
+          dataToUpdate.couponReportClearPassword = data.couponReportClearPassword; // Store plain text - **NOT SECURE**
+          toast({ title: "Senha do Relatório Definida", description: "Senha para limpar relatório de cupons foi definida/atualizada.", variant: "default" });
+      } else if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
+         // This case should ideally be caught by zod refine, but as a fallback
+         toast({ title: "Erro na Senha", description: "As senhas do relatório não coincidem ou estão incompletas.", variant: "destructive" });
+         return; // Prevent saving if passwords are provided but invalid
+      }
+
+
+      // Update Firestore document
+      await updateDoc(userDocRef, dataToUpdate);
 
       // Update auth email ONLY if it changed and user confirms
+      let emailUpdateMessage = "";
       if (data.email !== initialEmail) {
         if (window.confirm(`Deseja realmente alterar seu e-mail de login de ${initialEmail} para ${data.email}? Esta ação pode exigir reverificação.`)) {
           try {
             await updateEmail(currentUser, data.email);
             setInitialEmail(data.email); // Update initialEmail after successful change
-            toast({ title: "E-mail Atualizado", description: "Seu e-mail de login foi alterado. Pode ser necessário fazer login novamente.", variant: "default" });
+            emailUpdateMessage = "Seu e-mail de login foi alterado com sucesso.";
             // Potentially force re-authentication here if needed
           } catch (authError: any) {
             console.error("Error updating auth email:", authError);
@@ -124,22 +166,26 @@ export default function PartnerSettingsPage() {
             }
             toast({ title: "Erro ao Atualizar E-mail", description: authErrorMessage, variant: "destructive", duration: 7000 });
             // Revert email in the form if auth update fails
-            reset({ ...data, email: initialEmail || '' });
-             // Skip the success toast below if email update failed
+            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); // Also clear password fields on error
+             // Skip the general success toast below if email update failed
              return;
           }
         } else {
            // User cancelled email change, revert in form
-           reset({ ...data, email: initialEmail || '' });
-           toast({ title: "Alteração de E-mail Cancelada", description: "Seu e-mail de login não foi alterado.", variant: "default" });
+           reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); // Also clear password fields on cancel
+           emailUpdateMessage = "Alteração de e-mail cancelada.";
         }
       }
 
       toast({
         title: "Configurações Salvas!",
-        description: "Suas informações foram atualizadas com sucesso.",
+        description: `Suas informações foram atualizadas. ${emailUpdateMessage}`,
         variant: "default", // Use default (blue) for partner success
       });
+
+      // Clear password fields after successful save
+      reset({ ...data, email: data.email, couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
+
 
     } catch (error) {
       console.error("Error updating partner settings:", error);
@@ -188,60 +234,130 @@ export default function PartnerSettingsPage() {
               <p className="text-xs sm:text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="contactName" className="text-destructive/90">Nome do Contato</Label>
-               <Controller
-                name="contactName"
-                control={control}
-                render={({ field }) => (
-                  <Input id="contactName" {...field} className={cn(errors.contactName && 'border-red-500 focus-visible:ring-red-500')} />
-                )}
-              />
-              {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="companyName" className="text-destructive/90">Nome da Empresa/Estabelecimento</Label>
-               <Controller
-                name="companyName"
-                control={control}
-                render={({ field }) => (
-                  <Input id="companyName" {...field} className={cn(errors.companyName && 'border-red-500 focus-visible:ring-red-500')} />
-                )}
-              />
-               {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-destructive/90">E-mail de Login</Label>
-               <Controller
-                name="email"
-                control={control}
-                render={({ field }) => (
-                   <Input id="email" type="email" {...field} className={cn(errors.email && 'border-red-500 focus-visible:ring-red-500')} />
-                )}
-              />
-              {errors.email && <p className="mt-1 text-sm text-destructive">{errors.email.message}</p>}
-               <p className="mt-1 text-xs text-muted-foreground">Alterar este e-mail muda seu acesso. Pode ser necessário reverificar.</p>
-            </div>
+            {/* Basic Info Section */}
+            <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="contactName" className="text-destructive/90">Nome do Contato</Label>
+                   <Controller
+                    name="contactName"
+                    control={control}
+                    render={({ field }) => (
+                      <Input id="contactName" {...field} className={cn(errors.contactName && 'border-red-500 focus-visible:ring-red-500')} />
+                    )}
+                  />
+                  {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="companyName" className="text-destructive/90">Nome da Empresa/Estabelecimento</Label>
+                   <Controller
+                    name="companyName"
+                    control={control}
+                    render={({ field }) => (
+                      <Input id="companyName" {...field} className={cn(errors.companyName && 'border-red-500 focus-visible:ring-red-500')} />
+                    )}
+                  />
+                   {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-destructive/90">E-mail de Login</Label>
+                   <Controller
+                    name="email"
+                    control={control}
+                    render={({ field }) => (
+                       <Input id="email" type="email" {...field} className={cn(errors.email && 'border-red-500 focus-visible:ring-red-500')} />
+                    )}
+                  />
+                  {errors.email && <p className="mt-1 text-sm text-destructive">{errors.email.message}</p>}
+                   <p className="mt-1 text-xs text-muted-foreground">Alterar este e-mail muda seu acesso. Pode ser necessário reverificar.</p>
+                </div>
 
-            <div className="flex items-center justify-between pt-2">
-              <Label htmlFor="notificationsEnabled" className="text-destructive/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
-               <Controller
-                  name="notificationsEnabled"
-                  control={control}
-                  render={({ field }) => (
-                     <Switch
-                      id="notificationsEnabled"
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      className="data-[state=checked]:bg-destructive data-[state=unchecked]:bg-input"
+                <div className="flex items-center justify-between pt-2">
+                  <Label htmlFor="notificationsEnabled" className="text-destructive/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
+                   <Controller
+                      name="notificationsEnabled"
+                      control={control}
+                      render={({ field }) => (
+                         <Switch
+                          id="notificationsEnabled"
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          className="data-[state=checked]:bg-destructive data-[state=unchecked]:bg-input"
+                        />
+                      )}
                     />
-                  )}
-                />
+                </div>
+                 {errors.notificationsEnabled && <p className="mt-1 text-sm text-destructive">{errors.notificationsEnabled.message}</p>}
             </div>
-            {errors.notificationsEnabled && <p className="mt-1 text-sm text-destructive">{errors.notificationsEnabled.message}</p>}
 
+            <Separator className="my-6 border-destructive/20" />
 
-            <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm sm:text-base" disabled={isSubmitting}>
+            {/* Coupon Report Password Section */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium text-destructive">Senha para Limpar Relatório de Cupons</h3>
+                <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
+
+                 <div className="space-y-2">
+                    <Label htmlFor="couponReportClearPassword" className="text-destructive/90">Nova Senha</Label>
+                    <div className="relative">
+                        <Controller
+                            name="couponReportClearPassword"
+                            control={control}
+                            render={({ field }) => (
+                            <Input
+                                id="couponReportClearPassword"
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Deixe em branco para não alterar"
+                                {...field}
+                                className={cn(errors.couponReportClearPassword && 'border-red-500 focus-visible:ring-red-500')}
+                            />
+                            )}
+                        />
+                         <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setShowPassword(!showPassword)}
+                            aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
+                        >
+                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </Button>
+                    </div>
+                    {errors.couponReportClearPassword && <p className="mt-1 text-sm text-destructive">{errors.couponReportClearPassword.message}</p>}
+                 </div>
+
+                 <div className="space-y-2">
+                    <Label htmlFor="confirmCouponReportClearPassword" className="text-destructive/90">Confirmar Nova Senha</Label>
+                     <div className="relative">
+                        <Controller
+                            name="confirmCouponReportClearPassword"
+                            control={control}
+                            render={({ field }) => (
+                            <Input
+                                id="confirmCouponReportClearPassword"
+                                type={showConfirmPassword ? "text" : "password"}
+                                placeholder="Confirme a senha"
+                                {...field}
+                                className={cn(errors.confirmCouponReportClearPassword && 'border-red-500 focus-visible:ring-red-500')}
+                            />
+                            )}
+                        />
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            aria-label={showConfirmPassword ? "Esconder confirmação de senha" : "Mostrar confirmação de senha"}
+                        >
+                            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </Button>
+                    </div>
+                    {errors.confirmCouponReportClearPassword && <p className="mt-1 text-sm text-destructive">{errors.confirmCouponReportClearPassword.message}</p>}
+                 </div>
+            </div>
+
+            <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm sm:text-base mt-6" disabled={isSubmitting}>
                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
             </Button>
           </CardContent>
@@ -250,3 +366,5 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
+    
