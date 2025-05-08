@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore'; 
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift } from 'lucide-react'; // Added Gift for coupons
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText } from 'lucide-react'; // Added Gift, ScrollText
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle } from '@/lib/constants';
 
@@ -30,7 +30,7 @@ interface VenueData {
   instagramUrl?: string;
   facebookUrl?: string;
   youtubeUrl?: string;
-  questionnaireCompleted?: boolean; 
+  questionnaireCompleted?: boolean;
 }
 
 
@@ -49,14 +49,14 @@ export default function PartnerDashboardPage() {
         setCurrentUser(user);
         setLoading(true);
         const userDocRef = doc(firestore, "users", user.uid);
-        
+
         unsubscribeSnapshot = onSnapshot(userDocRef, (userDocSnap) => {
           if (userDocSnap.exists()) {
-            const data = userDocSnap.data() as VenueData; 
+            const data = userDocSnap.data() as VenueData;
             if (!data.questionnaireCompleted) {
               toast({ title: "Questionário Pendente", description: "Complete seu perfil para acessar o painel.", variant: "destructive" });
               router.push('/partner-questionnaire');
-              setLoading(false); 
+              setLoading(false);
             } else {
               setVenueData({
                 venueName: data.venueName,
@@ -74,7 +74,7 @@ export default function PartnerDashboardPage() {
             }
           } else {
              toast({ title: "Erro", description: "Dados do parceiro não encontrados. Por favor, complete seu cadastro.", variant: "destructive" });
-             router.push('/partner-questionnaire'); 
+             router.push('/partner-questionnaire');
              setLoading(false);
           }
         }, (error) => {
@@ -88,7 +88,7 @@ export default function PartnerDashboardPage() {
         router.push('/login');
         setLoading(false);
         if (unsubscribeSnapshot) {
-          unsubscribeSnapshot(); 
+          unsubscribeSnapshot();
         }
       }
     });
@@ -109,7 +109,7 @@ export default function PartnerDashboardPage() {
       </div>
     );
   }
-  
+
   const fullAddress = `${venueData.address.street}, ${venueData.address.number}, ${venueData.address.city} - ${venueData.address.state}, ${venueData.address.cep}`;
 
   return (
@@ -124,7 +124,7 @@ export default function PartnerDashboardPage() {
             <Edit className="w-3 h-3 mr-1.5" /> Editar Info. do Local
         </Button>
       </header>
-      
+
       <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
@@ -135,7 +135,7 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm">Crie, edite e visualize seus próximos eventos.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-3 p-4 sm:p-6 pt-0 sm:pt-0">
-            <Button 
+            <Button
               className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm sm:text-base"
               onClick={() => router.push('/partner/events')}
             >
@@ -143,7 +143,7 @@ export default function PartnerDashboardPage() {
             </Button>
           </CardContent>
         </Card>
-        
+
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
@@ -153,8 +153,8 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm">Veja o que os usuários acharam dos seus eventos.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-             <Button 
-                variant="outline" 
+             <Button
+                variant="outline"
                 className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
                 onClick={() => router.push('/partner/ratings')}
             >
@@ -172,8 +172,8 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm">Valide cupons de usuários aqui.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-             <Button 
-                variant="outline" 
+             <Button
+                variant="outline"
                 className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
                 onClick={() => router.push('/partner/redeem-coupon')}
             >
@@ -181,6 +181,26 @@ export default function PartnerDashboardPage() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
+            <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
+                <ScrollText className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
+                Relatório de Cupons
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Visualize os cupons que você resgatou.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
+                <Button
+                variant="outline"
+                className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
+                onClick={() => router.push('/partner/coupon-report')}
+                >
+                Ver Relatório
+                </Button>
+            </CardContent>
+        </Card>
+
 
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
@@ -194,7 +214,7 @@ export default function PartnerDashboardPage() {
             <p className="text-muted-foreground text-xs sm:text-sm">Funcionalidade em desenvolvimento.</p>
           </CardContent>
         </Card>
-        
+
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
@@ -204,8 +224,8 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm">Ajuste suas preferências e informações de contato.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-             <Button 
-                variant="outline" 
+             <Button
+                variant="outline"
                 className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
                 onClick={() => router.push('/partner/settings')}
             >
@@ -218,3 +238,4 @@ export default function PartnerDashboardPage() {
   );
 }
 
+    

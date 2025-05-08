@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -9,7 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, runTransaction, serverTimestamp, documentId, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, collectionGroup, getDoc } from 'firebase/firestore'; // Added collectionGroup, getDoc
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -68,27 +67,47 @@ const PartnerRedeemCouponPage: NextPage = () => {
     const enteredCouponCode = data.couponCode.toUpperCase();
 
     try {
-      // Inefficient query: Iterate through all users, then their coupons.
-      // This should be optimized for production with a global coupon index.
-      const usersSnapshot = await getDocs(collection(firestore, 'users'));
+      // Use collection group query to find the coupon across all users.
+      const couponsRef = collectionGroup(firestore, 'coupons');
+      const q = query(
+        couponsRef,
+        where('couponCode', '==', enteredCouponCode),
+        where('status', '==', 'active')
+        // Note: Firestore does not allow querying by document ID in collectionGroup directly.
+        // We query by couponCode and status, then verify details if found.
+      );
+
+      const couponSnapshot = await getDocs(q);
       let foundCoupon: CouponToRedeem | null = null;
 
-      for (const userDoc of usersSnapshot.docs) {
-        const userId = userDoc.id;
-        const userCouponsRef = collection(firestore, `users/${userId}/coupons`);
-        const q = query(userCouponsRef, where('couponCode', '==', enteredCouponCode), where('status', '==', 'active'));
-        const couponSnapshot = await getDocs(q);
+      if (!couponSnapshot.empty) {
+        // Assuming coupon codes are unique across all users (as they should be)
+        const couponDoc = couponSnapshot.docs[0];
+        const couponData = couponDoc.data();
+        const userId = couponDoc.ref.parent.parent?.id; // Get the userId from the path
 
-        if (!couponSnapshot.empty) {
-          const couponDoc = couponSnapshot.docs[0]; // Should be unique by code
-          foundCoupon = {
-            id: couponDoc.id,
-            userId: userId,
-            description: couponDoc.data().description,
-            couponCode: couponDoc.data().couponCode,
-            userName: userDoc.data().name || 'Usuário desconhecido',
-          };
-          break; 
+        if (userId) {
+           let userName = 'Usuário Desconhecido';
+            try {
+              const userDocRef = doc(firestore, 'users', userId);
+              const userDoc = await getDoc(userDocRef);
+              if (userDoc.exists()) {
+                userName = userDoc.data().name || userName;
+              }
+            } catch (error) {
+              console.error(`Failed to fetch user name for userId ${userId}:`, error);
+            }
+
+            foundCoupon = {
+              id: couponDoc.id,
+              userId: userId,
+              description: couponData.description,
+              couponCode: couponData.couponCode,
+              userName: userName,
+            };
+        } else {
+            console.error("Could not extract userId from coupon path:", couponDoc.ref.path);
+            throw new Error("Erro ao identificar o usuário do cupom.");
         }
       }
 
@@ -100,13 +119,13 @@ const PartnerRedeemCouponPage: NextPage = () => {
 
       // Proceed to redeem
       const userCouponDocRef = doc(firestore, `users/${foundCoupon.userId}/coupons/${foundCoupon.id}`);
-      
+
       await updateDoc(userCouponDocRef, {
         status: 'redeemed',
         redeemedAt: serverTimestamp(),
-        redeemedByPartnerId: currentUser.uid,
+        redeemedByPartnerId: currentUser.uid, // Store which partner redeemed it
       });
-      
+
       toast({
         title: "Cupom Resgatado!",
         description: `Cupom "${foundCoupon.couponCode}" (${foundCoupon.description}) de ${foundCoupon.userName} foi resgatado com sucesso.`,
@@ -179,7 +198,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
               {isRedeeming ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TicketCheck className="w-4 h-4 mr-2" />}
               {isRedeeming ? 'Verificando...' : 'Resgatar Cupom'}
             </Button>
-            
+
              <div className="mt-4 p-3 bg-accent/10 border border-accent/30 rounded-md text-accent-foreground">
                 <div className="flex items-start">
                     <AlertTriangle className="h-5 w-5 mr-2 mt-0.5 text-accent" />
