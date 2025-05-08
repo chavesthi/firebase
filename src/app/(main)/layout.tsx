@@ -34,14 +34,14 @@ interface AppUser {
   preferredMusicStyles?: MusicStyle[];
   questionnaireCompleted?: boolean;
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
-  fervoCoins: number; // Ensure fervoCoins is always a number
+  fervoCoins: number; 
 }
 
 const useAuthAndUserSubscription = () => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const pathname = usePathname(); // Get pathname here for use in appUser default creation
+  const pathname = usePathname(); 
   const { toast } = useToast();
 
   useEffect(() => {
@@ -63,18 +63,16 @@ const useAuthAndUserSubscription = () => {
               preferredMusicStyles: userData.preferredMusicStyles || [],
               questionnaireCompleted: userData.questionnaireCompleted || false,
               lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
-              fervoCoins: userData.fervoCoins || 0, // Default to 0 if not present
+              fervoCoins: userData.fervoCoins || 0, 
             });
           } else {
-            // User exists in Auth, but not in Firestore. Create a default appUser for questionnaire flow.
-            // Role guess based on path is temporary. Login/Signup flow should create the definitive doc.
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
               uid: user.uid,
               name: user.displayName || (defaultRoleBasedOnInitialAuthAttempt === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
               email: user.email,
               role: defaultRoleBasedOnInitialAuthAttempt,
-              fervoCoins: 0, // Default to 0 for new/uninitialized users
+              fervoCoins: 0, 
               questionnaireCompleted: false,
             });
           }
@@ -86,7 +84,6 @@ const useAuthAndUserSubscription = () => {
           toast({ title: "Erro ao carregar dados", description: "Não foi possível sincronizar os dados do usuário.", variant: "destructive" });
         });
       } else {
-        // No Firebase user (logged out)
         setAppUser(null);
         setLoading(false);
       }
@@ -119,24 +116,20 @@ export default function MainAppLayout({
   const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); 
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
-  // Redirect logic effect
   useEffect(() => {
-    if (!loading) { // Only run redirect logic after loading is complete
+    if (!loading) { 
       const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
       const isSharedEventPage = pathname.startsWith('/shared-event');
       
       if (!appUser && !isAuthPage && !isSharedEventPage) {
         router.push('/login');
       } else if (appUser && !appUser.questionnaireCompleted) {
-        // If user is logged in but questionnaire is not complete
         if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage) {
           router.push('/questionnaire');
         } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage) {
           router.push('/partner-questionnaire');
         }
       }
-      // No explicit redirect if questionnaire is complete and user is on other pages,
-      // or if on auth pages / shared event page.
     }
   }, [appUser, loading, router, pathname]);
 
@@ -281,8 +274,6 @@ export default function MainAppLayout({
     );
   }
   
-  // Determine if children should be rendered or if a redirect is pending/occurred
-  // This allows auth pages and shared event page to render their own content without appUser
   const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
   const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
 
@@ -292,7 +283,7 @@ export default function MainAppLayout({
 
   return (
     <div className="flex flex-col min-h-screen">
-      {appUser && ( // Only render header if appUser exists (logged in and data loaded)
+      {appUser && ( 
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
             <Logo iconClassName={activeColorClass} />
@@ -337,10 +328,12 @@ export default function MainAppLayout({
                           </span>
                       )}
                   </div>
-                  <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Cupons", description: "Recurso em breve!", variant: "default"})}>
-                    <TicketPercent className="w-5 h-5" />
-                    <span className="sr-only">Cupons de Desconto</span>
-                  </Button>
+                  <Link href="/user/coupons" passHref>
+                    <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} title="Meus Cupons">
+                        <TicketPercent className="w-5 h-5" />
+                        <span className="sr-only">Cupons de Desconto</span>
+                    </Button>
+                  </Link>
                 </>
               )}
               {appUser?.role === UserRole.PARTNER && (
@@ -406,7 +399,7 @@ export default function MainAppLayout({
         </header>
       )}
       <main className="flex-1">
-        {canRenderChildren ? children : null /* Render null or specific redirect loading if preferred */}
+        {canRenderChildren ? children : null }
       </main>
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal 

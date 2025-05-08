@@ -64,3 +64,9 @@ export const PRICING_TYPE_OPTIONS = [
 
 // Reward amount for sharing an event
 export const FERVO_COINS_SHARE_REWARD = 2;
+
+// Coupon System Constants
+export const FERVO_COINS_FOR_COUPON = 20;
+export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 350ml";
+export const COUPON_CODE_PREFIX = "FERVO";
+
