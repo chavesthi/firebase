@@ -14,7 +14,7 @@ import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, Ticket
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react'; // Added useMemo
 import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -125,6 +125,13 @@ export default function MainAppLayout({
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
+
+   // Calculate total coins
+  const totalFervoCoins = useMemo(() => {
+    if (!appUser || !appUser.venueCoins) return 0;
+    return Object.values(appUser.venueCoins).reduce((sum, count) => sum + count, 0);
+  }, [appUser]);
+
 
   useEffect(() => {
     if (!loading) {
@@ -297,7 +304,7 @@ export default function MainAppLayout({
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
             <Logo iconClassName={activeColorClass} />
-            <nav className="flex items-center gap-2 ml-auto md:gap-4">
+            <nav className="flex items-center gap-1 ml-auto sm:gap-2 md:gap-4"> {/* Reduced gap slightly */}
               {appUser?.role === UserRole.USER && (
                 <>
                   <Link href="/map" passHref>
@@ -327,18 +334,24 @@ export default function MainAppLayout({
                     {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
                     <span className="sr-only">Notificações</span>
                   </Button>
-                  {/* Coin display removed as requested by new logic */}
-                  {/* <div className="relative">
-                      <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${appUser.fervoCoins} moedas. Ganhe mais compartilhando eventos!`, variant: "default"})}>
-                      <Coins className="w-5 h-5" />
-                      <span className="sr-only">Moedas</span>
+                   {/* Coins Button */}
+                   <div className="relative">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={cn(activeColorClass, 'hover:bg-primary/10')} 
+                        onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${totalFervoCoins} moedas no total. Ganhe mais compartilhando eventos e troque por cupons em locais específicos!`, variant: "default", duration: 5000})}
+                        title="Minhas FervoCoins"
+                      >
+                        <Coins className="w-5 h-5" />
+                        <span className="sr-only">Moedas</span>
                       </Button>
-                      {appUser.fervoCoins > 0 && (
+                      {totalFervoCoins > 0 && (
                           <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-accent-foreground text-[10px] font-bold">
-                          {appUser.fervoCoins > 9 ? '9+' : appUser.fervoCoins}
+                          {totalFervoCoins > 9 ? '9+' : totalFervoCoins}
                           </span>
                       )}
-                  </div> */}
+                  </div>
                   <Link href="/user/coupons" passHref>
                     <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} title="Meus Cupons">
                         <TicketPercent className="w-5 h-5" />
@@ -421,4 +434,3 @@ export default function MainAppLayout({
       )}
     </div>
   );
-}
