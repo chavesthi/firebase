@@ -49,10 +49,10 @@ const EventQrCodePage: NextPage = () => {
             setQrSize(256); // Default size for larger screens
         }
     };
-    
+
     window.addEventListener('resize', handleResize);
     handleResize(); // Initial call
-    
+
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -91,7 +91,7 @@ const EventQrCodePage: NextPage = () => {
         if (!eventDocSnap.exists()) {
           throw new Error('Evento não encontrado ou você não tem permissão para acessá-lo.');
         }
-        
+
         const data = eventDocSnap.data();
         if (data.partnerId !== currentUser.uid) {
             throw new Error('Você não tem permissão para visualizar o QR code deste evento.');
@@ -148,12 +148,13 @@ const EventQrCodePage: NextPage = () => {
   if (authLoading || eventLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background text-foreground">
-        <Loader2 className="w-12 h-12 mb-4 text-destructive animate-spin" />
+         {/* Changed loader color to primary */}
+        <Loader2 className="w-12 h-12 mb-4 text-primary animate-spin" />
         Carregando QR Code do Evento...
       </div>
     );
   }
-  
+
   const qrCodeValue = eventDetails ? JSON.stringify({
     eventId: eventDetails.id,
     partnerId: eventDetails.partnerId,
@@ -164,16 +165,19 @@ const EventQrCodePage: NextPage = () => {
   return (
     <main className="flex flex-col items-center min-h-screen p-4 bg-background">
        <div className="absolute top-4 left-4 sm:top-8 sm:left-8 print:hidden">
-         <Button variant="outline" onClick={() => router.push('/partner/events')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+          {/* Changed button colors to primary */}
+         <Button variant="outline" onClick={() => router.push('/partner/events')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
             <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
             Eventos
         </Button>
       </div>
-      
+
       <div className="flex flex-col items-center justify-center w-full max-w-md mt-20 sm:mt-24 space-y-6 sm:space-y-8">
-        <Card className="w-full shadow-2xl bg-card/95 backdrop-blur-sm border-destructive/30 print:shadow-none print:border-none">
+         {/* Changed card border to primary */}
+        <Card className="w-full shadow-2xl bg-card/95 backdrop-blur-sm border-primary/30 print:shadow-none print:border-none">
           <CardHeader className="text-center px-4 sm:px-6">
-            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-destructive to-accent print:text-black">
+             {/* Changed title gradient from destructive/accent to primary/accent */}
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent print:text-black">
               QR Code de Check-in
             </CardTitle>
              {eventDetails && (
@@ -192,10 +196,10 @@ const EventQrCodePage: NextPage = () => {
 
             {!error && eventDetails && eventDetails.checkInToken && (
               <div className="p-4 sm:p-6 bg-white rounded-lg shadow-inner"> {/* White background for QR code */}
-                <QRCodeCanvas 
+                <QRCodeCanvas
                     id="qr-code-canvas"
-                    value={qrCodeValue} 
-                    size={qrSize} 
+                    value={qrCodeValue}
+                    size={qrSize}
                     level={"H"}
                     imageSettings={{
                         src: "/fervo_icon.png", // Path to your logo in public folder
@@ -207,7 +211,7 @@ const EventQrCodePage: NextPage = () => {
               </div>
             )}
             {/* Specific error for missing token if event was loaded but token is missing */}
-            {!error && eventDetails && !eventDetails.checkInToken && ( 
+            {!error && eventDetails && !eventDetails.checkInToken && (
                  <p className="text-destructive text-center">Token de check-in não encontrado para este evento.</p>
             )}
 
@@ -217,10 +221,12 @@ const EventQrCodePage: NextPage = () => {
 
             {!error && eventDetails && eventDetails.checkInToken && (
                 <div className="flex flex-col w-full gap-3 pt-4 sm:flex-row sm:justify-center print:hidden">
-                    <Button onClick={handlePrint} className="w-full sm:w-auto bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs sm:text-sm">
+                     {/* Changed print button colors to primary */}
+                    <Button onClick={handlePrint} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm">
                         <Printer className="w-4 h-4 mr-2" /> Imprimir
                     </Button>
-                    <Button onClick={handleDownload} variant="outline" className="w-full sm:w-auto border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+                    {/* Changed download button colors to primary */}
+                    <Button onClick={handleDownload} variant="outline" className="w-full sm:w-auto border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
                         <Download className="w-4 h-4 mr-2" /> Baixar PNG
                     </Button>
                 </div>
@@ -228,7 +234,7 @@ const EventQrCodePage: NextPage = () => {
 
           </CardContent>
         </Card>
-        
+
         <footer className="py-6 sm:py-8 text-center print:hidden">
           <p className="text-xs sm:text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} Fervo App. Todos os direitos reservados.
@@ -237,7 +243,8 @@ const EventQrCodePage: NextPage = () => {
       </div>
        <style jsx global>{`
         .shadow-2xl {
-          box-shadow: 0 0 15px 6px hsl(var(--destructive)), 0 0 30px 10px hsla(var(--destructive), 0.25), 0 0 15px 6px hsl(var(--accent)), 0 0 30px 10px hsla(var(--accent), 0.25);
+           /* Changed shadow colors from destructive/accent to primary/accent */
+          box-shadow: 0 0 15px 6px hsl(var(--primary)), 0 0 30px 10px hsla(var(--primary), 0.25), 0 0 15px 6px hsl(var(--accent)), 0 0 30px 10px hsla(var(--accent), 0.25);
         }
         @media print {
           body * {

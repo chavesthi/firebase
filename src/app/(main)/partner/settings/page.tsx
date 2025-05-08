@@ -180,7 +180,7 @@ export default function PartnerSettingsPage() {
       toast({
         title: "Configurações Salvas!",
         description: `Suas informações foram atualizadas. ${emailUpdateMessage}`,
-        variant: "default", // Use default (blue) for partner success
+        variant: "default", // Use default (primary) for partner success
       });
 
       // Clear password fields after successful save
@@ -200,8 +200,10 @@ export default function PartnerSettingsPage() {
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-destructive animate-spin" />
-        <p className="ml-4 text-lg text-destructive">Carregando configurações...</p>
+         {/* Changed loader color to primary */}
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+         {/* Changed text color to primary */}
+        <p className="ml-4 text-lg text-primary">Carregando configurações...</p>
       </div>
     );
   }
@@ -209,26 +211,30 @@ export default function PartnerSettingsPage() {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
         <div className="flex items-center justify-between mb-4 sm:mb-6 max-w-2xl mx-auto">
-            <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+             {/* Changed button colors to primary */}
+            <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
                 <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
                 Painel
             </Button>
         </div>
-      <Card className="max-w-2xl mx-auto border-destructive/70 shadow-lg shadow-destructive/20">
+       {/* Changed card border/shadow to primary */}
+      <Card className="max-w-2xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
         <CardHeader className="text-center p-4 sm:p-6">
-          <CardTitle className="text-2xl sm:text-3xl text-destructive">Configurações da Conta</CardTitle>
+           {/* Changed title text color to primary */}
+          <CardTitle className="text-2xl sm:text-3xl text-primary">Configurações da Conta</CardTitle>
           <CardDescription className="text-sm sm:text-base">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
             <div className="flex flex-col items-center space-y-2">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-destructive rounded-full flex items-center justify-center bg-muted">
+               {/* Changed avatar border and text color */}
+              <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted">
                 {watchedName ? (
-                  <span className="text-2xl sm:text-3xl text-destructive font-semibold">
+                  <span className="text-2xl sm:text-3xl text-primary font-semibold">
                     {watchedName.charAt(0).toUpperCase()}
                   </span>
                 ) : (
-                  <UserCircle className="w-14 h-14 sm:w-16 sm:h-16 text-destructive" />
+                  <UserCircle className="w-14 h-14 sm:w-16 sm:h-16 text-primary" />
                 )}
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
@@ -237,7 +243,8 @@ export default function PartnerSettingsPage() {
             {/* Basic Info Section */}
             <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="contactName" className="text-destructive/90">Nome do Contato</Label>
+                   {/* Changed label text color */}
+                  <Label htmlFor="contactName" className="text-primary/90">Nome do Contato</Label>
                    <Controller
                     name="contactName"
                     control={control}
@@ -248,7 +255,8 @@ export default function PartnerSettingsPage() {
                   {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="companyName" className="text-destructive/90">Nome da Empresa/Estabelecimento</Label>
+                   {/* Changed label text color */}
+                  <Label htmlFor="companyName" className="text-primary/90">Nome da Empresa/Estabelecimento</Label>
                    <Controller
                     name="companyName"
                     control={control}
@@ -259,7 +267,8 @@ export default function PartnerSettingsPage() {
                    {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-destructive/90">E-mail de Login</Label>
+                   {/* Changed label text color */}
+                  <Label htmlFor="email" className="text-primary/90">E-mail de Login</Label>
                    <Controller
                     name="email"
                     control={control}
@@ -272,7 +281,8 @@ export default function PartnerSettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                  <Label htmlFor="notificationsEnabled" className="text-destructive/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
+                   {/* Changed label text color and switch checked color */}
+                  <Label htmlFor="notificationsEnabled" className="text-primary/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
                    <Controller
                       name="notificationsEnabled"
                       control={control}
@@ -281,7 +291,7 @@ export default function PartnerSettingsPage() {
                           id="notificationsEnabled"
                           checked={field.value}
                           onCheckedChange={field.onChange}
-                          className="data-[state=checked]:bg-destructive data-[state=unchecked]:bg-input"
+                          className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
                         />
                       )}
                     />
@@ -289,15 +299,18 @@ export default function PartnerSettingsPage() {
                  {errors.notificationsEnabled && <p className="mt-1 text-sm text-destructive">{errors.notificationsEnabled.message}</p>}
             </div>
 
-            <Separator className="my-6 border-destructive/20" />
+             {/* Changed separator color */}
+            <Separator className="my-6 border-primary/20" />
 
             {/* Coupon Report Password Section */}
             <div className="space-y-4">
-                <h3 className="text-lg font-medium text-destructive">Senha para Limpar Relatório de Cupons</h3>
+                 {/* Changed heading text color */}
+                <h3 className="text-lg font-medium text-primary">Senha para Limpar Relatório de Cupons</h3>
                 <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
 
                  <div className="space-y-2">
-                    <Label htmlFor="couponReportClearPassword" className="text-destructive/90">Nova Senha</Label>
+                     {/* Changed label text color */}
+                    <Label htmlFor="couponReportClearPassword" className="text-primary/90">Nova Senha</Label>
                     <div className="relative">
                         <Controller
                             name="couponReportClearPassword"
@@ -327,7 +340,8 @@ export default function PartnerSettingsPage() {
                  </div>
 
                  <div className="space-y-2">
-                    <Label htmlFor="confirmCouponReportClearPassword" className="text-destructive/90">Confirmar Nova Senha</Label>
+                     {/* Changed label text color */}
+                    <Label htmlFor="confirmCouponReportClearPassword" className="text-primary/90">Confirmar Nova Senha</Label>
                      <div className="relative">
                         <Controller
                             name="confirmCouponReportClearPassword"
@@ -357,7 +371,8 @@ export default function PartnerSettingsPage() {
                  </div>
             </div>
 
-            <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm sm:text-base mt-6" disabled={isSubmitting}>
+             {/* Changed button colors to primary */}
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base mt-6" disabled={isSubmitting}>
                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
             </Button>
           </CardContent>
@@ -367,4 +382,3 @@ export default function PartnerSettingsPage() {
   );
 }
 
-    

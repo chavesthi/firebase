@@ -39,8 +39,8 @@ const partnerQuestionnaireSchema = z.object({
     .min(1, { message: "Selecione pelo menos 1 estilo musical."})
     .max(4, { message: "Selecione no máximo 4 estilos musicais." })
     .default([]),
-  phone: z.string().min(10, { message: 'Telefone inválido. Inclua DDD.' }).optional().or(z.literal('')), 
-  
+  phone: z.string().min(10, { message: 'Telefone inválido. Inclua DDD.' }).optional().or(z.literal('')),
+
   country: z.string().min(2, { message: 'País inválido.' }),
   state: z.string().min(2, { message: 'Estado inválido.' }),
   city: z.string().min(2, { message: 'Cidade inválida.' }),
@@ -83,7 +83,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       venueName: '',
       musicStyles: [],
       phone: '',
-      country: 'Brasil', 
+      country: 'Brasil',
       state: '',
       city: '',
       street: '',
@@ -194,7 +194,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         }
         setIsGeocoding(false);
     }
-    
+
     if (!isProfileLocked && !currentVenueLocation) {
         toast({ title: "Localização Pendente", description: "Por favor, forneça um endereço válido e localize-o no mapa.", variant: "destructive" });
         return;
@@ -202,7 +202,7 @@ const PartnerQuestionnairePage: NextPage = () => {
 
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
-      
+
       let dataToUpdate: any = {
         questionnaireCompleted: true, // Always set this on successful submission
       };
@@ -235,32 +235,34 @@ const PartnerQuestionnairePage: NextPage = () => {
           facebookUrl: data.facebookUrl,
           youtubeUrl: data.youtubeUrl,
           whatsappPhone: data.whatsappPhone,
-          averageVenueRating: 0, 
-          venueRatingCount: 0,   
+          averageVenueRating: 0,
+          venueRatingCount: 0,
         };
         // Only set questionnaireCompletedAt if it's the first time completing
         if (!initialQuestionnaireCompletedState) {
             dataToUpdate.questionnaireCompletedAt = serverTimestamp();
         }
       }
-      
+
       ['phone', 'instagramUrl', 'facebookUrl', 'youtubeUrl', 'whatsappPhone'].forEach(key => {
         if (dataToUpdate[key] === '') {
-          dataToUpdate[key] = null; 
+          dataToUpdate[key] = null;
         }
       });
-      
+
       await updateDoc(userDocRef, dataToUpdate);
 
       toast({
         title: isProfileLocked ? "Contatos e Mídias Salvos!" : "Perfil do Local Salvo!",
         description: isProfileLocked ? "Suas URLs, vídeo e WhatsApp foram atualizados." : "Seu estabelecimento foi configurado com sucesso.",
-        variant: "default", 
+        variant: "default",
       });
-      
-      if (!isProfileLocked) { 
-        setIsProfileLocked(true); 
+
+      if (!isProfileLocked) {
+        setIsProfileLocked(true);
         setInitialQuestionnaireCompletedState(true); // Update local state to reflect completion
+        // Redirect to dashboard after initial setup
+         router.push('/partner/dashboard');
       }
     } catch (error) {
       console.error("Error saving partner questionnaire:", error);
@@ -271,8 +273,8 @@ const PartnerQuestionnairePage: NextPage = () => {
       });
     }
   };
-  
-  const initialMapCenter = { lat: -23.55052, lng: -46.633308 }; 
+
+  const initialMapCenter = { lat: -23.55052, lng: -46.633308 };
 
   if (loading) {
     return (
@@ -285,25 +287,27 @@ const PartnerQuestionnairePage: NextPage = () => {
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4 bg-background">
       <div className="absolute top-4 sm:top-8 left-4 sm:left-8">
-        <Logo iconClassName="text-destructive" />
+        <Logo iconClassName="text-primary" /> {/* Use primary color for logo */}
       </div>
       {isProfileLocked && (
         <div className="w-full max-w-3xl mb-4 flex justify-end px-2 sm:px-0">
-          <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10">
+          <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10"> {/* Changed to primary */}
               <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar ao Painel
           </Button>
         </div>
       )}
-      <Card className="w-full max-w-3xl p-px rounded-lg shadow-2xl bg-gradient-to-b from-destructive/50 to-secondary/50">
+      {/* Changed gradient from destructive/secondary to primary/secondary */}
+      <Card className="w-full max-w-3xl p-px rounded-lg shadow-2xl bg-gradient-to-b from-primary/50 to-secondary/50">
         <Card className="w-full bg-card/95 backdrop-blur-sm">
           <CardHeader className="text-center px-4 sm:px-6">
-            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-destructive to-accent">
+             {/* Changed gradient from destructive/accent to primary/accent */}
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
               {isProfileLocked ? "Editar Contatos e Mídia" : "Configure seu Local!"}
             </CardTitle>
             <CardDescription className="text-muted-foreground text-sm sm:text-base">
-              {isProfileLocked 
-                ? "Atualize seus links de contato, redes sociais e vídeo de apresentação." 
+              {isProfileLocked
+                ? "Atualize seus links de contato, redes sociais e vídeo de apresentação."
                 : "Detalhes do seu estabelecimento para os usuários do Fervo App."}
             </CardDescription>
           </CardHeader>
@@ -313,13 +317,13 @@ const PartnerQuestionnairePage: NextPage = () => {
                 {/* Left Column */}
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="venueName" className="text-destructive/90">Nome do Local</Label>
+                    <Label htmlFor="venueName" className="text-primary/90">Nome do Local</Label> {/* Changed text color */}
                     <Controller name="venueName" control={control} render={({ field }) => <Input id="venueName" placeholder="Ex: Balada FervoTop" {...field} className={errors.venueName ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
                     {errors.venueName && <p className="mt-1 text-sm text-destructive">{errors.venueName.message}</p>}
                   </div>
 
                   <div>
-                    <Label htmlFor="venueType" className="text-destructive/90">Tipo de Local</Label>
+                    <Label htmlFor="venueType" className="text-primary/90">Tipo de Local</Label> {/* Changed text color */}
                     <Controller
                       name="venueType"
                       control={control}
@@ -338,9 +342,9 @@ const PartnerQuestionnairePage: NextPage = () => {
                     />
                     {errors.venueType && <p className="mt-1 text-sm text-destructive">{errors.venueType.message}</p>}
                   </div>
-                  
+
                   <div>
-                    <Label className="text-destructive/90">Estilos Musicais (Máx. 4)</Label>
+                    <Label className="text-primary/90">Estilos Musicais (Máx. 4)</Label> {/* Changed text color */}
                     <ScrollArea className="h-32 p-2 border rounded-md border-input">
                       <div className="grid grid-cols-1 gap-2 xs:grid-cols-2"> {/* Adjusted for very small screens */}
                         {MUSIC_STYLE_OPTIONS.map((option) => (
@@ -360,7 +364,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                                         field.onChange([...currentSelection, option.value]);
                                       } else {
                                         toast({ title: "Limite atingido", description: "Você pode selecionar no máximo 4 estilos.", variant: "destructive", duration: 3000 });
-                                        return false; 
+                                        return false;
                                       }
                                     } else {
                                       field.onChange(currentSelection.filter((value) => value !== option.value));
@@ -380,17 +384,17 @@ const PartnerQuestionnairePage: NextPage = () => {
                   </div>
 
                   <div>
-                    <Label htmlFor="phone" className="text-destructive/90">Telefone Fixo (Opcional)</Label>
+                    <Label htmlFor="phone" className="text-primary/90">Telefone Fixo (Opcional)</Label> {/* Changed text color */}
                     <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXX-XXXX" {...field} className={errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
                     {errors.phone && <p className="mt-1 text-sm text-destructive">{errors.phone.message}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="country" className="text-destructive/90">País</Label>
+                    <Label htmlFor="country" className="text-primary/90">País</Label> {/* Changed text color */}
                     <Controller name="country" control={control} render={({ field }) => <Input id="country" placeholder="Brasil" {...field} className={errors.country ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
                     {errors.country && <p className="mt-1 text-sm text-destructive">{errors.country.message}</p>}
                   </div>
                    <div>
-                    <Label htmlFor="cep" className="text-destructive/90">CEP</Label>
+                    <Label htmlFor="cep" className="text-primary/90">CEP</Label> {/* Changed text color */}
                     <Controller name="cep" control={control} render={({ field }) => <Input id="cep" placeholder="XXXXX-XXX" {...field} className={errors.cep ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
                     {errors.cep && <p className="mt-1 text-sm text-destructive">{errors.cep.message}</p>}
                   </div>
@@ -398,32 +402,33 @@ const PartnerQuestionnairePage: NextPage = () => {
 
                 {/* Right Column - Address */}
                 <div className="space-y-4">
-                 
+
                   <div>
-                    <Label htmlFor="state" className="text-destructive/90">Estado</Label>
+                    <Label htmlFor="state" className="text-primary/90">Estado</Label> {/* Changed text color */}
                     <Controller name="state" control={control} render={({ field }) => <Input id="state" placeholder="Ex: São Paulo" {...field} className={errors.state ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
                     {errors.state && <p className="mt-1 text-sm text-destructive">{errors.state.message}</p>}
                   </div>
 
                   <div>
-                    <Label htmlFor="city" className="text-destructive/90">Cidade</Label>
+                    <Label htmlFor="city" className="text-primary/90">Cidade</Label> {/* Changed text color */}
                     <Controller name="city" control={control} render={({ field }) => <Input id="city" placeholder="Ex: São Paulo" {...field} className={errors.city ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
                     {errors.city && <p className="mt-1 text-sm text-destructive">{errors.city.message}</p>}
                   </div>
-                  
+
                   <div>
-                    <Label htmlFor="street" className="text-destructive/90">Rua</Label>
+                    <Label htmlFor="street" className="text-primary/90">Rua</Label> {/* Changed text color */}
                     <Controller name="street" control={control} render={({ field }) => <Input id="street" placeholder="Ex: Av. Paulista" {...field} className={errors.street ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
                     {errors.street && <p className="mt-1 text-sm text-destructive">{errors.street.message}</p>}
                   </div>
 
                   <div>
-                    <Label htmlFor="number" className="text-destructive/90">Número</Label>
+                    <Label htmlFor="number" className="text-primary/90">Número</Label> {/* Changed text color */}
                     <Controller name="number" control={control} render={({ field }) => <Input id="number" placeholder="Ex: 1000 ou S/N" {...field} className={errors.number ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
                     {errors.number && <p className="mt-1 text-sm text-destructive">{errors.number.message}</p>}
                   </div>
-                  
-                  <Button type="button" onClick={handleGeocode} disabled={isProfileLocked || isGeocoding || !addressFields.every(f => f && f.length > 0)} className="w-full bg-destructive/80 hover:bg-destructive text-destructive-foreground">
+
+                   {/* Changed button bg/hover color */}
+                  <Button type="button" onClick={handleGeocode} disabled={isProfileLocked || isGeocoding || !addressFields.every(f => f && f.length > 0)} className="w-full bg-primary/80 hover:bg-primary text-primary-foreground">
                     <MapPin className="w-4 h-4 mr-2"/> {isGeocoding ? 'Localizando...' : 'Localizar Endereço no Mapa'}
                   </Button>
 
@@ -449,40 +454,40 @@ const PartnerQuestionnairePage: NextPage = () => {
                   )}
                 </div>
               </div>
-              
+
               {/* Social Links & WhatsApp - Full Width */}
               <div className="pt-4 space-y-4 border-t border-border">
-                 <h3 className="text-lg font-semibold text-center text-destructive/90">Contatos, Redes Sociais e Vídeo</h3>
+                 <h3 className="text-lg font-semibold text-center text-primary/90">Contatos, Redes Sociais e Vídeo</h3> {/* Changed text color */}
                   <div>
-                    <Label htmlFor="whatsappPhone" className="text-destructive/90">WhatsApp (Contato Principal)</Label>
-                    <Controller 
-                        name="whatsappPhone" 
-                        control={control} 
-                        render={({ field }) => 
-                            <Input 
-                                id="whatsappPhone" 
-                                type="tel" 
-                                placeholder="Ex: +5511987654321" 
-                                {...field} 
-                                className={errors.whatsappPhone ? 'border-destructive focus-visible:ring-destructive' : ''} 
+                    <Label htmlFor="whatsappPhone" className="text-primary/90">WhatsApp (Contato Principal)</Label> {/* Changed text color */}
+                    <Controller
+                        name="whatsappPhone"
+                        control={control}
+                        render={({ field }) =>
+                            <Input
+                                id="whatsappPhone"
+                                type="tel"
+                                placeholder="Ex: +5511987654321"
+                                {...field}
+                                className={errors.whatsappPhone ? 'border-destructive focus-visible:ring-destructive' : ''}
                             />
-                        } 
+                        }
                     />
                     {errors.whatsappPhone && <p className="mt-1 text-sm text-destructive">{errors.whatsappPhone.message}</p>}
                     <p className="mt-1 text-xs text-muted-foreground">Inclua código do país para melhor alcance (Ex: +55 para Brasil).</p>
                   </div>
                  <div>
-                    <Label htmlFor="instagramUrl" className="text-destructive/90">Instagram URL</Label>
+                    <Label htmlFor="instagramUrl" className="text-primary/90">Instagram URL</Label> {/* Changed text color */}
                     <Controller name="instagramUrl" control={control} render={({ field }) => <Input id="instagramUrl" type="url" placeholder="https://instagram.com/seulocal" {...field} className={errors.instagramUrl ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
                     {errors.instagramUrl && <p className="mt-1 text-sm text-destructive">{errors.instagramUrl.message}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="facebookUrl" className="text-destructive/90">Facebook URL</Label>
+                    <Label htmlFor="facebookUrl" className="text-primary/90">Facebook URL</Label> {/* Changed text color */}
                     <Controller name="facebookUrl" control={control} render={({ field }) => <Input id="facebookUrl" type="url" placeholder="https://facebook.com/seulocal" {...field} className={errors.facebookUrl ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
                     {errors.facebookUrl && <p className="mt-1 text-sm text-destructive">{errors.facebookUrl.message}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="youtubeUrl" className="text-destructive/90">Vídeo de Apresentação (YouTube URL)</Label>
+                    <Label htmlFor="youtubeUrl" className="text-primary/90">Vídeo de Apresentação (YouTube URL)</Label> {/* Changed text color */}
                     <Controller name="youtubeUrl" control={control} render={({ field }) => <Input id="youtubeUrl" type="url" placeholder="https://youtube.com/watch?v=..." {...field} className={errors.youtubeUrl ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
                     {errors.youtubeUrl && <p className="mt-1 text-sm text-destructive">{errors.youtubeUrl.message}</p>}
                   </div>
@@ -490,8 +495,9 @@ const PartnerQuestionnairePage: NextPage = () => {
 
             </CardContent>
             <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isSubmitting || isGeocoding}>
-                <Save className="w-4 h-4 mr-2"/> 
+               {/* Changed button bg/hover color */}
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting || isGeocoding}>
+                <Save className="w-4 h-4 mr-2"/>
                 {isSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Contatos e Mídia' : 'Salvar e Continuar')}
               </Button>
             </CardFooter>
@@ -500,7 +506,8 @@ const PartnerQuestionnairePage: NextPage = () => {
       </Card>
        <style jsx global>{`
         .shadow-2xl {
-          box-shadow: 0 0 15px 5px hsl(var(--destructive)), 0 0 30px 10px hsla(var(--destructive), 0.3), 0 0 15px 5px hsl(var(--secondary)), 0 0 30px 10px hsla(var(--secondary), 0.3);
+          /* Changed shadow colors from destructive/secondary to primary/secondary */
+          box-shadow: 0 0 15px 5px hsl(var(--primary)), 0 0 30px 10px hsla(var(--primary), 0.3), 0 0 15px 5px hsl(var(--secondary)), 0 0 30px 10px hsla(var(--secondary), 0.3);
         }
         @media (max-width: 640px) { /* xs breakpoint */
           .grid-cols-xs-2 {

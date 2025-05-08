@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -294,8 +295,10 @@ export default function MainAppLayout({
   const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
   const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
 
-  const activeColorClass = appUser?.role === UserRole.PARTNER ? 'text-destructive' : 'text-primary';
-  const activeBorderColorClass = appUser?.role === UserRole.PARTNER ? 'border-destructive' : 'border-primary';
+  // Use primary color consistently for both roles in the layout
+  const activeColorClass = 'text-primary';
+  const activeBorderColorClass = 'border-primary';
+  const hoverBgClass = 'hover:bg-primary/10';
 
 
   return (
@@ -308,14 +311,14 @@ export default function MainAppLayout({
               {appUser?.role === UserRole.USER && (
                 <>
                   <Link href="/map" passHref>
-                    <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={cn(pathname === '/map' ? activeColorClass : '', 'hover:bg-primary/10')}>
+                    <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={cn(pathname === '/map' ? activeColorClass : '', hoverBgClass)}>
                       <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
                     </Button>
                   </Link>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className={cn(activeColorClass, 'hover:bg-primary/10')}
+                    className={cn(activeColorClass, hoverBgClass)}
                     onClick={() => setIsQrScannerOpen(true)}
                     title="Check-in com QR Code"
                     disabled={isFetchingNotifications}
@@ -326,7 +329,7 @@ export default function MainAppLayout({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', 'hover:bg-primary/10')}
+                    className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', hoverBgClass)}
                     onClick={handleNotificationsClick}
                     disabled={isFetchingNotifications}
                     title="Verificar novos Fervos"
@@ -336,10 +339,10 @@ export default function MainAppLayout({
                   </Button>
                    {/* Coins Button */}
                    <div className="relative">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className={cn(activeColorClass, 'hover:bg-primary/10')} 
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(activeColorClass, hoverBgClass)}
                         onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${totalFervoCoins} moedas no total. Ganhe mais compartilhando eventos e troque por cupons em locais específicos!`, variant: "default", duration: 5000})}
                         title="Minhas FervoCoins"
                       >
@@ -353,7 +356,7 @@ export default function MainAppLayout({
                       )}
                   </div>
                   <Link href="/user/coupons" passHref>
-                    <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} title="Meus Cupons">
+                    <Button variant="ghost" size="icon" className={cn(activeColorClass, hoverBgClass)} title="Meus Cupons">
                         <TicketPercent className="w-5 h-5" />
                         <span className="sr-only">Cupons de Desconto</span>
                     </Button>
@@ -362,19 +365,23 @@ export default function MainAppLayout({
               )}
               {appUser?.role === UserRole.PARTNER && (
                 <Link href="/partner/dashboard" passHref>
-                  <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={cn(pathname === '/partner/dashboard' ? activeColorClass : '', 'hover:bg-destructive/10')}>
+                  {/* Apply primary color styling for partner dashboard button */}
+                  <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={cn(pathname === '/partner/dashboard' ? activeColorClass : '', hoverBgClass)}>
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Meu Painel
                   </Button>
                 </Link>
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
+                  {/* Apply primary border color for partner avatar */}
                   <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
                     {appUser?.name ? (
+                      // Apply primary text color for partner initial
                       <span className={`text-lg font-semibold ${activeColorClass}`}>
                         {appUser.name.charAt(0).toUpperCase()}
                       </span>
                     ) : (
+                      // Apply primary color for partner default icon
                       <UserCircle className={`w-6 h-6 ${activeColorClass}`} />
                     )}
                   </Button>
@@ -435,3 +442,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+

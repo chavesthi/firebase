@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -156,7 +157,8 @@ const PartnerRedeemCouponPage: NextPage = () => {
   if (isLoadingUser) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-destructive animate-spin" />
+         {/* Changed loader color to primary */}
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
       </div>
     );
   }
@@ -164,15 +166,18 @@ const PartnerRedeemCouponPage: NextPage = () => {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+         {/* Changed button colors to primary */}
+        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
           <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
           Painel
         </Button>
       </div>
 
-      <Card className="max-w-lg mx-auto border-destructive/50 shadow-lg shadow-destructive/15">
+       {/* Changed card border/shadow to primary */}
+      <Card className="max-w-lg mx-auto border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="text-center p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-destructive flex items-center justify-center">
+           {/* Changed title text color to primary */}
+          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center justify-center">
             <TicketCheck className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Resgatar Cupom de Usuário
           </CardTitle>
@@ -183,7 +188,8 @@ const PartnerRedeemCouponPage: NextPage = () => {
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-6 px-4 sm:px-6">
             <div>
-              <Label htmlFor="couponCode" className="text-destructive/90">Código do Cupom</Label>
+               {/* Changed label text color */}
+              <Label htmlFor="couponCode" className="text-primary/90">Código do Cupom</Label>
               <Controller
                 name="couponCode"
                 control={control}
@@ -205,7 +211,8 @@ const PartnerRedeemCouponPage: NextPage = () => {
               </p>
             </div>
 
-            <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm sm:text-base" disabled={isRedeeming}>
+             {/* Changed button colors to primary */}
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isRedeeming}>
               {isRedeeming ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <TicketCheck className="w-4 h-4 mr-2" />}
               {isRedeeming ? 'Verificando...' : 'Resgatar Cupom'}
             </Button>
@@ -230,3 +237,4 @@ const PartnerRedeemCouponPage: NextPage = () => {
 };
 
 export default PartnerRedeemCouponPage;
+

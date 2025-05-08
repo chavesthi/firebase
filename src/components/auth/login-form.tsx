@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -74,7 +73,7 @@ export function LoginForm() {
     const userDoc = await getDoc(userDocRef);
 
     if (!userDoc.exists()) {
-      // New user (either via Google first time or regular signup which should have created this)
+      // New user (either via Google first time or regular signup)
       await setDoc(userDocRef, {
         uid: user.uid,
         name: isGoogleSignIn ? (googleName || user.displayName || "Usuário") : signupMethods.getValues("name"),
@@ -83,11 +82,12 @@ export function LoginForm() {
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
         fervoCoins: 0, // Initialize fervoCoins for new users
+        venueCoins: {}, // Initialize venueCoins map
       });
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
         description: "Quase lá! Conte-nos um pouco mais sobre você.",
-        variant: role === UserRole.USER ? "default" : "destructive",
+        variant: "default", // Use default (primary) for both new user/partner
       });
       router.push(role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire');
     } else {
@@ -102,13 +102,15 @@ export function LoginForm() {
           description: `Este e-mail está registrado como ${userRoleInDb === UserRole.USER ? 'usuário comum' : 'parceiro'}. Por favor, use a aba correta.`,
           variant: "destructive",
         });
+         // Sign out the user if they logged in with the wrong role tab
+         await auth.signOut();
         return;
       }
-      
+
       toast({
         title: "Login Bem Sucedido!",
         description: `Bem-vindo de volta, ${userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro')}! Redirecionando...`,
-        variant: role === UserRole.USER ? "default" : "destructive",
+        variant: "default", // Use default (primary) for both user/partner login success
       });
 
       if (role === UserRole.USER) {
@@ -187,35 +189,32 @@ export function LoginForm() {
   };
 
 
-  const cardStyles = activeRole === UserRole.USER 
-    ? 'border-primary/80 [--card-glow:hsl(var(--primary))] [--card-glow-soft:hsla(var(--primary),0.2)]' 
-    : 'border-destructive/80 [--card-glow:hsl(var(--destructive))] [--card-glow-soft:hsla(var(--destructive),0.2)]';
-  
-  const buttonStyles = activeRole === UserRole.USER 
-    ? 'bg-primary hover:bg-primary/90 text-primary-foreground' 
-    : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground';
+  // Use primary styles consistently for both roles in the card/button
+  const cardStyles = 'border-primary/80 [--card-glow:hsl(var(--primary))] [--card-glow-soft:hsla(var(--primary),0.2)]';
+  const buttonStyles = 'bg-primary hover:bg-primary/90 text-primary-foreground';
+  const commonLabelStyle = "text-primary/80";
+  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive"; // Keep error border red
 
-  const commonLabelStyle = activeRole === UserRole.PARTNER ? "text-destructive/80" : "text-primary/80";
-  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive";
+  // Style for active/inactive tabs
+  const userTabStyle = activeRole === UserRole.USER
+    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]"
+    : "hover:bg-primary/10";
+  const partnerTabStyle = activeRole === UserRole.PARTNER
+    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]" // Use primary styling for active partner tab
+    : "hover:bg-primary/10"; // Use primary hover for inactive partner tab
 
   return (
     <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as UserRole)} className="w-full">
       <TabsList className="grid w-full grid-cols-2 mb-6 bg-background/50">
-        <TabsTrigger 
-          value={UserRole.USER} 
-          className={cn(
-            "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]",
-            "hover:bg-primary/10"
-          )}
+        <TabsTrigger
+          value={UserRole.USER}
+          className={cn(userTabStyle)}
         >
           Usuário
         </TabsTrigger>
-        <TabsTrigger 
+        <TabsTrigger
           value={UserRole.PARTNER}
-          className={cn(
-            "data-[state=active]:bg-destructive/20 data-[state=active]:text-destructive data-[state=active]:shadow-[0_0_10px_hsl(var(--destructive))]",
-            "hover:bg-destructive/10"
-          )}
+          className={cn(partnerTabStyle)}
         >
           Parceiro
         </TabsTrigger>
@@ -265,16 +264,16 @@ export function LoginForm() {
               <Button type="submit" className={cn("w-full", buttonStyles)} disabled={loginMethods.formState.isSubmitting || isGoogleSigningIn}>
                 {loginMethods.formState.isSubmitting ? 'Entrando...' : 'Entrar'} <LogIn size={18} className="ml-2"/>
               </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full border-border hover:bg-muted/50" 
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-border hover:bg-muted/50"
                 onClick={handleGoogleSignIn}
                 disabled={isGoogleSigningIn || loginMethods.formState.isSubmitting}
               >
                 <GoogleIcon className="mr-2"/> {isGoogleSigningIn ? 'Conectando com Google...' : 'Entrar com Google'}
               </Button>
-              <Button variant="link" type="button" onClick={() => setFormMode('signup')} className={cn("p-0 h-auto", activeRole === UserRole.USER ? "text-primary/80 hover:text-primary" : "text-destructive/80 hover:text-destructive")}>
+              <Button variant="link" type="button" onClick={() => setFormMode('signup')} className="p-0 h-auto text-primary/80 hover:text-primary">
                 Não tem uma conta? Cadastre-se
               </Button>
             </CardFooter>
@@ -359,16 +358,16 @@ export function LoginForm() {
               <Button type="submit" className={cn("w-full", buttonStyles)} disabled={signupMethods.formState.isSubmitting || isGoogleSigningIn}>
                 {signupMethods.formState.isSubmitting ? 'Criando conta...' : 'Criar Conta'} <UserPlus size={18} className="ml-2"/>
               </Button>
-               <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full border-border hover:bg-muted/50" 
+               <Button
+                type="button"
+                variant="outline"
+                className="w-full border-border hover:bg-muted/50"
                 onClick={handleGoogleSignIn}
                 disabled={isGoogleSigningIn || signupMethods.formState.isSubmitting}
               >
                  <GoogleIcon className="mr-2"/> {isGoogleSigningIn ? 'Conectando com Google...' : 'Cadastrar com Google'}
-              </Button>
-              <Button variant="link" type="button" onClick={() => setFormMode('login')} className={cn("p-0 h-auto", activeRole === UserRole.USER ? "text-primary/80 hover:text-primary" : "text-destructive/80 hover:text-destructive")}>
+               </Button>
+              <Button variant="link" type="button" onClick={() => setFormMode('login')} className="p-0 h-auto text-primary/80 hover:text-primary">
                 Já tem uma conta? Faça login
               </Button>
             </CardFooter>
@@ -377,16 +376,14 @@ export function LoginForm() {
       )}
 
        <style jsx global>{`
+        /* Use primary color for border, shadow, and background regardless of role */
         .border-primary\\/80 { border-color: hsla(var(--primary), 0.8); }
-        .border-destructive\\/80 { border-color: hsla(var(--destructive), 0.8); }
         .shadow-\\[0_0_10px_hsl\\(var\\(--primary\\)\\)\\] { box-shadow: 0 0 10px hsl(var(--primary)); }
-        .shadow-\\[0_0_10px_hsl\\(var\\(--destructive\\)\\)\\] { box-shadow: 0 0 10px hsl(var(--destructive)); }
         .bg-primary\\/20 { background-color: hsla(var(--primary), 0.2); }
-        .bg-destructive\\/20 { background-color: hsla(var(--destructive), 0.2); }
         .text-primary { color: hsl(var(--primary)); }
-        .text-destructive { color: hsl(var(--destructive)); }
-        .text-destructive\\/80 { color: hsla(var(--destructive), 0.8); }
         .text-primary\\/80 { color: hsla(var(--primary), 0.8); }
+        /* Keep destructive text color for actual errors */
+        .text-destructive { color: hsl(var(--destructive)); }
       `}</style>
     </Tabs>
   );

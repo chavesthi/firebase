@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -38,7 +39,7 @@ interface RedeemedCoupon {
   description: string;
   redeemedAt: FirebaseTimestamp;
   // Add the document path for deletion
-  docPath: string; 
+  docPath: string;
 }
 
 const PartnerCouponReportPage: NextPage = () => {
@@ -47,7 +48,7 @@ const PartnerCouponReportPage: NextPage = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [redeemedCoupons, setRedeemedCoupons] = useState<RedeemedCoupon[]>([]);
-  const [showClearConfirm, setShowClearConfirm] = useState(false); 
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [password, setPassword] = useState('');
   const [isClearing, setIsClearing] = useState(false);
 
@@ -96,7 +97,7 @@ const PartnerCouponReportPage: NextPage = () => {
                 userName = userDoc.data().name || userName;
               }
             } catch (error) {
-              console.error(`Failed to fetch user name for userId ${userId}:`, error); // This line seems syntactically correct. Ensure surrounding blocks are okay.
+              console.error(`Failed to fetch user name for userId ${userId}:`, error);
             }
         } else {
              console.warn(`Missing or invalid userId for coupon ${docSnap.id}`);
@@ -129,7 +130,6 @@ const PartnerCouponReportPage: NextPage = () => {
   }, [currentUser, toast]);
 
 
-  // Placeholder for Clear Report functionality
   const handleClearReport = async () => {
       if (!currentUser || redeemedCoupons.length === 0) return;
       setIsClearing(true);
@@ -161,10 +161,10 @@ const PartnerCouponReportPage: NextPage = () => {
 
           // 2. Password is correct, proceed with deletion
           const batch = writeBatch(firestore);
-          
+
           redeemedCoupons.forEach(coupon => {
               // Use the stored docPath to reference the document for deletion
-              const couponDocRef = doc(firestore, coupon.docPath); 
+              const couponDocRef = doc(firestore, coupon.docPath);
               batch.delete(couponDocRef);
           });
 
@@ -187,15 +187,18 @@ const PartnerCouponReportPage: NextPage = () => {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+         {/* Changed button colors to primary */}
+        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
           <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
           Painel
         </Button>
       </div>
 
-      <Card className="border-destructive/50 shadow-lg shadow-destructive/15">
+       {/* Changed card border/shadow to primary */}
+      <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-destructive flex items-center">
+          {/* Changed title text color to primary */}
+          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <ScrollText className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Relatório de Cupons Resgatados
           </CardTitle>
@@ -206,7 +209,8 @@ const PartnerCouponReportPage: NextPage = () => {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="flex justify-center items-center h-60">
-              <Loader2 className="w-10 h-10 text-destructive animate-spin" />
+               {/* Changed loader color to primary */}
+              <Loader2 className="w-10 h-10 text-primary animate-spin" />
             </div>
           ) : redeemedCoupons.length === 0 ? (
             <p className="p-6 text-center text-muted-foreground">Nenhum cupom foi resgatado ainda.</p>
@@ -215,10 +219,11 @@ const PartnerCouponReportPage: NextPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-destructive/90">Usuário</TableHead>
-                    <TableHead className="text-destructive/90">Cupom</TableHead>
-                    <TableHead className="text-destructive/90">Descrição</TableHead>
-                    <TableHead className="text-destructive/90 text-right">Data Resgate</TableHead>
+                     {/* Changed table head text color */}
+                    <TableHead className="text-primary/90">Usuário</TableHead>
+                    <TableHead className="text-primary/90">Cupom</TableHead>
+                    <TableHead className="text-primary/90">Descrição</TableHead>
+                    <TableHead className="text-primary/90 text-right">Data Resgate</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -238,10 +243,11 @@ const PartnerCouponReportPage: NextPage = () => {
           )}
         </CardContent>
          {redeemedCoupons.length > 0 && (
-          <CardFooter className="p-4 sm:p-6 border-t border-destructive/20 justify-end">
+           {/* Changed footer border color */}
+          <CardFooter className="p-4 sm:p-6 border-t border-primary/20 justify-end">
              <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
                <AlertDialogTrigger asChild>
-                  {/* Enable the button */}
+                  {/* Changed button variant to destructive (still red for delete action) */}
                   <Button variant="destructive" size="sm" onClick={() => setShowClearConfirm(true)} >
                       <Trash2 className="w-4 h-4 mr-2" /> Limpar Relatório
                   </Button>
@@ -265,10 +271,10 @@ const PartnerCouponReportPage: NextPage = () => {
                  </div>
                  <AlertDialogFooter>
                    <AlertDialogCancel onClick={() => {setPassword(''); setShowClearConfirm(false)}}>Cancelar</AlertDialogCancel>
-                   {/* Action button also enabled */}
+                   {/* Kept destructive style for confirm delete */}
                    <AlertDialogAction
                      onClick={handleClearReport}
-                     disabled={!password || isClearing} 
+                     disabled={!password || isClearing}
                      className="bg-destructive hover:bg-destructive/90"
                    >
                      {isClearing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -285,3 +291,4 @@ const PartnerCouponReportPage: NextPage = () => {
 };
 
 export default PartnerCouponReportPage;
+

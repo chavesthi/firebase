@@ -90,7 +90,7 @@ const PartnerRatingsPage: NextPage = () => {
     // Fetch all events created by the partner to list them for selection
     const partnerEventsRef = collection(firestore, `users/${currentUser.uid}/events`);
     // Order by createdAt descending to show newer events first in the list
-    const qEvents = query(partnerEventsRef, orderBy('createdAt', 'desc')); 
+    const qEvents = query(partnerEventsRef, orderBy('createdAt', 'desc'));
 
     const unsubscribeEvents = onSnapshot(qEvents, (snapshot) => {
         const fetchedEvents: EventDetails[] = [];
@@ -106,7 +106,7 @@ const PartnerRatingsPage: NextPage = () => {
         setEventsWithRatings(fetchedEvents);
         if (!selectedEventId && fetchedEvents.length > 0) {
             // Automatically select the first (most recent) event if none is selected
-            setSelectedEventId(fetchedEvents[0].id); 
+            setSelectedEventId(fetchedEvents[0].id);
         }
         setIsLoading(false);
     }, (error) => {
@@ -125,25 +125,25 @@ const PartnerRatingsPage: NextPage = () => {
 
   useEffect(() => {
     if (!selectedEventId || !currentUser) {
-      setEventRatings([]); 
-      if (isLoading && !currentUser) setIsLoading(false); 
+      setEventRatings([]);
+      if (isLoading && !currentUser) setIsLoading(false);
       else if(isLoading && !selectedEventId && eventsWithRatings.length > 0) setIsLoading(false);
       return;
     }
-    
+
     setIsLoading(true);
     const ratingsRef = collection(firestore, 'eventRatings');
     const qRatings = query(
-        ratingsRef, 
+        ratingsRef,
         where('eventId', '==', selectedEventId),
-        where('partnerId', '==', currentUser.uid), 
+        where('partnerId', '==', currentUser.uid),
         orderBy('createdAt', 'desc')
     );
 
     const unsubscribeRatings = onSnapshot(qRatings, async (snapshot) => {
         const fetchedRatings: EventRating[] = [];
         let eventName = eventsWithRatings.find(e => e.id === selectedEventId)?.eventName;
-        if (!eventName && currentUser && selectedEventId) { 
+        if (!eventName && currentUser && selectedEventId) {
             try {
                 const eventDoc = await getDoc(doc(firestore, `users/${currentUser.uid}/events/${selectedEventId}`));
                 if (eventDoc.exists()) {
@@ -160,7 +160,7 @@ const PartnerRatingsPage: NextPage = () => {
             fetchedRatings.push({
                 id: doc.id,
                 eventId: data.eventId,
-                eventName: eventName || "Evento Desconhecido", 
+                eventName: eventName || "Evento Desconhecido",
                 userId: data.userId,
                 userName: data.userName,
                 rating: data.rating,
@@ -180,10 +180,11 @@ const PartnerRatingsPage: NextPage = () => {
   }, [selectedEventId, currentUser, toast, eventsWithRatings]); // isLoading removed from dependencies
 
 
-  if (!currentUser && !isLoading) { 
+  if (!currentUser && !isLoading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-destructive animate-spin" />
+         {/* Changed loader color to primary */}
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
       </div>
     );
   }
@@ -193,15 +194,18 @@ const PartnerRatingsPage: NextPage = () => {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+         {/* Changed button colors to primary */}
+        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
             <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
             Painel
         </Button>
       </div>
 
-      <Card className="mb-8 border-destructive/50 shadow-lg shadow-destructive/15">
+      {/* Changed card border/shadow to primary */}
+      <Card className="mb-8 border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-destructive flex items-center">
+           {/* Changed title text color to primary */}
+          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <StarIcon className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Avaliações
           </CardTitle>
@@ -211,8 +215,10 @@ const PartnerRatingsPage: NextPage = () => {
         </CardHeader>
         <CardContent className="space-y-6 px-4 sm:px-6 pb-4 sm:pb-6">
             {partnerOverallRating && (
-                <div className="p-3 sm:p-4 mb-6 border rounded-lg border-destructive/30 bg-card/80">
-                    <h3 className="mb-2 text-md sm:text-lg font-semibold text-destructive">Avaliação Geral do Local</h3>
+                // Changed border color
+                <div className="p-3 sm:p-4 mb-6 border rounded-lg border-primary/30 bg-card/80">
+                     {/* Changed heading text color */}
+                    <h3 className="mb-2 text-md sm:text-lg font-semibold text-primary">Avaliação Geral do Local</h3>
                     {partnerOverallRating.averageVenueRating !== undefined && partnerOverallRating.venueRatingCount !== undefined && partnerOverallRating.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-2">
                             <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={20} smSize={24} readOnly />
@@ -225,24 +231,27 @@ const PartnerRatingsPage: NextPage = () => {
                     )}
                 </div>
             )}
-            <Separator className="my-4 border-destructive/20" />
+             {/* Changed separator color */}
+            <Separator className="my-4 border-primary/20" />
 
 
             {isLoading && eventsWithRatings.length === 0 && <p className="text-center text-muted-foreground">Carregando seus eventos...</p>}
             {!isLoading && eventsWithRatings.length === 0 && <p className="text-center text-muted-foreground">Você ainda não criou nenhum evento.</p>}
-            
+
             {eventsWithRatings.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="md:col-span-1">
-                        <h3 className="mb-2 text-md sm:text-lg font-medium text-destructive/90">Eventos Avaliados</h3>
+                         {/* Changed heading text color */}
+                        <h3 className="mb-2 text-md sm:text-lg font-medium text-primary/90">Eventos Avaliados</h3>
                         <ScrollArea className="h-60 md:h-72 border rounded-md border-input">
                             {eventsWithRatings.map(event => (
                                 <Button
                                     key={event.id}
                                     variant={selectedEventId === event.id ? "secondary" : "ghost"}
                                     className={cn(
-                                        "w-full justify-start text-left p-2 sm:p-3 rounded-none h-auto flex flex-col items-start", 
-                                        selectedEventId === event.id && "bg-destructive/20 text-destructive font-semibold"
+                                        "w-full justify-start text-left p-2 sm:p-3 rounded-none h-auto flex flex-col items-start",
+                                         // Changed selected background/text color
+                                        selectedEventId === event.id && "bg-primary/20 text-primary font-semibold"
                                     )}
                                     onClick={() => setSelectedEventId(event.id)}
                                 >
@@ -260,10 +269,11 @@ const PartnerRatingsPage: NextPage = () => {
                         </ScrollArea>
                     </div>
                     <div className="md:col-span-2">
-                        <h3 className="mb-2 text-md sm:text-lg font-medium text-destructive/90">
+                         {/* Changed heading text color */}
+                        <h3 className="mb-2 text-md sm:text-lg font-medium text-primary/90">
                             Comentários para: <span className="font-semibold">{selectedEventDetails?.eventName || "Selecione um Evento"}</span>
                         </h3>
-                        {isLoading && selectedEventId && <div className="flex justify-center items-center h-60"><Loader2 className="w-8 h-8 text-destructive animate-spin" /></div>}
+                        {isLoading && selectedEventId && <div className="flex justify-center items-center h-60"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>} {/* Changed loader color */}
                         {!isLoading && selectedEventId && eventRatings.length === 0 && (
                              <div className="flex items-center justify-center h-60 p-4 border border-dashed rounded-md border-border">
                                 <p className="text-muted-foreground text-sm sm:text-base">Nenhuma avaliação para este evento ainda.</p>
@@ -274,7 +284,8 @@ const PartnerRatingsPage: NextPage = () => {
                                 {eventRatings.map(rating => (
                                     <Card key={rating.id} className="bg-card/70 p-3 sm:p-4">
                                         <div className="flex justify-between items-center mb-1">
-                                            <CardTitle className="text-sm sm:text-base text-destructive/80">{rating.userName}</CardTitle>
+                                             {/* Changed user name text color */}
+                                            <CardTitle className="text-sm sm:text-base text-primary/80">{rating.userName}</CardTitle>
                                             <StarRating rating={rating.rating} readOnly size={16} />
                                         </div>
                                          <p className="text-xs text-muted-foreground mb-2">
@@ -282,7 +293,8 @@ const PartnerRatingsPage: NextPage = () => {
                                         </p>
                                         {rating.comment && (
                                           <p className="text-sm text-foreground/90 flex items-start">
-                                             <MessageCircle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-destructive/70" /> 
+                                              {/* Changed icon color */}
+                                             <MessageCircle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-primary/70" />
                                              <span className="italic">"{rating.comment}"</span>
                                           </p>
                                         )}
@@ -306,6 +318,4 @@ const PartnerRatingsPage: NextPage = () => {
 
 
 export default PartnerRatingsPage;
-
-    
 
