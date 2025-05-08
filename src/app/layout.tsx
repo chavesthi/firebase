@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -21,7 +22,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      {/* Ensure no leading/trailing whitespace or comments that might render as text nodes here */}
       <body className={`${inter.variable} font-sans antialiased flex flex-col min-h-screen`}>
         <ThemeProvider
           defaultTheme="dark"
