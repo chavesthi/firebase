@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -199,13 +199,6 @@ const ManageEventsPage: NextPage = () => {
       updatedAt: serverTimestamp(),
     };
     
-    // Remove pricingValue if it's null and we don't want to store nulls explicitly,
-    // though storing null is generally fine and preferred over undefined for addDoc/setDoc.
-    // For this fix, we'll keep it as null to explicitly indicate no value.
-    // if (eventPayload.pricingValue === null) {
-    //   delete eventPayload.pricingValue;
-    // }
-
 
     try {
       if (editingEventId) {
@@ -250,15 +243,26 @@ const ManageEventsPage: NextPage = () => {
     try {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
-      toast({ title: "Evento Excluído", description: "O evento foi excluído com sucesso." });
+
+      // Delete associated ratings
+      const ratingsQuery = query(collection(firestore, 'eventRatings'), where('eventId', '==', eventId), where('partnerId', '==', currentUser.uid));
+      const ratingsSnapshot = await getDocs(ratingsQuery);
+      
+      const batch = writeBatch(firestore);
+      ratingsSnapshot.forEach(ratingDoc => {
+        batch.delete(ratingDoc.ref);
+      });
+      await batch.commit();
+      
+      toast({ title: "Evento Excluído", description: "O evento e suas avaliações foram excluídos com sucesso." });
       fetchEvents(currentUser.uid);
       if (editingEventId === eventId) {
         setEditingEventId(null);
         reset();
       }
     } catch (error) {
-      console.error("Error deleting event:", error);
-      toast({ title: "Erro ao Excluir", description: "Não foi possível excluir o evento.", variant: "destructive" });
+      console.error("Error deleting event and ratings:", error);
+      toast({ title: "Erro ao Excluir", description: "Não foi possível excluir o evento e/ou suas avaliações.", variant: "destructive" });
     }
   };
 
