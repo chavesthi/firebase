@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -120,14 +119,14 @@ const PartnerRatingsPage: NextPage = () => {
         unsubscribePartnerRating();
     };
 
-  }, [currentUser, toast]); // Removed selectedEventId from dependencies
+  }, [currentUser, toast]);
 
 
   useEffect(() => {
     if (!selectedEventId || !currentUser) {
       setEventRatings([]); 
-      if (isLoading && !currentUser) setIsLoading(false); // Stop loading if no user
-      else if(isLoading && !selectedEventId && eventsWithRatings.length > 0) setIsLoading(false); // Stop loading if no event selected but list is there
+      if (isLoading && !currentUser) setIsLoading(false); 
+      else if(isLoading && !selectedEventId && eventsWithRatings.length > 0) setIsLoading(false);
       return;
     }
     
@@ -142,9 +141,8 @@ const PartnerRatingsPage: NextPage = () => {
 
     const unsubscribeRatings = onSnapshot(qRatings, async (snapshot) => {
         const fetchedRatings: EventRating[] = [];
-        // Get eventName for display - prefer fetching once if needed
         let eventName = eventsWithRatings.find(e => e.id === selectedEventId)?.eventName;
-        if (!eventName && currentUser && selectedEventId) { // Check currentUser and selectedEventId again
+        if (!eventName && currentUser && selectedEventId) { 
             try {
                 const eventDoc = await getDoc(doc(firestore, `users/${currentUser.uid}/events/${selectedEventId}`));
                 if (eventDoc.exists()) {
@@ -152,7 +150,6 @@ const PartnerRatingsPage: NextPage = () => {
                 }
             } catch (error) {
                 console.error("Error fetching event name for ratings:", error);
-                // Proceed without event name if fetch fails
             }
         }
 
@@ -179,10 +176,10 @@ const PartnerRatingsPage: NextPage = () => {
     });
     return () => unsubscribeRatings();
 
-  }, [selectedEventId, currentUser, toast, eventsWithRatings, isLoading]); // Add isLoading to re-evaluate if selection changes while loading
+  }, [selectedEventId, currentUser, toast, eventsWithRatings]); // isLoading removed from dependencies
 
 
-  if (!currentUser && !isLoading) { // Ensure loading stops if no user
+  if (!currentUser && !isLoading) { 
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <Loader2 className="w-12 h-12 text-destructive animate-spin" />
