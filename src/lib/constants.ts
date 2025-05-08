@@ -1,4 +1,3 @@
-
 export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_DEFAULT_API_KEY_HERE";
 
 export enum UserRole {
@@ -62,11 +61,11 @@ export const PRICING_TYPE_OPTIONS = [
   { value: PricingType.CONSUMPTION, label: 'Consumação Mínima' },
 ];
 
-// Reward amount for sharing an event
+// Reward amount for sharing an event (per venue)
 export const FERVO_COINS_SHARE_REWARD = 2;
 
-// Coupon System Constants
-export const FERVO_COINS_FOR_COUPON = 20;
+// Coupon System Constants (Venue-Specific)
+export const FERVO_COINS_FOR_COUPON = 20; // Coins needed *per venue*
+// Dynamic description created in handleShareEvent, this is the base reward
 export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 350ml";
 export const COUPON_CODE_PREFIX = "FERVO";
-

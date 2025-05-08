@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -10,7 +9,7 @@ import { auth, firestore } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, TicketIcon, Copy, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, TicketIcon, Copy, Loader2, AlertCircle, MapPin } from 'lucide-react'; // Added MapPin
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
@@ -20,6 +19,8 @@ interface Coupon {
   description: string;
   createdAt: FirebaseTimestamp;
   status: 'active' | 'redeemed';
+  validAtPartnerId: string; // Partner ID where the coupon is valid
+  partnerVenueName: string; // Name of the partner venue
   // Potentially add: redeemedAt, redeemedByPartnerId if needed for display
 }
 
@@ -49,12 +50,19 @@ const UserCouponsPage: NextPage = () => {
 
     setIsLoading(true);
     const couponsRef = collection(firestore, `users/${currentUser.uid}/coupons`);
+    // Query only for active coupons belonging to the current user
     const q = query(couponsRef, where('status', '==', 'active'), where('userId', '==', currentUser.uid));
 
     const unsubscribeCoupons = onSnapshot(q, (snapshot) => {
       const fetchedCoupons: Coupon[] = [];
       snapshot.forEach((doc) => {
-        fetchedCoupons.push({ id: doc.id, ...doc.data() } as Coupon);
+        const data = doc.data();
+        // Ensure all required fields exist before pushing
+        if (data.couponCode && data.description && data.createdAt && data.status && data.validAtPartnerId && data.partnerVenueName) {
+          fetchedCoupons.push({ id: doc.id, ...data } as Coupon);
+        } else {
+          console.warn("Incomplete coupon data found, skipping:", doc.id, data);
+        }
       });
       setCoupons(fetchedCoupons.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())); // Show newest first
       setIsLoading(false);
@@ -76,7 +84,6 @@ const UserCouponsPage: NextPage = () => {
   };
 
   if (!currentUser && !isLoading) {
-    // Should be caught by auth listener, but as a fallback
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
@@ -101,7 +108,7 @@ const UserCouponsPage: NextPage = () => {
             Meus Cupons Ativos
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Use estes cupons nos locais parceiros do Fervo App!
+            Use estes cupons nos locais parceiros indicados!
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
@@ -113,33 +120,33 @@ const UserCouponsPage: NextPage = () => {
             <div className="text-center py-10">
               <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground" />
               <p className="mt-4 text-lg text-muted-foreground">Você ainda não possui cupons ativos.</p>
-              <p className="text-sm text-muted-foreground">Compartilhe eventos para ganhar FervoCoins e trocá-las por cupons!</p>
+              <p className="text-sm text-muted-foreground">Compartilhe eventos para ganhar FervoCoins em locais específicos e trocá-las por cupons!</p>
             </div>
           ) : (
             <ScrollArea className="h-[calc(100vh-20rem)] sm:h-[calc(100vh-22rem)] pr-3"> {/* Adjust height as needed */}
               <div className="space-y-4">
                 {coupons.map((coupon) => (
                   <Card key={coupon.id} className="bg-card/80 border-primary/50 shadow-md">
-                    <CardHeader className="pb-3 pt-4 px-4">
+                    <CardHeader className="pb-2 pt-4 px-4">
                       <CardTitle className="text-lg text-primary">{coupon.description}</CardTitle>
                     </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <CardContent className="px-4 pb-4 space-y-2">
+                      <div className="flex items-center text-sm text-muted-foreground">
+                         <MapPin className="w-4 h-4 mr-1.5 text-primary/80 shrink-0"/> Válido em: <span className="font-medium ml-1 text-foreground/90">{coupon.partnerVenueName}</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
                         <Badge variant="secondary" className="text-base px-3 py-1.5 bg-accent text-accent-foreground">
                           {coupon.couponCode}
                         </Badge>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-primary text-primary hover:bg-primary/10 mt-2 sm:mt-0"
+                          className="border-primary text-primary hover:bg-primary/10 mt-2 sm:mt-0 w-full sm:w-auto"
                           onClick={() => handleCopyCode(coupon.couponCode)}
                         >
                           <Copy className="w-3.5 h-3.5 mr-1.5" /> Copiar Código
                         </Button>
                       </div>
-                       <p className="text-xs text-muted-foreground mt-2">
-                        Válido para resgate em locais parceiros.
-                      </p>
                     </CardContent>
                   </Card>
                 ))}

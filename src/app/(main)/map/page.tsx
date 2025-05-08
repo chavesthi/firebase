@@ -1,10 +1,9 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
-import { useRouter } from 'next/navigation'; 
+import { useRouter } from 'next/navigation';
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc } from 'firebase/firestore'; // Added increment, writeBatch, addDoc
 import { format } from 'date-fns';
@@ -15,12 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle as UICardTitle } from '@/compo
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
-import { 
-  IconBar, 
-  IconNightclub, 
-  IconStandUp, 
-  IconShowHouse, 
-  IconAdultEntertainment, 
+import {
+  IconBar,
+  IconNightclub,
+  IconStandUp,
+  IconShowHouse,
+  IconAdultEntertainment,
   IconLGBT,
 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +39,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { Logo } from '@/components/shared/logo'; 
+import { Logo } from '@/components/shared/logo';
 
 interface VenueEvent {
   id: string;
@@ -57,20 +56,20 @@ interface VenueEvent {
 }
 
 interface Venue {
-  id: string; 
+  id: string;
   name: string;
   type: VenueType;
-  musicStyles?: MusicStyle[]; 
+  musicStyles?: MusicStyle[];
   location: Location;
   youtubeUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
-  whatsappPhone?: string; 
-  events?: VenueEvent[]; 
-  hasActiveEvent?: boolean; 
+  whatsappPhone?: string;
+  events?: VenueEvent[];
+  hasActiveEvent?: boolean;
   activeEventName?: string | null;
-  averageVenueRating?: number; 
-  venueRatingCount?: number;   
+  averageVenueRating?: number;
+  venueRatingCount?: number;
 }
 
 interface UserRatingData {
@@ -79,6 +78,23 @@ interface UserRatingData {
   createdAt: FirebaseTimestamp;
   userName: string;
 }
+
+// Data structure for venue-specific coins on user document
+interface UserVenueCoins {
+    [partnerId: string]: number;
+}
+
+interface AppUser {
+    uid: string;
+    name: string;
+    email: string | null;
+    role: UserRole | null;
+    preferredVenueTypes?: VenueType[];
+    preferredMusicStyles?: MusicStyle[];
+    questionnaireCompleted?: boolean;
+    lastNotificationCheckTimestamp?: FirebaseTimestamp;
+    venueCoins?: UserVenueCoins; // Replaced fervoCoins with venueCoins map
+  }
 
 
 const venueTypeIcons: Record<VenueType, React.ElementType> = {
@@ -102,12 +118,12 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 }, {} as Record<MusicStyle, string>);
 
 const venueTypeColors: Record<VenueType, string> = {
-  [VenueType.NIGHTCLUB]: 'hsl(var(--primary))', 
-  [VenueType.BAR]: 'hsl(var(--accent))',       
-  [VenueType.STAND_UP]: '#FACC15', 
+  [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
+  [VenueType.BAR]: 'hsl(var(--accent))',
+  [VenueType.STAND_UP]: '#FACC15',
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
-  [VenueType.LGBT]: '#F97316',      
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
+  [VenueType.LGBT]: '#F97316',
 };
 
 const MapUpdater = ({ center }: { center: Location }) => {
@@ -120,27 +136,27 @@ const MapUpdater = ({ center }: { center: Location }) => {
   return null;
 };
 
-const VenueCustomMapMarker = ({ 
-  type, 
-  venueName, 
+const VenueCustomMapMarker = ({
+  type,
+  venueName,
   isFilterActive,
-  hasActiveEvent 
-}: { 
-  type: VenueType, 
-  venueName: string, 
+  hasActiveEvent
+}: {
+  type: VenueType,
+  venueName: string,
   isFilterActive: boolean,
-  hasActiveEvent?: boolean 
+  hasActiveEvent?: boolean
 }) => {
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
-  
-  let effectiveBlinkHighlightColor = '#FACC15'; 
+
+  let effectiveBlinkHighlightColor = '#FACC15';
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : normalizeHex(basePinColor);
 
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor)) {
-    effectiveBlinkHighlightColor = 'white'; 
+    effectiveBlinkHighlightColor = 'white';
   }
 
   const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -158,21 +174,21 @@ const VenueCustomMapMarker = ({
       )}
       <div className="flex flex-col items-center cursor-pointer relative" title={venueName} style={{ transform: 'translate(-50%, -100%)' }}>
         {hasActiveEvent && (
-          <div 
+          <div
             className="absolute -top-8 mb-1 px-2 py-1 text-xs font-semibold text-white bg-green-600 rounded-md shadow-lg whitespace-nowrap z-20 animate-pulse"
-            style={{ transform: 'translateX(-50%)', left: '50%' }} 
+            style={{ transform: 'translateX(-50%)', left: '50%' }}
           >
             Acontecendo Agora!
           </div>
         )}
         <div
           className={cn(
-            "flex items-center justify-center w-10 h-10 rounded-full z-10", 
-            isFilterActive ? 'shadow-xl' : 'shadow-lg', 
+            "flex items-center justify-center w-10 h-10 rounded-full z-10",
+            isFilterActive ? 'shadow-xl' : 'shadow-lg',
           )}
-          style={{ 
-            backgroundColor: basePinColor, 
-            ...(isFilterActive && { animation: `${animationName} 1.5s infinite ease-in-out` }) 
+          style={{
+            backgroundColor: basePinColor,
+            ...(isFilterActive && { animation: `${animationName} 1.5s infinite ease-in-out` })
           }}
         >
           {IconComponent ? <IconComponent className="w-6 h-6 text-white" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
@@ -190,7 +206,7 @@ const UserCustomMapMarker = () => {
   return (
     <div className="flex flex-col items-center" title="Sua Localização" style={{ transform: 'translate(-50%, -100%)' }}>
       <div
-        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" 
+        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md"
       >
         <UserIconLucide className="w-5 h-5 text-white" />
       </div>
@@ -211,13 +227,13 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
       videoId = urlObj.searchParams.get('v');
     } else if (urlObj.hostname === 'youtu.be') {
       const pathParts = urlObj.pathname.substring(1).split('/');
-      videoId = pathParts[0]; 
+      videoId = pathParts[0];
     }
   } catch (e) {
     console.warn("Could not parse YouTube URL for embed: ", url, e);
     return null;
   }
-  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0` : null; 
+  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0` : null;
 };
 
 const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: FirebaseTimestamp): boolean => {
@@ -251,7 +267,7 @@ const updatePartnerOverallRating = async (partnerId: string) => {
             averageVenueRating: averageVenueRating,
             venueRatingCount: venueRatingCount,
         });
-        
+
     } catch (error) {
         console.error("Error updating partner overall rating:", error);
     }
@@ -265,15 +281,15 @@ const MapContentAndLogic = () => {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
   const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
-  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false); 
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(true);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  
+
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
-  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({}); 
+  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({});
 
   const [currentRating, setCurrentRating] = useState(0);
   const [currentComment, setCurrentComment] = useState('');
@@ -281,23 +297,29 @@ const MapContentAndLogic = () => {
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
 
-  const mapsApi = useMapsLibrary('maps'); 
+  const mapsApi = useMapsLibrary('maps');
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
       if (user) {
         const userDocRef = doc(firestore, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          setCurrentUserName(userDocSnap.data().name || "Usuário Fervo");
-        } else {
-          setCurrentUserName("Usuário Fervo");
-        }
+        // Use onSnapshot to keep username updated if it changes
+        const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
+            if (userDocSnap.exists()) {
+              setCurrentUserName(userDocSnap.data().name || "Usuário Fervo");
+              // Note: We don't need to fetch AppUser here, as venueCoins logic is handled in handleShareEvent
+            } else {
+              setCurrentUserName("Usuário Fervo");
+            }
+        });
+        // Return the user listener unsubscribe function
+        return () => unsubscribeUser();
       } else {
         setCurrentUserName(null);
       }
     });
+    // Return the auth listener unsubscribe function
     return () => unsubscribeAuth();
   }, []);
 
@@ -312,7 +334,7 @@ const MapContentAndLogic = () => {
         });
         setUserCheckIns(checkInsData);
       });
-      
+
       const ratingsQuery = query(collection(firestore, 'eventRatings'), where('userId', '==', currentUser.uid));
       const unsubscribeRatings = onSnapshot(ratingsQuery, (snapshot) => {
         const ratingsData: Record<string, UserRatingData> = {};
@@ -347,12 +369,12 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
-          setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
+          setUserLocation({ lat: -23.55052, lng: -46.633308 });
         }
       );
     } else {
       console.error("Geolocation is not supported by this browser.");
-      setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
+      setUserLocation({ lat: -23.55052, lng: -46.633308 });
     }
   }, []);
 
@@ -368,7 +390,7 @@ const MapContentAndLogic = () => {
     const unsubscribeVenues = onSnapshot(qPartners, async (partnersSnapshot) => {
       const venuePromises = partnersSnapshot.docs.map(async (partnerDoc) => {
         const partnerData = partnerDoc.data();
-        
+
         let hasActiveEvent = false;
         let activeEventName: string | null = null;
 
@@ -379,11 +401,11 @@ const MapContentAndLogic = () => {
         if (!eventsSnapshot.empty) {
           for (const eventDoc of eventsSnapshot.docs) {
             const eventData = eventDoc.data();
-            if (eventData.startDateTime && eventData.endDateTime && 
+            if (eventData.startDateTime && eventData.endDateTime &&
                 isEventHappeningNow(eventData.startDateTime as FirebaseTimestamp, eventData.endDateTime as FirebaseTimestamp)) {
               hasActiveEvent = true;
               activeEventName = eventData.eventName as string;
-              break; 
+              break;
             }
           }
         }
@@ -398,8 +420,8 @@ const MapContentAndLogic = () => {
           instagramUrl: partnerData.instagramUrl,
           facebookUrl: partnerData.facebookUrl,
           whatsappPhone: partnerData.whatsappPhone,
-          averageVenueRating: partnerData.averageVenueRating, 
-          venueRatingCount: partnerData.venueRatingCount,     
+          averageVenueRating: partnerData.averageVenueRating,
+          venueRatingCount: partnerData.venueRatingCount,
           hasActiveEvent,
           activeEventName,
         };
@@ -407,7 +429,7 @@ const MapContentAndLogic = () => {
 
       const fetchedVenues = (await Promise.all(venuePromises))
         .filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
-      
+
       setVenues(fetchedVenues);
       setIsLoadingVenues(false);
     }, (error) => {
@@ -416,30 +438,30 @@ const MapContentAndLogic = () => {
       setIsLoadingVenues(false);
     });
 
-    return () => unsubscribeVenues(); 
-  }, [toast]); 
+    return () => unsubscribeVenues();
+  }, [toast]);
 
   const fetchVenueEvents = async (venueId: string) => {
-    if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return; 
+    if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return;
     setIsLoadingEvents(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
-      
+
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-        } as VenueEvent)); 
-        
+        } as VenueEvent));
+
         setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
-        setIsLoadingEvents(false); 
+        setIsLoadingEvents(false);
       }, (error) => {
         console.error("Error fetching venue events with onSnapshot:", error);
         toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
         setIsLoadingEvents(false);
       });
-      return unsubscribe; 
+      return unsubscribe;
     } catch (error) {
       console.error("Error fetching venue events:", error);
       toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
@@ -452,7 +474,7 @@ const MapContentAndLogic = () => {
     if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
-      setCurrentlyRatingEventId(null); 
+      setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
     }
@@ -480,9 +502,9 @@ const MapContentAndLogic = () => {
     if (!isAnyFilterActive) return [];
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
-      const musicStyleMatch = activeMusicStyleFilters.length === 0 || 
+      const musicStyleMatch = activeMusicStyleFilters.length === 0 ||
                              (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
-      
+
       if (activeVenueTypeFilters.length > 0 && activeMusicStyleFilters.length > 0) {
         return venueTypeMatch && musicStyleMatch;
       }
@@ -503,15 +525,15 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; 
-    
+    let colorClass = "text-foreground";
+
     if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
     else if (type === VenueType.BAR) colorClass = "text-accent";
-    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; 
+    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
     else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
-    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; 
-    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; 
-    
+    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
+    else if (type === VenueType.LGBT) colorClass = "text-orange-500";
+
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
 
@@ -525,16 +547,16 @@ const MapContentAndLogic = () => {
         return;
     }
     setIsSubmittingRating(true);
-    setCurrentlyRatingEventId(eventId); 
+    setCurrentlyRatingEventId(eventId);
 
     try {
         const eventDocRef = doc(firestore, `users/${partnerId}/events/${eventId}`);
         const ratingDocRef = doc(firestore, 'eventRatings', `${eventId}_${currentUser.uid}`);
-        
+
         await runTransaction(firestore, async (transaction) => {
             const eventSnap = await transaction.get(eventDocRef);
             if (!eventSnap.exists()) throw new Error("Evento não encontrado para atualizar avaliação.");
-            
+
             const eventData = eventSnap.data();
             const oldRatingCount = eventData.ratingCount || 0;
             const oldAverageRating = eventData.averageRating || 0;
@@ -546,15 +568,15 @@ const MapContentAndLogic = () => {
             if (existingRatingSnap.exists()) {
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
-                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { 
-                    newAverageRating = currentRating; 
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) {
+                    newAverageRating = currentRating;
                 }
 
             } else {
                 newRatingCount = oldRatingCount + 1;
                 newAverageRating = newRatingCount > 0 ? ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount : currentRating;
             }
-            
+
             transaction.update(eventDocRef, {
                 averageRating: parseFloat(newAverageRating.toFixed(2)),
                 ratingCount: newRatingCount,
@@ -568,7 +590,7 @@ const MapContentAndLogic = () => {
                 rating: currentRating,
                 comment: currentComment || null,
                 createdAt: serverTimestamp(),
-            }, { merge: true }); 
+            }, { merge: true });
 
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
             transaction.update(userCheckedInEventRef, { hasRated: true });
@@ -578,7 +600,7 @@ const MapContentAndLogic = () => {
         setCurrentRating(0);
         setCurrentComment('');
         setCurrentlyRatingEventId(null);
-        
+
         if (selectedVenue) {
             await updatePartnerOverallRating(selectedVenue.id);
         }
@@ -591,7 +613,7 @@ const MapContentAndLogic = () => {
     }
 };
 
- const handleShareEvent = async (partnerId: string, eventId: string) => {
+ const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string) => {
     if (!currentUser) {
       toast({ title: "Login Necessário", description: "Faça login para compartilhar e ganhar moedas.", variant: "destructive" });
       return;
@@ -600,10 +622,11 @@ const MapContentAndLogic = () => {
     const shareUrl = `${window.location.origin}/shared-event/${partnerId}/${eventId}`;
     let sharedSuccessfully = false;
 
+    // --- Share via Web Share API or Clipboard ---
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Confira este Fervo: ${selectedVenue?.name} - ${selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento'}`,
+          title: `Confira este Fervo: ${partnerName} - ${selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento'}`,
           text: `Olha esse evento que encontrei no Fervo App!`,
           url: shareUrl,
         });
@@ -612,91 +635,89 @@ const MapContentAndLogic = () => {
       } catch (shareError: any) {
         if (shareError.name === 'AbortError') {
           console.log('Share operation cancelled by user.');
-          return; 
-        } else if (shareError.name === 'NotAllowedError' || shareError.message.includes("Permission denied")) {
-          console.warn('Share permission denied or feature unavailable:', shareError);
+          return; // Don't award coins if cancelled
+        } else { // Handle other share errors by falling back to clipboard
+          console.warn('navigator.share failed, falling back to clipboard:', shareError);
            try {
             await navigator.clipboard.writeText(shareUrl);
-            toast({ title: "Link Copiado!", description: "O compartilhamento direto não está disponível ou foi bloqueado. O link do evento foi copiado para sua área de transferência!", variant: "default", duration: 6000 });
-            sharedSuccessfully = true;
-          } catch (clipError) {
-            console.error('Failed to copy link to clipboard after share denial:', clipError);
-            toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link automaticamente após falha no compartilhamento.", variant: "destructive"});
-          }
-        } else {
-          console.error('Failed to share via navigator.share:', shareError);
-          toast({ title: "Erro ao Compartilhar", description: "Não foi possível usar o compartilhamento nativo. Tentando copiar o link...", variant: "destructive", duration: 5000});
-           try {
-            await navigator.clipboard.writeText(shareUrl);
-            toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
-            sharedSuccessfully = true;
+            toast({ title: "Link Copiado!", description: "O compartilhamento falhou ou não está disponível. O link foi copiado para a área de transferência!", variant: "default", duration: 6000 });
+            sharedSuccessfully = true; // Award coins even if copied
           } catch (clipError) {
             console.error('Failed to copy link to clipboard:', clipError);
             toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link automaticamente.", variant: "destructive"});
           }
         }
       }
-    } else {
+    } else { // Fallback for browsers without Web Share API
       try {
         await navigator.clipboard.writeText(shareUrl);
         toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
-        sharedSuccessfully = true;
+        sharedSuccessfully = true; // Award coins if copied
       } catch (clipError) {
         console.error('Failed to copy link to clipboard (fallback):', clipError);
         toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
       }
     }
 
+    // --- Award Coins and Check for Coupon ---
     if (sharedSuccessfully && currentUser) {
       const userDocRef = doc(firestore, "users", currentUser.uid);
       const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
       try {
-        await runTransaction(firestore, async (transaction) => {
+        const { newCoinTotal, newCouponGenerated } = await runTransaction(firestore, async (transaction) => {
           const userSnap = await transaction.get(userDocRef);
           if (!userSnap.exists()) {
             throw new Error("Usuário não encontrado para premiar moedas.");
           }
           const userData = userSnap.data();
-          const currentCoins = userData.fervoCoins || 0;
-          let newCoinTotal = currentCoins + FERVO_COINS_SHARE_REWARD;
-          
-          const updates: any = { fervoCoins: newCoinTotal };
-          let newCouponGenerated = false;
+          const venueCoinsMap: UserVenueCoins = userData.venueCoins || {};
+          const currentVenueCoins = venueCoinsMap[partnerId] || 0;
 
-          if (newCoinTotal >= FERVO_COINS_FOR_COUPON) {
-            newCoinTotal -= FERVO_COINS_FOR_COUPON;
-            updates.fervoCoins = newCoinTotal;
+          // Update venue-specific coin count using FieldPath for the map key
+          const venueCoinFieldPath = `venueCoins.${partnerId}`;
+          transaction.update(userDocRef, { [venueCoinFieldPath]: increment(FERVO_COINS_SHARE_REWARD) });
 
+          const updatedVenueCoins = currentVenueCoins + FERVO_COINS_SHARE_REWARD;
+          let couponGenerated = false;
+
+          // Check if threshold is met for THIS venue
+          if (updatedVenueCoins >= FERVO_COINS_FOR_COUPON) {
+            // Consume coins for this venue
+            transaction.update(userDocRef, { [venueCoinFieldPath]: increment(-FERVO_COINS_FOR_COUPON) });
+
+            // Generate coupon
             const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-            const newCouponRef = doc(couponCollectionRef); // Auto-generates ID for the coupon
+            const newCouponRef = doc(couponCollectionRef); // Auto-generates ID
             transaction.set(newCouponRef, {
               userId: currentUser.uid,
               couponCode: couponCode,
-              description: COUPON_REWARD_DESCRIPTION,
+              description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`, // Venue-specific description
               createdAt: serverTimestamp(),
               status: 'active',
+              validAtPartnerId: partnerId, // Store partner ID where coupon is valid
+              partnerVenueName: partnerName, // Store partner name for display
             });
-            newCouponGenerated = true;
+            couponGenerated = true;
           }
-          transaction.update(userDocRef, updates);
-          
-          return { newCoinTotal, newCouponGenerated }; // Return values from transaction
-        }).then(({ newCoinTotal, newCouponGenerated }) => {
-            let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins! Total: ${newCoinTotal}.`;
-            if (newCouponGenerated) {
-                rewardMessage += ` E um novo cupom: ${COUPON_REWARD_DESCRIPTION}!`;
-                toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 7000 });
-            } else {
-                toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 5000 });
-            }
+          // Return the updated state for the toast message
+           return { newCoinTotal: updatedVenueCoins, newCouponGenerated: couponGenerated };
         });
 
+        // Show appropriate toast message after transaction commits
+        let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins para ${partnerName}! Total neste local: ${newCoinTotal}.`;
+        if (newCouponGenerated) {
+          rewardMessage += ` E um novo cupom: ${COUPON_REWARD_DESCRIPTION} em ${partnerName}!`;
+          toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 7000 });
+        } else {
+          toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 5000 });
+        }
+
       } catch (error) {
-        console.error("Error in FervoCoins/Coupon transaction:", error);
-        toast({ 
-          title: "Erro na Recompensa", 
-          description: `Não foi possível processar sua recompensa. Tente novamente.`, 
+        console.error("Error in Venue-Specific FervoCoins/Coupon transaction:", error);
+        toast({
+          title: "Erro na Recompensa",
+          description: `Não foi possível processar sua recompensa de moedas/cupom. Tente novamente.`,
           variant: "destructive",
           duration: 5000
         });
@@ -724,11 +745,11 @@ const MapContentAndLogic = () => {
 
 
   return (
-    <div className="relative flex w-full h-[calc(100vh-4rem)]"> 
+    <div className="relative flex w-full h-[calc(100vh-4rem)]">
       <div className="absolute top-4 left-4 z-30">
           <Logo iconClassName="text-primary" />
       </div>
-      <Card 
+      <Card
         className={cn(
           "absolute z-20 top-16 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
           filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'
@@ -741,7 +762,7 @@ const MapContentAndLogic = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-15rem)] pr-3"> 
+          <ScrollArea className="h-[calc(100vh-15rem)] pr-3">
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Tipo de Local</h3>
               {VENUE_TYPE_OPTIONS.map((option) => (
@@ -783,7 +804,7 @@ const MapContentAndLogic = () => {
             variant="outline"
             size="icon"
             onClick={() => setFilterSidebarOpen(true)}
-            className="absolute z-20 p-2 rounded-full top-16 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg" 
+            className="absolute z-20 p-2 rounded-full top-16 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
             aria-label="Abrir filtros"
           >
             <Filter className="w-5 h-5" />
@@ -799,27 +820,27 @@ const MapContentAndLogic = () => {
                 className="w-full h-full"
             >
                 <MapUpdater center={userLocation} />
-                
+
                 {userLocation && (
                     <AdvancedMarker position={userLocation} title="Sua Localização">
                         <UserCustomMapMarker />
                     </AdvancedMarker>
                 )}
-                
+
                 {displayedVenues.map((venue) => {
                     const isVenueFilteredForBlinking = filteredVenuesForBlinking.some(fv => fv.id === venue.id);
-                    
+
                     return (
                     <AdvancedMarker
                         key={venue.id}
                         position={venue.location}
                         onClick={() => { setSelectedVenue(venue); }}
                         title={venue.name}
-                        zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1} 
+                        zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1}
                     >
-                        <VenueCustomMapMarker 
-                            type={venue.type} 
-                            venueName={venue.name} 
+                        <VenueCustomMapMarker
+                            type={venue.type}
+                            venueName={venue.name}
                             isFilterActive={isVenueFilteredForBlinking}
                             hasActiveEvent={venue.hasActiveEvent}
                         />
@@ -837,10 +858,10 @@ const MapContentAndLogic = () => {
 
       {selectedVenue && (
         <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { if (!isOpen) setSelectedVenue(null); }}>
-          <SheetContent 
-            side="right" 
+          <SheetContent
+            side="right"
             className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()} 
+            onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4">
@@ -867,8 +888,8 @@ const MapContentAndLogic = () => {
                 </SheetClose>
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
-            
-            <ScrollArea className="h-[calc(100vh-6rem)]"> 
+
+            <ScrollArea className="h-[calc(100vh-6rem)]">
               <div className="px-4 sm:px-6 pb-6 pt-4 space-y-6">
                   {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
                     <div className="mb-4">
@@ -905,15 +926,15 @@ const MapContentAndLogic = () => {
                       <h3 className="text-lg font-semibold text-foreground mb-3">Contatos e Redes Sociais</h3>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         {selectedVenue.whatsappPhone && (
-                           <a 
-                            href={`https://wa.me/${selectedVenue.whatsappPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${selectedVenue.name}, te encontrei pelo Fervo App. Gostaria de informações adicionais sobre vocês.`)}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            aria-label="WhatsApp do local" 
-                            title="WhatsApp" 
+                           <a
+                            href={`https://wa.me/${selectedVenue.whatsappPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${selectedVenue.name}, te encontrei pelo Fervo App. Gostaria de informações adicionais sobre vocês.`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="WhatsApp do local"
+                            title="WhatsApp"
                             className="text-muted-foreground hover:text-primary transition-colors"
                           >
-                            <MessageSquare className="w-6 h-6" /> 
+                            <MessageSquare className="w-6 h-6" />
                           </a>
                         )}
                         {selectedVenue.instagramUrl && (
@@ -926,7 +947,7 @@ const MapContentAndLogic = () => {
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && ( 
+                        {selectedVenue.youtubeUrl && (
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -934,7 +955,7 @@ const MapContentAndLogic = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">Próximos Eventos</h3>
                     {isLoadingEvents && <p className="text-muted-foreground text-center"><Loader2 className="inline w-4 h-4 mr-2 animate-spin"/> Carregando eventos...</p>}
@@ -964,19 +985,19 @@ const MapContentAndLogic = () => {
                                     )}
                                   </div>
                                   <div className="flex items-center space-x-1">
-                                      <Button 
-                                          variant="ghost" 
-                                          size="icon" 
+                                      <Button
+                                          variant="ghost"
+                                          size="icon"
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
-                                          onClick={() => handleShareEvent(selectedVenue.id, event.id)}
-                                          title="Compartilhar evento"
-                                          disabled={!currentUser} 
+                                          onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name)}
+                                          title="Compartilhar evento e ganhar moedas!"
+                                          disabled={!currentUser}
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
-                                      <Button 
-                                          variant="ghost" 
-                                          size="icon" 
+                                      <Button
+                                          variant="ghost"
+                                          size="icon"
                                           className="text-primary hover:text-primary/80 -mr-2 -mt-1"
                                           onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
                                           title="Ativar notificação para este evento"
@@ -1007,37 +1028,37 @@ const MapContentAndLogic = () => {
                                 </p>
                               )}
                               {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
-                              
+
                               {currentUser && userHasCheckedIn && !userHasRated && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
                                   <h4 className="text-sm font-semibold text-primary mb-1.5">Avalie este evento:</h4>
-                                  <StarRating 
-                                    rating={currentlyRatingEventId === event.id ? currentRating : 0} 
-                                    setRating={setCurrentRating} 
-                                    readOnly={isSubmittingRating && currentlyRatingEventId === event.id} 
+                                  <StarRating
+                                    rating={currentlyRatingEventId === event.id ? currentRating : 0}
+                                    setRating={setCurrentRating}
+                                    readOnly={isSubmittingRating && currentlyRatingEventId === event.id}
                                     totalStars={5}
                                     size={20}
                                   />
-                                  <Textarea 
+                                  <Textarea
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
                                     onChange={(e) => {
-                                      setCurrentlyRatingEventId(event.id); 
+                                      setCurrentlyRatingEventId(event.id);
                                       setCurrentComment(e.target.value);
                                     }}
                                     className="mt-2 text-xs"
                                     rows={2}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id}
                                   />
-                                  <Button 
-                                    size="sm" 
+                                  <Button
+                                    size="sm"
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
-                                        if(currentlyRatingEventId !== event.id) { 
-                                            setCurrentRating(0); 
+                                        if(currentlyRatingEventId !== event.id) {
+                                            setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id); 
+                                        setCurrentlyRatingEventId(event.id);
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1136,4 +1157,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-

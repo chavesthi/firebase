@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -24,6 +23,10 @@ import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/theme-provider';
 
+// Data structure for venue-specific coins on user document
+interface UserVenueCoins {
+    [partnerId: string]: number;
+}
 
 interface AppUser {
   uid: string;
@@ -34,14 +37,14 @@ interface AppUser {
   preferredMusicStyles?: MusicStyle[];
   questionnaireCompleted?: boolean;
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
-  fervoCoins: number; 
+  venueCoins?: UserVenueCoins; // Replaced fervoCoins with venueCoins map
 }
 
 const useAuthAndUserSubscription = () => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const pathname = usePathname(); 
+  const pathname = usePathname();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -63,16 +66,17 @@ const useAuthAndUserSubscription = () => {
               preferredMusicStyles: userData.preferredMusicStyles || [],
               questionnaireCompleted: userData.questionnaireCompleted || false,
               lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
-              fervoCoins: userData.fervoCoins || 0, 
+              venueCoins: userData.venueCoins || {}, // Initialize as empty map if not present
             });
           } else {
+            // Handle case where user exists in Auth but not Firestore (e.g., first Google Sign-In)
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
               uid: user.uid,
               name: user.displayName || (defaultRoleBasedOnInitialAuthAttempt === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
               email: user.email,
               role: defaultRoleBasedOnInitialAuthAttempt,
-              fervoCoins: 0, 
+              venueCoins: {},
               questionnaireCompleted: false,
             });
           }
@@ -86,16 +90,22 @@ const useAuthAndUserSubscription = () => {
       } else {
         setAppUser(null);
         setLoading(false);
+        // Ensure Firestore listener is cleaned up if user logs out
+        if (unsubscribeUserDoc) {
+          unsubscribeUserDoc();
+          unsubscribeUserDoc = undefined;
+        }
       }
     });
 
+    // Cleanup function
     return () => {
       unsubscribeAuth();
       if (unsubscribeUserDoc) {
         unsubscribeUserDoc();
       }
     };
-  }, [pathname, toast]);
+  }, [pathname, toast]); // Dependencies for the effect
 
   return { firebaseUser, appUser, loading };
 };
@@ -113,14 +123,14 @@ export default function MainAppLayout({
   const pathname = usePathname();
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
-  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); 
+  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
-    if (!loading) { 
+    if (!loading) {
       const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
       const isSharedEventPage = pathname.startsWith('/shared-event');
-      
+
       if (!appUser && !isAuthPage && !isSharedEventPage) {
         router.push('/login');
       } else if (appUser && !appUser.questionnaireCompleted) {
@@ -133,7 +143,7 @@ export default function MainAppLayout({
     }
   }, [appUser, loading, router, pathname]);
 
-  
+
   useEffect(() => {
     if (loading || !appUser || !appUser.uid || !appUser.questionnaireCompleted || appUser.role !== UserRole.USER) {
       setHasNewNotifications(false);
@@ -141,7 +151,7 @@ export default function MainAppLayout({
     }
 
     const userLastCheck = appUser.lastNotificationCheckTimestamp?.toDate() || new Date(0);
-    
+
     const partnersRef = collection(firestore, 'users');
     const q = query(partnersRef,
       where('role', '==', UserRole.PARTNER),
@@ -172,7 +182,7 @@ export default function MainAppLayout({
       setHasNewNotifications(false);
     });
 
-    return () => unsubscribe(); 
+    return () => unsubscribe();
   }, [appUser, loading]);
 
 
@@ -208,20 +218,20 @@ export default function MainAppLayout({
        return;
     }
 
-    setIsFetchingNotifications(true); 
-    
+    setIsFetchingNotifications(true);
+
     try {
       const partnersRef = collection(firestore, 'users');
       const q = query(partnersRef,
         where('role', '==', UserRole.PARTNER),
         where('questionnaireCompleted', '==', true),
       );
-      const querySnapshot = await getDocs(q); 
+      const querySnapshot = await getDocs(q);
       const allVenues: Array<{ id: string, venueName: string, venueType: VenueType, musicStyles: MusicStyle[] }> = [];
-      
+
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        if(data.venueName && data.venueType) { 
+        if(data.venueName && data.venueType) {
             allVenues.push({
                 id: doc.id,
                 venueName: data.venueName,
@@ -239,7 +249,7 @@ export default function MainAppLayout({
             const styleMatch = Array.isArray(venue.musicStyles) && venue.musicStyles.some(style => userPrefs.musicStyles.includes(style));
             return typeMatch || styleMatch;
           });
-    
+
           if (matchingVenues.length > 0) {
             const venueNames = matchingVenues.slice(0, 2).map(v => v.venueName).join(', ');
             const andMore = matchingVenues.length > 2 ? ` e mais ${matchingVenues.length - 2}!` : '.';
@@ -257,7 +267,7 @@ export default function MainAppLayout({
       await updateDoc(userDocRef, {
         lastNotificationCheckTimestamp: serverTimestamp()
       });
-     
+
     } catch (error) {
       console.error("Error fetching notifications data or updating timestamp:", error);
       toast({ title: "Erro ao Buscar Sugestões", description: "Não foi possível verificar novos Fervos.", variant: "destructive" });
@@ -273,7 +283,7 @@ export default function MainAppLayout({
       </div>
     );
   }
-  
+
   const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
   const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
 
@@ -283,7 +293,7 @@ export default function MainAppLayout({
 
   return (
     <div className="flex flex-col min-h-screen">
-      {appUser && ( 
+      {appUser && (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
             <Logo iconClassName={activeColorClass} />
@@ -295,20 +305,20 @@ export default function MainAppLayout({
                       <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
                     </Button>
                   </Link>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={cn(activeColorClass, 'hover:bg-primary/10')} 
-                    onClick={() => setIsQrScannerOpen(true)} 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(activeColorClass, 'hover:bg-primary/10')}
+                    onClick={() => setIsQrScannerOpen(true)}
                     title="Check-in com QR Code"
                     disabled={isFetchingNotifications}
                   >
                     <ScanLine className="w-5 h-5" />
                     <span className="sr-only">Check-in QR Code</span>
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', 'hover:bg-primary/10')}
                     onClick={handleNotificationsClick}
                     disabled={isFetchingNotifications}
@@ -317,7 +327,8 @@ export default function MainAppLayout({
                     {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
                     <span className="sr-only">Notificações</span>
                   </Button>
-                  <div className="relative">
+                  {/* Coin display removed as requested by new logic */}
+                  {/* <div className="relative">
                       <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${appUser.fervoCoins} moedas. Ganhe mais compartilhando eventos!`, variant: "default"})}>
                       <Coins className="w-5 h-5" />
                       <span className="sr-only">Moedas</span>
@@ -327,7 +338,7 @@ export default function MainAppLayout({
                           {appUser.fervoCoins > 9 ? '9+' : appUser.fervoCoins}
                           </span>
                       )}
-                  </div>
+                  </div> */}
                   <Link href="/user/coupons" passHref>
                     <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} title="Meus Cupons">
                         <TicketPercent className="w-5 h-5" />
@@ -379,7 +390,7 @@ export default function MainAppLayout({
                   )}
                   {appUser?.role === UserRole.PARTNER && (
                     <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
-                      <Settings className="w-4 h-4 mr-2" /> 
+                      <Settings className="w-4 h-4 mr-2" />
                       Configurações da Conta
                     </DropdownMenuItem>
                   )}
@@ -402,8 +413,8 @@ export default function MainAppLayout({
         {canRenderChildren ? children : null }
       </main>
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
-        <QrScannerModal 
-          isOpen={isQrScannerOpen} 
+        <QrScannerModal
+          isOpen={isQrScannerOpen}
           onClose={() => setIsQrScannerOpen(false)}
           userId={appUser.uid}
         />
@@ -411,4 +422,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-

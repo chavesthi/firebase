@@ -29,6 +29,7 @@ interface CouponToRedeem {
   description: string;
   couponCode: string;
   userName?: string; // Name of the user for display after redemption
+  validAtPartnerId: string; // Partner ID where the coupon is valid
 }
 
 const PartnerRedeemCouponPage: NextPage = () => {
@@ -73,20 +74,17 @@ const PartnerRedeemCouponPage: NextPage = () => {
         couponsRef,
         where('couponCode', '==', enteredCouponCode),
         where('status', '==', 'active')
-        // Note: Firestore does not allow querying by document ID in collectionGroup directly.
-        // We query by couponCode and status, then verify details if found.
       );
 
       const couponSnapshot = await getDocs(q);
       let foundCoupon: CouponToRedeem | null = null;
 
       if (!couponSnapshot.empty) {
-        // Assuming coupon codes are unique across all users (as they should be)
         const couponDoc = couponSnapshot.docs[0];
         const couponData = couponDoc.data();
-        const userId = couponDoc.ref.parent.parent?.id; // Get the userId from the path
+        const userId = couponDoc.ref.parent.parent?.id;
 
-        if (userId) {
+        if (userId && couponData.validAtPartnerId) { // Check if validAtPartnerId exists
            let userName = 'Usuário Desconhecido';
             try {
               const userDocRef = doc(firestore, 'users', userId);
@@ -104,10 +102,12 @@ const PartnerRedeemCouponPage: NextPage = () => {
               description: couponData.description,
               couponCode: couponData.couponCode,
               userName: userName,
+              validAtPartnerId: couponData.validAtPartnerId, // Store validAtPartnerId
             };
         } else {
-            console.error("Could not extract userId from coupon path:", couponDoc.ref.path);
-            throw new Error("Erro ao identificar o usuário do cupom.");
+            if (!userId) console.error("Could not extract userId from coupon path:", couponDoc.ref.path);
+            if (!couponData.validAtPartnerId) console.error("Coupon missing validAtPartnerId field:", couponDoc.id);
+            // Don't throw error here, let the !foundCoupon check handle it
         }
       }
 
@@ -117,7 +117,18 @@ const PartnerRedeemCouponPage: NextPage = () => {
         return;
       }
 
-      // Proceed to redeem
+      // *** Check if the coupon is valid at THIS partner's venue ***
+      if (foundCoupon.validAtPartnerId !== currentUser.uid) {
+          toast({
+              title: "Cupom Inválido Neste Local",
+              description: `Este cupom (${foundCoupon.couponCode}) não é válido neste estabelecimento.`,
+              variant: "destructive"
+          });
+          setIsRedeeming(false);
+          return;
+      }
+
+      // Proceed to redeem (coupon is valid and active at this location)
       const userCouponDocRef = doc(firestore, `users/${foundCoupon.userId}/coupons/${foundCoupon.id}`);
 
       await updateDoc(userCouponDocRef, {
@@ -166,7 +177,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
             Resgatar Cupom de Usuário
           </CardTitle>
           <CardDescription className="text-xs sm:text-sm">
-            Insira o código do cupom fornecido pelo usuário para validá-lo e marcá-lo como utilizado.
+            Insira o código do cupom fornecido pelo usuário para validá-lo e marcá-lo como utilizado neste estabelecimento.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -206,7 +217,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
                         <h4 className="font-semibold text-sm">Importante:</h4>
                         <p className="text-xs">
                             Ao resgatar, o cupom será marcado como utilizado e não poderá ser usado novamente.
-                            Certifique-se de que o usuário está presente e a recompensa está sendo entregue.
+                            Certifique-se de que o usuário está presente, o cupom é válido <span className="font-semibold">neste local</span>, e a recompensa está sendo entregue.
                         </p>
                     </div>
                 </div>
