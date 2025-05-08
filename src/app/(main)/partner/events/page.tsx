@@ -305,7 +305,7 @@ const ManageEventsPage: NextPage = () => {
 
   if (loading && !currentUser) { 
     return (
-      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto">
+      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <p className="text-xl text-destructive animate-pulse">Carregando...</p>
       </div>
     );
@@ -313,26 +313,26 @@ const ManageEventsPage: NextPage = () => {
 
 
   return (
-    <div className="container py-8 mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar ao Painel
+    <div className="container py-6 sm:py-8 mx-auto px-4">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+            <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
+            Painel
         </Button>
       </div>
       <Card className="mb-8 border-destructive/50 shadow-lg shadow-destructive/15">
-        <CardHeader>
-          <CardTitle className="text-2xl text-destructive flex items-center">
-            <PlusCircle className="w-7 h-7 mr-3" />
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-xl sm:text-2xl text-destructive flex items-center">
+            <PlusCircle className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             {editingEventId ? 'Editar Evento' : 'Adicionar Novo Evento'}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             {editingEventId ? 'Modifique os detalhes do seu evento.' : 'Crie um novo evento para seu local. Você pode ter até 5 eventos visíveis simultaneamente.'}
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label htmlFor="eventName" className="text-destructive/90">Nome do Evento</Label>
                 <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-red-500' : ''} />} />
@@ -392,7 +392,7 @@ const ManageEventsPage: NextPage = () => {
                             />
                           )}
                         />
-                        <Label htmlFor={`event-music-${option.value}`} className="font-normal text-foreground/80">{option.label}</Label>
+                        <Label htmlFor={`event-music-${option.value}`} className="font-normal text-foreground/80 text-xs sm:text-sm">{option.label}</Label>
                       </div>
                     ))}
                   </div>
@@ -442,13 +442,13 @@ const ManageEventsPage: NextPage = () => {
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex justify-end gap-2">
+          <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 p-4 sm:p-6">
              {editingEventId && (
-                <Button type="button" variant="outline" onClick={() => { setEditingEventId(null); reset(); }} className="border-destructive text-destructive hover:bg-destructive/10">
+                <Button type="button" variant="outline" onClick={() => { setEditingEventId(null); reset(); }} className="w-full sm:w-auto border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
                     Cancelar Edição
                 </Button>
             )}
-            <Button type="submit" className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isSubmitting}>
+            <Button type="submit" className="w-full sm:w-auto bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs sm:text-sm" disabled={isSubmitting}>
               <Save className="w-4 h-4 mr-2" /> {isSubmitting ? 'Salvando...' : (editingEventId ? 'Salvar Alterações' : 'Criar Evento')}
             </Button>
           </CardFooter>
@@ -456,14 +456,14 @@ const ManageEventsPage: NextPage = () => {
       </Card>
 
       <Card className="border-destructive/50 shadow-lg shadow-destructive/15">
-        <CardHeader>
-          <CardTitle className="text-2xl text-destructive flex items-center">
-            <CalendarDays className="w-7 h-7 mr-3" />
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-xl sm:text-2xl text-destructive flex items-center">
+            <CalendarDays className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Meus Eventos Cadastrados
           </CardTitle>
-          <CardDescription>Gerencie seus eventos existentes.</CardDescription>
+          <CardDescription className="text-xs sm:text-sm">Gerencie seus eventos existentes.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
           {loading && <p className="text-center text-muted-foreground">Carregando eventos...</p>}
           {!loading && partnerEvents.length === 0 && (
             <p className="text-center text-muted-foreground">Nenhum evento cadastrado ainda.</p>
@@ -474,36 +474,36 @@ const ManageEventsPage: NextPage = () => {
                 {partnerEvents.map(event => {
                   const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
                   return (
-                  <Card key={event.id} className={`p-4 border rounded-lg ${event.id === editingEventId ? 'border-destructive shadow-md' : 'border-border'}`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-semibold text-foreground">{event.eventName}</h3>
+                  <Card key={event.id} className={`p-3 sm:p-4 border rounded-lg ${event.id === editingEventId ? 'border-destructive shadow-md' : 'border-border'}`}>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <div className="flex-1 min-w-0"> {/* Ensure text truncates */}
+                        <h3 className="text-md sm:text-lg font-semibold text-foreground truncate">{event.eventName}</h3>
                         {isHappening && (
                           <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                              <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
                           </Badge>
                         )}
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                           {format(event.startDateTime.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                             Preço: {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
                             {event.pricingType !== PricingType.FREE && event.pricingValue ? ` (R$ ${Number(event.pricingValue).toFixed(2)})` : ''}
                         </p>
                       </div>
-                      <div className="flex items-center space-x-1 flex-wrap sm:flex-nowrap">
+                      <div className="flex items-center space-x-0.5 sm:space-x-1 flex-shrink-0">
                         <Button variant="ghost" size="icon" onClick={() => toggleEventVisibility(event)} title={event.visibility ? "Ocultar evento" : "Tornar evento visível"}>
-                          {event.visibility ? <Eye className="w-5 h-5 text-green-500" /> : <EyeOff className="w-5 h-5 text-gray-500" />}
+                          {event.visibility ? <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />}
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEditEvent(event)} title="Editar evento">
-                          <Edit className="w-5 h-5 text-blue-500" />
+                          <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(event.id)} title="Excluir evento">
-                          <Trash2 className="w-5 h-5 text-red-500" />
+                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
                         </Button>
                         {event.checkInToken && (
                           <Button variant="ghost" size="icon" onClick={() => router.push(`/partner/qr-code/${event.id}`)} title="Ver QR Code do Evento">
-                            <QrCode className="w-5 h-5 text-destructive" />
+                            <QrCode className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
                           </Button>
                         )}
                       </div>
@@ -512,12 +512,12 @@ const ManageEventsPage: NextPage = () => {
                      {event.musicStyles && event.musicStyles.length > 0 && (
                         <div className="mt-2">
                             <span className="text-sm font-medium text-muted-foreground">Estilos: </span>
-                            {event.musicStyles.map(style => MUSIC_STYLE_OPTIONS.find(s => s.value === style)?.label).join(', ')}
+                             <span className="text-sm text-muted-foreground">{event.musicStyles.map(style => MUSIC_STYLE_OPTIONS.find(s => s.value === style)?.label).join(', ')}</span>
                         </div>
                     )}
                     {event.checkInToken && (
                       <div className="mt-2 flex items-center gap-2">
-                        <QrCode className="w-4 h-4 text-muted-foreground" /> 
+                        <QrCode className="w-4 h-4 text-muted-foreground shrink-0" /> 
                         <Input 
                           type="text" 
                           readOnly 

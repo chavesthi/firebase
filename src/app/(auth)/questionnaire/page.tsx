@@ -125,22 +125,22 @@ const QuestionnairePage: NextPage = () => {
   }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <div className="absolute top-8 left-8">
+    <main className="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4 bg-background">
+      <div className="absolute top-4 sm:top-8 left-4 sm:left-8">
         <Logo />
       </div>
       <Card className="w-full max-w-lg p-px rounded-lg shadow-2xl bg-gradient-to-b from-primary/50 to-secondary/50">
         <Card className="w-full bg-card/95 backdrop-blur-sm">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
+          <CardHeader className="text-center px-4 sm:px-6">
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
               Conte-nos mais sobre você!
             </CardTitle>
-            <CardDescription className="text-muted-foreground">
+            <CardDescription className="text-muted-foreground text-sm sm:text-base">
               Suas preferências nos ajudarão a recomendar os melhores fervos.
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 px-4 sm:px-6">
               <div>
                 <Label htmlFor="age" className="text-primary/90">Qual sua idade?</Label>
                 <Controller
@@ -169,7 +169,7 @@ const QuestionnairePage: NextPage = () => {
 
               <div className="space-y-2">
                 <Label className="text-primary/90">Quais locais você mais gosta? (Máx. 4)</Label>
-                <ScrollArea className="h-40 p-2 border rounded-md border-input">
+                <ScrollArea className="h-32 sm:h-40 p-2 border rounded-md border-input">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {VENUE_TYPE_OPTIONS.map((option) => (
                       <div key={option.value} className="flex items-center space-x-2">
@@ -198,7 +198,7 @@ const QuestionnairePage: NextPage = () => {
                             />
                           )}
                         />
-                        <Label htmlFor={`venue-${option.value}`} className="font-normal text-foreground/80">{option.label}</Label>
+                        <Label htmlFor={`venue-${option.value}`} className="font-normal text-foreground/80 text-xs sm:text-sm">{option.label}</Label>
                       </div>
                     ))}
                   </div>
@@ -208,7 +208,7 @@ const QuestionnairePage: NextPage = () => {
               
               <div className="space-y-2">
                 <Label className="text-primary/90">Quais estilos musicais você curte? (Máx. 4)</Label>
-                <ScrollArea className="h-40 p-2 border rounded-md border-input">
+                <ScrollArea className="h-32 sm:h-40 p-2 border rounded-md border-input">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {MUSIC_STYLE_OPTIONS.map((option) => (
                     <div key={option.value} className="flex items-center space-x-2">
@@ -237,7 +237,7 @@ const QuestionnairePage: NextPage = () => {
                           />
                         )}
                       />
-                      <Label htmlFor={`music-${option.value}`} className="font-normal text-foreground/80">{option.label}</Label>
+                      <Label htmlFor={`music-${option.value}`} className="font-normal text-foreground/80 text-xs sm:text-sm">{option.label}</Label>
                     </div>
                   ))}
                   </div>
@@ -246,8 +246,8 @@ const QuestionnairePage: NextPage = () => {
               </div>
 
             </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+            <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isSubmitting}>
                 {isSubmitting ? 'Salvando...' : 'Salvar e Continuar'}
               </Button>
             </CardFooter>

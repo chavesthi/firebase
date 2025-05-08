@@ -89,7 +89,8 @@ const PartnerRatingsPage: NextPage = () => {
 
     // Fetch all events created by the partner to list them for selection
     const partnerEventsRef = collection(firestore, `users/${currentUser.uid}/events`);
-    const qEvents = query(partnerEventsRef, orderBy('startDateTime', 'desc'));
+    // Order by createdAt descending to show newer events first in the list
+    const qEvents = query(partnerEventsRef, orderBy('createdAt', 'desc')); 
 
     const unsubscribeEvents = onSnapshot(qEvents, (snapshot) => {
         const fetchedEvents: EventDetails[] = [];
@@ -104,6 +105,7 @@ const PartnerRatingsPage: NextPage = () => {
         });
         setEventsWithRatings(fetchedEvents);
         if (!selectedEventId && fetchedEvents.length > 0) {
+            // Automatically select the first (most recent) event if none is selected
             setSelectedEventId(fetchedEvents[0].id); 
         }
         setIsLoading(false);
@@ -118,7 +120,7 @@ const PartnerRatingsPage: NextPage = () => {
         unsubscribePartnerRating();
     };
 
-  }, [currentUser, toast]); // Removed selectedEventId from dependencies to avoid re-fetching overall rating unnecessarily
+  }, [currentUser, toast]); // Removed selectedEventId from dependencies
 
 
   useEffect(() => {
@@ -140,11 +142,20 @@ const PartnerRatingsPage: NextPage = () => {
 
     const unsubscribeRatings = onSnapshot(qRatings, async (snapshot) => {
         const fetchedRatings: EventRating[] = [];
+        // Get eventName for display - prefer fetching once if needed
         let eventName = eventsWithRatings.find(e => e.id === selectedEventId)?.eventName;
-        if (!eventName) { 
-            const eventDoc = await getDoc(doc(firestore, `users/${currentUser.uid}/events/${selectedEventId}`));
-            if (eventDoc.exists()) eventName = eventDoc.data()?.eventName;
+        if (!eventName && currentUser && selectedEventId) { // Check currentUser and selectedEventId again
+            try {
+                const eventDoc = await getDoc(doc(firestore, `users/${currentUser.uid}/events/${selectedEventId}`));
+                if (eventDoc.exists()) {
+                    eventName = eventDoc.data()?.eventName;
+                }
+            } catch (error) {
+                console.error("Error fetching event name for ratings:", error);
+                // Proceed without event name if fetch fails
+            }
         }
+
 
         snapshot.forEach(doc => {
             const data = doc.data();
@@ -168,12 +179,12 @@ const PartnerRatingsPage: NextPage = () => {
     });
     return () => unsubscribeRatings();
 
-  }, [selectedEventId, currentUser, toast, eventsWithRatings]);
+  }, [selectedEventId, currentUser, toast, eventsWithRatings, isLoading]); // Add isLoading to re-evaluate if selection changes while loading
 
 
   if (!currentUser && !isLoading) { // Ensure loading stops if no user
     return (
-      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto">
+      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <Loader2 className="w-12 h-12 text-destructive animate-spin" />
       </div>
     );
@@ -182,37 +193,37 @@ const PartnerRatingsPage: NextPage = () => {
   const selectedEventDetails = eventsWithRatings.find(e => e.id === selectedEventId);
 
   return (
-    <div className="container py-8 mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar ao Painel
+    <div className="container py-6 sm:py-8 mx-auto px-4">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+            <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
+            Painel
         </Button>
       </div>
 
       <Card className="mb-8 border-destructive/50 shadow-lg shadow-destructive/15">
-        <CardHeader>
-          <CardTitle className="text-2xl text-destructive flex items-center">
-            <StarIcon className="w-7 h-7 mr-3" />
-            Avaliações dos Eventos e do Local
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-xl sm:text-2xl text-destructive flex items-center">
+            <StarIcon className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
+            Avaliações
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Veja as avaliações e comentários dos usuários para seus eventos e a avaliação geral do seu local (média das avaliações de todos os seus eventos).
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 px-4 sm:px-6 pb-4 sm:pb-6">
             {partnerOverallRating && (
-                <div className="p-4 mb-6 border rounded-lg border-destructive/30 bg-card/80">
-                    <h3 className="mb-2 text-lg font-semibold text-destructive">Sua Avaliação Geral do Local</h3>
+                <div className="p-3 sm:p-4 mb-6 border rounded-lg border-destructive/30 bg-card/80">
+                    <h3 className="mb-2 text-md sm:text-lg font-semibold text-destructive">Avaliação Geral do Local</h3>
                     {partnerOverallRating.averageVenueRating !== undefined && partnerOverallRating.venueRatingCount !== undefined && partnerOverallRating.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-2">
-                            <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={24} readOnly fillColor="hsl(var(--destructive))" />
-                            <span className="text-md text-muted-foreground">
+                            <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={20} smSize={24} readOnly fillColor="hsl(var(--destructive))" />
+                            <span className="text-sm sm:text-md text-muted-foreground">
                                 ({partnerOverallRating.averageVenueRating.toFixed(1)} de {partnerOverallRating.venueRatingCount} {partnerOverallRating.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
                             </span>
                         </div>
                     ) : (
-                        <p className="text-muted-foreground">Seu local ainda não possui avaliações (nenhum de seus eventos foi avaliado).</p>
+                        <p className="text-muted-foreground text-sm sm:text-base">Seu local ainda não possui avaliações (nenhum de seus eventos foi avaliado).</p>
                     )}
                 </div>
             )}
@@ -225,63 +236,57 @@ const PartnerRatingsPage: NextPage = () => {
             {eventsWithRatings.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="md:col-span-1">
-                        <h3 className="mb-2 text-lg font-medium text-destructive/90">Avaliações por Evento</h3>
-                        <ScrollArea className="h-72 border rounded-md border-input">
+                        <h3 className="mb-2 text-md sm:text-lg font-medium text-destructive/90">Eventos Avaliados</h3>
+                        <ScrollArea className="h-60 md:h-72 border rounded-md border-input">
                             {eventsWithRatings.map(event => (
                                 <Button
                                     key={event.id}
                                     variant={selectedEventId === event.id ? "secondary" : "ghost"}
                                     className={cn(
-                                        "w-full justify-start text-left p-3 rounded-none h-auto", 
+                                        "w-full justify-start text-left p-2 sm:p-3 rounded-none h-auto flex flex-col items-start", 
                                         selectedEventId === event.id && "bg-destructive/20 text-destructive font-semibold"
                                     )}
                                     onClick={() => setSelectedEventId(event.id)}
                                 >
-                                    <div className="flex flex-col">
-                                      <span className="truncate">{event.eventName}</span>
-                                      {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
-                                        <div className="flex items-center gap-1 mt-0.5">
-                                            <StarRating rating={event.averageRating} totalStars={5} size={12} readOnly fillColor="hsl(var(--destructive))" />
-                                            <span className="text-xs text-muted-foreground">({event.ratingCount})</span>
-                                        </div>
-                                      ) : (
-                                        <span className="text-xs text-muted-foreground mt-0.5">Sem avaliações</span>
-                                      )}
-                                    </div>
+                                    <span className="truncate text-sm sm:text-base font-medium">{event.eventName}</span>
+                                    {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                          <StarRating rating={event.averageRating} totalStars={5} size={12} readOnly fillColor="hsl(var(--destructive))" />
+                                          <span className="text-xs text-muted-foreground">({event.ratingCount})</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground mt-0.5">Sem avaliações</span>
+                                    )}
                                 </Button>
                             ))}
                         </ScrollArea>
                     </div>
                     <div className="md:col-span-2">
-                        <h3 className="mb-2 text-lg font-medium text-destructive/90">
-                            Comentários para: {selectedEventDetails?.eventName || "Selecione um Evento"}
+                        <h3 className="mb-2 text-md sm:text-lg font-medium text-destructive/90">
+                            Comentários para: <span className="font-semibold">{selectedEventDetails?.eventName || "Selecione um Evento"}</span>
                         </h3>
                         {isLoading && selectedEventId && <div className="flex justify-center items-center h-60"><Loader2 className="w-8 h-8 text-destructive animate-spin" /></div>}
                         {!isLoading && selectedEventId && eventRatings.length === 0 && (
                              <div className="flex items-center justify-center h-60 p-4 border border-dashed rounded-md border-border">
-                                <p className="text-muted-foreground">Nenhuma avaliação para este evento ainda.</p>
+                                <p className="text-muted-foreground text-sm sm:text-base">Nenhuma avaliação para este evento ainda.</p>
                             </div>
                         )}
                         {!isLoading && selectedEventId && eventRatings.length > 0 && (
-                            <ScrollArea className="h-72 border rounded-md border-input p-3 space-y-3">
+                            <ScrollArea className="h-60 md:h-72 border rounded-md border-input p-2 sm:p-3 space-y-3">
                                 {eventRatings.map(rating => (
-                                    <Card key={rating.id} className="bg-card/70">
-                                        <CardHeader className="pb-2 pt-3 px-4">
-                                            <div className="flex justify-between items-center">
-                                                <CardTitle className="text-sm text-destructive/80">{rating.userName}</CardTitle>
-                                                <StarRating rating={rating.rating} readOnly size={16} fillColor="hsl(var(--destructive))" />
-                                            </div>
-                                             <p className="text-xs text-muted-foreground">
-                                                {format(rating.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                            </p>
-                                        </CardHeader>
+                                    <Card key={rating.id} className="bg-card/70 p-3 sm:p-4">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <CardTitle className="text-sm sm:text-base text-destructive/80">{rating.userName}</CardTitle>
+                                            <StarRating rating={rating.rating} readOnly size={16} fillColor="hsl(var(--destructive))" />
+                                        </div>
+                                         <p className="text-xs text-muted-foreground mb-2">
+                                            {format(rating.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                        </p>
                                         {rating.comment && (
-                                            <CardContent className="px-4 pb-3">
-                                                <p className="text-sm text-foreground/90 flex items-start">
-                                                   <MessageCircle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-destructive/70" /> 
-                                                   <span className="italic">"{rating.comment}"</span>
-                                                </p>
-                                            </CardContent>
+                                          <p className="text-sm text-foreground/90 flex items-start">
+                                             <MessageCircle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-destructive/70" /> 
+                                             <span className="italic">"{rating.comment}"</span>
+                                          </p>
                                         )}
                                     </Card>
                                 ))}
@@ -289,7 +294,7 @@ const PartnerRatingsPage: NextPage = () => {
                         )}
                          {!selectedEventId && !isLoading && eventsWithRatings.length > 0 && (
                              <div className="flex items-center justify-center h-60 p-4 border border-dashed rounded-md border-border">
-                                <p className="text-muted-foreground">Selecione um evento à esquerda para ver os comentários e avaliações.</p>
+                                <p className="text-muted-foreground text-sm sm:text-base">Selecione um evento à esquerda para ver os comentários e avaliações.</p>
                             </div>
                         )}
                     </div>
@@ -300,6 +305,24 @@ const PartnerRatingsPage: NextPage = () => {
     </div>
   );
 };
+
+// Augment StarRatingProps for smSize
+interface StarRatingProps {
+  rating: number;
+  setRating?: React.Dispatch<React.SetStateAction<number>>;
+  totalStars?: number;
+  size?: number;
+  smSize?: number; // Add smSize prop
+  fillColor?: string;
+  emptyColor?: string;
+  className?: string;
+  readOnly?: boolean;
+  hoverColor?: string;
+}
+
+// Update StarRating component if needed to handle smSize, or ensure existing size prop is sufficient
+// This example assumes existing size prop is handled well by Tailwind/CSS for responsiveness
+// If specific small screen size is needed, you'd adjust the component or use responsive Tailwind classes
 
 export default PartnerRatingsPage;
 

@@ -78,7 +78,7 @@ export default function PartnerDashboardPage() {
 
   if (loading || !currentUser || !venueData) {
     return (
-      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto">
+      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <p className="text-xl text-destructive animate-pulse">Carregando dados do parceiro...</p>
       </div>
     );
@@ -87,49 +87,49 @@ export default function PartnerDashboardPage() {
   const fullAddress = `${venueData.address.street}, ${venueData.address.number}, ${venueData.address.city} - ${venueData.address.state}, ${venueData.address.cep}`;
 
   return (
-    <div className="container py-8 mx-auto">
-      <header className="mb-10 text-center">
-        <h1 className="text-4xl font-bold text-destructive">{venueData.venueName}</h1>
-        <p className="mt-2 text-lg text-muted-foreground flex items-center justify-center">
-            <MapPin className="w-5 h-5 mr-2 text-destructive/70"/>
-            {fullAddress}
+    <div className="container py-6 sm:py-8 mx-auto px-4">
+      <header className="mb-8 sm:mb-10 text-center">
+        <h1 className="text-3xl sm:text-4xl font-bold text-destructive">{venueData.venueName}</h1>
+        <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center px-2">
+            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-destructive/70 shrink-0"/>
+            <span className="truncate">{fullAddress}</span>
         </p>
-         <Button variant="outline" size="sm" className="mt-4 border-destructive text-destructive hover:bg-destructive/10" onClick={() => router.push('/partner-questionnaire')}>
-            <Edit className="w-3 h-3 mr-1.5" /> Editar Informações do Local
+         <Button variant="outline" size="sm" className="mt-4 border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm" onClick={() => router.push('/partner-questionnaire')}>
+            <Edit className="w-3 h-3 mr-1.5" /> Editar Info. do Local
         </Button>
       </header>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl text-destructive">
-              <CalendarDays className="w-6 h-6 mr-3" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
+              <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Gerenciar Eventos
             </CardTitle>
-            <CardDescription>Crie, edite e visualize seus próximos eventos.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Crie, edite e visualize seus próximos eventos.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center gap-3">
+          <CardContent className="flex flex-col items-center gap-3 p-4 sm:p-6 pt-0 sm:pt-0">
             <Button 
-              className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm sm:text-base"
               onClick={() => router.push('/partner/events')}
             >
-              <PlusCircle className="w-5 h-5 mr-2" /> Adicionar/Gerenciar Eventos
+              <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Adicionar/Gerenciar Eventos
             </Button>
           </CardContent>
         </Card>
         
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl text-destructive">
-              <Star className="w-6 h-6 mr-3" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
+              <Star className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Avaliações e Comentários
             </CardTitle>
-            <CardDescription>Veja o que os usuários acharam dos seus eventos.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Veja o que os usuários acharam dos seus eventos.</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center">
+          <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
              <Button 
                 variant="outline" 
-                className="w-full border-destructive text-destructive hover:bg-destructive/10"
+                className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
                 onClick={() => router.push('/partner/ratings')}
             >
               Ver Avaliações
@@ -138,30 +138,30 @@ export default function PartnerDashboardPage() {
         </Card>
 
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl text-destructive">
-              <BarChart3 className="w-6 h-6 mr-3" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
+              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Estatísticas (Em Breve)
             </CardTitle>
-            <CardDescription>Acompanhe o desempenho dos seus eventos e visualizações.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Acompanhe o desempenho dos seus eventos e visualizações.</CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center justify-center">
-            <p className="text-muted-foreground">Funcionalidade em desenvolvimento.</p>
+          <CardContent className="flex items-center justify-center p-4 sm:p-6 pt-0 sm:pt-0">
+            <p className="text-muted-foreground text-xs sm:text-sm">Funcionalidade em desenvolvimento.</p>
           </CardContent>
         </Card>
         
-        <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow lg:col-start-2">
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl text-destructive">
-              <Settings className="w-6 h-6 mr-3" />
+        <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow md:col-start-1 lg:col-start-2">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
+              <Settings className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Configurações da Conta
             </CardTitle>
-            <CardDescription>Ajuste suas preferências e informações de contato.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Ajuste suas preferências e informações de contato.</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center">
+          <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
              <Button 
                 variant="outline" 
-                className="w-full border-destructive text-destructive hover:bg-destructive/10"
+                className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
                 onClick={() => router.push('/partner/settings')}
             >
               Acessar Configurações

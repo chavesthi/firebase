@@ -34,8 +34,27 @@ const EventQrCodePage: NextPage = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [eventLoading, setEventLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [qrSize, setQrSize] = useState(256); // Default size
 
   const eventId = typeof eventIdParam === 'string' ? eventIdParam : null;
+
+  useEffect(() => {
+    const handleResize = () => {
+        const width = window.innerWidth;
+        if (width < 400) {
+            setQrSize(192); // Smaller QR for very small screens
+        } else if (width < 640) {
+             setQrSize(224); // Medium size for small screens
+        } else {
+            setQrSize(256); // Default size for larger screens
+        }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Initial call
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -144,27 +163,27 @@ const EventQrCodePage: NextPage = () => {
 
   return (
     <main className="flex flex-col items-center min-h-screen p-4 bg-background">
-       <div className="absolute top-8 left-8 print:hidden">
-         <Button variant="outline" onClick={() => router.push('/partner/events')} className="border-destructive text-destructive hover:bg-destructive/10">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar para Eventos
+       <div className="absolute top-4 left-4 sm:top-8 sm:left-8 print:hidden">
+         <Button variant="outline" onClick={() => router.push('/partner/events')} className="border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
+            <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
+            Eventos
         </Button>
       </div>
       
-      <div className="flex flex-col items-center justify-center w-full max-w-md mt-20 space-y-8">
+      <div className="flex flex-col items-center justify-center w-full max-w-md mt-20 sm:mt-24 space-y-6 sm:space-y-8">
         <Card className="w-full shadow-2xl bg-card/95 backdrop-blur-sm border-destructive/30 print:shadow-none print:border-none">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-destructive to-accent print:text-black">
+          <CardHeader className="text-center px-4 sm:px-6">
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-destructive to-accent print:text-black">
               QR Code de Check-in
             </CardTitle>
              {eventDetails && (
-                <CardDescription className="text-muted-foreground print:text-gray-600">
-                    Evento: {eventDetails.eventName} <br />
+                <CardDescription className="text-muted-foreground text-sm sm:text-base print:text-gray-600">
+                    Evento: {eventDetails.eventName} <br className="sm:hidden"/> {/* Break line only on small screens */}
                     Data: {format(eventDetails.startDateTime.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </CardDescription>
             )}
           </CardHeader>
-          <CardContent className="flex flex-col items-center space-y-6">
+          <CardContent className="flex flex-col items-center space-y-4 sm:space-y-6 px-4 sm:px-6 pb-4 sm:pb-6">
             {error && !eventDetails && ( // Only show general error if no event details could be loaded
               <div className="p-4 text-center text-destructive-foreground bg-destructive/80 rounded-md print:hidden">
                 <p>{error}</p>
@@ -172,16 +191,16 @@ const EventQrCodePage: NextPage = () => {
             )}
 
             {!error && eventDetails && eventDetails.checkInToken && (
-              <div className="p-6 bg-white rounded-lg shadow-inner"> {/* White background for QR code */}
+              <div className="p-4 sm:p-6 bg-white rounded-lg shadow-inner"> {/* White background for QR code */}
                 <QRCodeCanvas 
                     id="qr-code-canvas"
                     value={qrCodeValue} 
-                    size={256} 
+                    size={qrSize} 
                     level={"H"}
                     imageSettings={{
                         src: "/fervo_icon.png", // Path to your logo in public folder
-                        height: 40,
-                        width: 40,
+                        height: Math.floor(qrSize * 0.15), // Adjust logo size relative to QR size
+                        width: Math.floor(qrSize * 0.15),
                         excavate: true,
                     }}
                  />
@@ -192,16 +211,16 @@ const EventQrCodePage: NextPage = () => {
                  <p className="text-destructive text-center">Token de check-in não encontrado para este evento.</p>
             )}
 
-            <p className="text-sm text-center text-muted-foreground print:hidden">
+            <p className="text-xs sm:text-sm text-center text-muted-foreground print:hidden">
                 Apresente este QR Code na entrada do evento para realizar o check-in dos participantes através do Fervo App (função de scanner do usuário).
             </p>
 
             {!error && eventDetails && eventDetails.checkInToken && (
                 <div className="flex flex-col w-full gap-3 pt-4 sm:flex-row sm:justify-center print:hidden">
-                    <Button onClick={handlePrint} className="w-full sm:w-auto bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                    <Button onClick={handlePrint} className="w-full sm:w-auto bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs sm:text-sm">
                         <Printer className="w-4 h-4 mr-2" /> Imprimir
                     </Button>
-                    <Button onClick={handleDownload} variant="outline" className="w-full sm:w-auto border-destructive text-destructive hover:bg-destructive/10">
+                    <Button onClick={handleDownload} variant="outline" className="w-full sm:w-auto border-destructive text-destructive hover:bg-destructive/10 text-xs sm:text-sm">
                         <Download className="w-4 h-4 mr-2" /> Baixar PNG
                     </Button>
                 </div>
@@ -210,15 +229,15 @@ const EventQrCodePage: NextPage = () => {
           </CardContent>
         </Card>
         
-        <footer className="py-8 text-center print:hidden">
-          <p className="text-sm text-muted-foreground">
+        <footer className="py-6 sm:py-8 text-center print:hidden">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} Fervo App. Todos os direitos reservados.
           </p>
         </footer>
       </div>
        <style jsx global>{`
         .shadow-2xl {
-          box-shadow: 0 0 20px 8px hsl(var(--destructive)), 0 0 40px 15px hsla(var(--destructive), 0.3), 0 0 20px 8px hsl(var(--accent)), 0 0 40px 15px hsla(var(--accent), 0.3);
+          box-shadow: 0 0 15px 6px hsl(var(--destructive)), 0 0 30px 10px hsla(var(--destructive), 0.25), 0 0 15px 6px hsl(var(--accent)), 0 0 30px 10px hsla(var(--accent), 0.25);
         }
         @media print {
           body * {
@@ -232,13 +251,17 @@ const EventQrCodePage: NextPage = () => {
             left: 0;
             top: 0;
             width: 100%;
+            padding: 1rem; /* Ensure some padding for printing */
           }
           .print\\:hidden { display: none !important; }
           .print\\:shadow-none { box-shadow: none !important; }
           .print\\:border-none { border: none !important; }
           .print\\:text-black { color: black !important; }
           .print\\:text-gray-600 { color: #4B5563 !important; } /* Tailwind gray-600 */
-
+          #qr-code-canvas {
+             max-width: 80vw; /* Ensure QR code fits reasonably */
+             height: auto;
+          }
         }
       `}</style>
     </main>

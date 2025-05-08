@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -271,12 +272,12 @@ const PartnerQuestionnairePage: NextPage = () => {
   }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <div className="absolute top-8 left-8">
+    <main className="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4 bg-background">
+      <div className="absolute top-4 sm:top-8 left-4 sm:left-8">
         <Logo iconClassName="text-destructive" />
       </div>
       {isProfileLocked && (
-        <div className="w-full max-w-3xl mb-4 flex justify-end">
+        <div className="w-full max-w-3xl mb-4 flex justify-end px-2 sm:px-0">
           <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-destructive text-destructive hover:bg-destructive/10">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar ao Painel
@@ -285,18 +286,18 @@ const PartnerQuestionnairePage: NextPage = () => {
       )}
       <Card className="w-full max-w-3xl p-px rounded-lg shadow-2xl bg-gradient-to-b from-destructive/50 to-secondary/50">
         <Card className="w-full bg-card/95 backdrop-blur-sm">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-destructive to-accent">
+          <CardHeader className="text-center px-4 sm:px-6">
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-destructive to-accent">
               {isProfileLocked ? "Editar Contatos e Mídia" : "Configure seu Local!"}
             </CardTitle>
-            <CardDescription className="text-muted-foreground">
+            <CardDescription className="text-muted-foreground text-sm sm:text-base">
               {isProfileLocked 
                 ? "Atualize seus links de contato, redes sociais e vídeo de apresentação." 
                 : "Detalhes do seu estabelecimento para os usuários do Fervo App."}
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 px-4 sm:px-6">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Left Column */}
                 <div className="space-y-4">
@@ -330,7 +331,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                   <div>
                     <Label className="text-destructive/90">Estilos Musicais (Máx. 4)</Label>
                     <ScrollArea className="h-32 p-2 border rounded-md border-input">
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-2 xs:grid-cols-2"> {/* Adjusted for very small screens */}
                         {MUSIC_STYLE_OPTIONS.map((option) => (
                           <div key={option.value} className="flex items-center space-x-2">
                             <Controller
@@ -359,7 +360,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                                 />
                               )}
                             />
-                            <Label htmlFor={`music-${option.value}`} className={`font-normal ${isProfileLocked ? 'text-muted-foreground' : 'text-foreground/80'}`}>{option.label}</Label>
+                            <Label htmlFor={`music-${option.value}`} className={`font-normal text-xs xs:text-sm ${isProfileLocked ? 'text-muted-foreground' : 'text-foreground/80'}`}>{option.label}</Label>
                           </div>
                         ))}
                       </div>
@@ -416,7 +417,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                   </Button>
 
                   {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && (
-                    <div className="h-48 mt-2 overflow-hidden border rounded-md border-input">
+                    <div className="h-40 sm:h-48 mt-2 overflow-hidden border rounded-md border-input">
                         <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
                             <GoogleMap
                                 defaultCenter={initialMapCenter}
@@ -478,7 +479,7 @@ const PartnerQuestionnairePage: NextPage = () => {
               </div>
 
             </CardContent>
-            <CardFooter>
+            <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">
               <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={isSubmitting || isGeocoding}>
                 <Save className="w-4 h-4 mr-2"/> 
                 {isSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Contatos e Mídia' : 'Salvar e Continuar')}
@@ -490,6 +491,15 @@ const PartnerQuestionnairePage: NextPage = () => {
        <style jsx global>{`
         .shadow-2xl {
           box-shadow: 0 0 15px 5px hsl(var(--destructive)), 0 0 30px 10px hsla(var(--destructive), 0.3), 0 0 15px 5px hsl(var(--secondary)), 0 0 30px 10px hsla(var(--secondary), 0.3);
+        }
+        @media (max-width: 640px) { /* xs breakpoint */
+          .grid-cols-xs-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .text-xs {
+            font-size: 0.75rem; /* 12px */
+            line-height: 1rem; /* 16px */
+          }
         }
       `}</style>
     </main>

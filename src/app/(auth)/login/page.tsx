@@ -8,20 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 export default function LoginPage() {
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <div className="absolute top-8 left-8">
+      <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <Logo />
       </div>
       {/* Wrapper Card for the main glow effect, LoginForm will contain its own card for content */}
       <div className="w-full max-w-md p-px rounded-lg shadow-2xl bg-gradient-to-b from-primary/50 to-destructive/50" 
            style={{'--card-glow-primary': 'hsl(var(--primary))', '--card-glow-destructive': 'hsl(var(--destructive))'} as React.CSSProperties}>
         <Card className="w-full bg-card/95 backdrop-blur-sm"> {/* Slightly transparent card inside */}
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Bem-vindo ao Fervo App!</CardTitle>
-            <CardDescription className="text-muted-foreground">
+          <CardHeader className="text-center px-4 sm:px-6 pt-6 sm:pt-8">
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Bem-vindo ao Fervo App!</CardTitle>
+            <CardDescription className="text-muted-foreground text-sm sm:text-base">
               Encontre os melhores fervos ou cadastre seu estabelecimento.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             <LoginForm />
           </CardContent>
         </Card>

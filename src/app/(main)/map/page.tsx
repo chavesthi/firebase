@@ -1,3 +1,4 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -761,7 +762,7 @@ const MapContentAndLogic = () => {
             onOpenAutoFocus={(e) => e.preventDefault()} 
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <SheetHeader className="px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4">
+            <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4">
                 <div className="flex-1">
                     <SheetTitle className="text-2xl font-bold text-secondary">
                     {selectedVenue.name}
@@ -778,7 +779,7 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                  <SheetClose asChild>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground flex-shrink-0 -mt-1 -mr-2 sm:-mr-0">
                     <X className="w-5 h-5" />
                     <span className="sr-only">Fechar</span>
                   </Button>
@@ -787,7 +788,7 @@ const MapContentAndLogic = () => {
             </SheetHeader>
             
             <ScrollArea className="h-[calc(100vh-6rem)]"> 
-              <div className="px-6 pb-6 pt-4 space-y-6">
+              <div className="px-4 sm:px-6 pb-6 pt-4 space-y-6">
                   {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
                     <div className="mb-4">
                       <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' }}>
@@ -821,7 +822,7 @@ const MapContentAndLogic = () => {
                   {(selectedVenue.instagramUrl || selectedVenue.facebookUrl || selectedVenue.youtubeUrl || selectedVenue.whatsappPhone) && (
                     <div className="pt-4 mt-4 border-t border-border">
                       <h3 className="text-lg font-semibold text-foreground mb-3">Contatos e Redes Sociais</h3>
-                      <div className="flex items-center space-x-4">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         {selectedVenue.whatsappPhone && (
                            <a 
                             href={`https://wa.me/${selectedVenue.whatsappPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${selectedVenue.name}, te encontrei pelo Fervo App. Gostaria de informações adicionais sobre vocês.`)}`} 
