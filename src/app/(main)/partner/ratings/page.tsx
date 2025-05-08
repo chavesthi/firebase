@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -214,7 +215,7 @@ const PartnerRatingsPage: NextPage = () => {
                     <h3 className="mb-2 text-md sm:text-lg font-semibold text-destructive">Avaliação Geral do Local</h3>
                     {partnerOverallRating.averageVenueRating !== undefined && partnerOverallRating.venueRatingCount !== undefined && partnerOverallRating.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-2">
-                            <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={20} smSize={24} readOnly fillColor="hsl(var(--destructive))" />
+                            <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={20} smSize={24} readOnly />
                             <span className="text-sm sm:text-md text-muted-foreground">
                                 ({partnerOverallRating.averageVenueRating.toFixed(1)} de {partnerOverallRating.venueRatingCount} {partnerOverallRating.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
                             </span>
@@ -248,7 +249,7 @@ const PartnerRatingsPage: NextPage = () => {
                                     <span className="truncate text-sm sm:text-base font-medium">{event.eventName}</span>
                                     {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
                                       <div className="flex items-center gap-1 mt-0.5">
-                                          <StarRating rating={event.averageRating} totalStars={5} size={12} readOnly fillColor="hsl(var(--destructive))" />
+                                          <StarRating rating={event.averageRating} totalStars={5} size={12} readOnly />
                                           <span className="text-xs text-muted-foreground">({event.ratingCount})</span>
                                       </div>
                                     ) : (
@@ -274,7 +275,7 @@ const PartnerRatingsPage: NextPage = () => {
                                     <Card key={rating.id} className="bg-card/70 p-3 sm:p-4">
                                         <div className="flex justify-between items-center mb-1">
                                             <CardTitle className="text-sm sm:text-base text-destructive/80">{rating.userName}</CardTitle>
-                                            <StarRating rating={rating.rating} readOnly size={16} fillColor="hsl(var(--destructive))" />
+                                            <StarRating rating={rating.rating} readOnly size={16} />
                                         </div>
                                          <p className="text-xs text-muted-foreground mb-2">
                                             {format(rating.createdAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
@@ -303,24 +304,8 @@ const PartnerRatingsPage: NextPage = () => {
   );
 };
 
-// Augment StarRatingProps for smSize
-interface StarRatingProps {
-  rating: number;
-  setRating?: React.Dispatch<React.SetStateAction<number>>;
-  totalStars?: number;
-  size?: number;
-  smSize?: number; // Add smSize prop
-  fillColor?: string;
-  emptyColor?: string;
-  className?: string;
-  readOnly?: boolean;
-  hoverColor?: string;
-}
-
-// Update StarRating component if needed to handle smSize, or ensure existing size prop is sufficient
-// This example assumes existing size prop is handled well by Tailwind/CSS for responsiveness
-// If specific small screen size is needed, you'd adjust the component or use responsive Tailwind classes
 
 export default PartnerRatingsPage;
 
     
+

@@ -747,7 +747,7 @@ const MapContentAndLogic = () => {
                     </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
-                            <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly fillColor="hsl(var(--secondary))" />
+                            <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly />
                             <span className="text-xs text-muted-foreground">
                                 (Avaliação Geral do Local: {selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
                             </span>
