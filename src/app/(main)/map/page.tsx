@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -230,7 +229,6 @@ const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: Fire
 const updatePartnerOverallRating = async (partnerId: string) => {
     try {
         const eventsCollectionRef = collection(firestore, 'users', partnerId, 'events');
-        // Query all events, not just those with ratingCount > 0, to correctly calculate if some events have no ratings
         const eventsSnapshot = await getDocs(eventsCollectionRef);
 
         let totalWeightedSum = 0;
@@ -238,7 +236,6 @@ const updatePartnerOverallRating = async (partnerId: string) => {
 
         eventsSnapshot.forEach(eventDoc => {
             const eventData = eventDoc.data();
-            // Ensure that averageRating and ratingCount are numbers and exist
             if (typeof eventData.averageRating === 'number' && typeof eventData.ratingCount === 'number' && eventData.ratingCount > 0) {
                 totalWeightedSum += (eventData.averageRating * eventData.ratingCount);
                 totalRatingsCount += eventData.ratingCount;
@@ -246,7 +243,7 @@ const updatePartnerOverallRating = async (partnerId: string) => {
         });
 
         const averageVenueRating = totalRatingsCount > 0 ? parseFloat((totalWeightedSum / totalRatingsCount).toFixed(2)) : 0;
-        const venueRatingCount = totalRatingsCount; // This is the sum of all rating counts from all events
+        const venueRatingCount = totalRatingsCount;
 
         const partnerDocRef = doc(firestore, 'users', partnerId);
         await updateDoc(partnerDocRef, {
@@ -256,7 +253,6 @@ const updatePartnerOverallRating = async (partnerId: string) => {
         
     } catch (error) {
         console.error("Error updating partner overall rating:", error);
-        // Do not toast here to avoid spamming the user for a background task failure
     }
 };
 
@@ -350,7 +346,6 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
-          // Default to SP if location is denied or fails
           setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
         }
       );
@@ -379,7 +374,6 @@ const MapContentAndLogic = () => {
           let activeEventName: string | null = null;
 
           const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
-          // Query only visible events to determine active status
           const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
           const eventsSnapshot = await getDocs(eventsQuery);
 
@@ -405,8 +399,8 @@ const MapContentAndLogic = () => {
             instagramUrl: partnerData.instagramUrl,
             facebookUrl: partnerData.facebookUrl,
             whatsappPhone: partnerData.whatsappPhone,
-            averageVenueRating: partnerData.averageVenueRating, // Ensure this is fetched
-            venueRatingCount: partnerData.venueRatingCount,     // Ensure this is fetched
+            averageVenueRating: partnerData.averageVenueRating, 
+            venueRatingCount: partnerData.venueRatingCount,     
             hasActiveEvent,
             activeEventName,
           };
@@ -459,7 +453,6 @@ const MapContentAndLogic = () => {
     if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
-      // If events are already loaded, reset rating form for the selected venue/event
       setCurrentlyRatingEventId(null); 
       setCurrentRating(0);
       setCurrentComment('');
@@ -506,7 +499,6 @@ const MapContentAndLogic = () => {
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
   const displayedVenues = useMemo(() => {
-    // For now, always display all venues. Filtering for blinking happens separately.
     return venues;
   }, [venues]);
 
@@ -555,10 +547,9 @@ const MapContentAndLogic = () => {
 
             if (existingRatingSnap.exists()) {
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
-                // Ensure oldRatingCount is not zero before division if it's the only rating
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
-                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { // special case for first rating being updated
-                    newAverageRating = currentRating; // if it's the only rating, new avg is just current rating
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { 
+                    newAverageRating = currentRating; 
                 }
 
             } else {
@@ -592,7 +583,6 @@ const MapContentAndLogic = () => {
         
         if (selectedVenue) {
             await updatePartnerOverallRating(selectedVenue.id);
-            // Refresh selected venue data to show updated overall rating
             const updatedVenueDoc = await getDoc(doc(firestore, 'users', selectedVenue.id));
             if (updatedVenueDoc.exists()) {
                 const updatedData = updatedVenueDoc.data();
@@ -601,7 +591,6 @@ const MapContentAndLogic = () => {
                     averageVenueRating: updatedData.averageVenueRating,
                     venueRatingCount: updatedData.venueRatingCount
                 } : null);
-                 // Update the venue in the main list as well
                 setVenues(prevVenues => prevVenues.map(v => v.id === selectedVenue.id ? {...v, averageVenueRating: updatedData.averageVenueRating, venueRatingCount: updatedData.venueRatingCount} : v));
             }
         }
@@ -780,10 +769,12 @@ const MapContentAndLogic = () => {
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly fillColor="hsl(var(--secondary))" />
-                            <span className="text-xs text-muted-foreground">({selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação de eventos' : 'avaliações de eventos'})</span>
+                            <span className="text-xs text-muted-foreground">
+                                (Avaliação Geral do Local: {selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
+                            </span>
                         </div>
                     ): (
-                        <p className="text-xs text-muted-foreground mt-1">Nenhuma avaliação de eventos ainda.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Este local ainda não foi avaliado (nenhum evento avaliado).</p>
                     )}
                 </div>
                  <SheetClose asChild>
