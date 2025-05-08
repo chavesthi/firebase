@@ -7,7 +7,7 @@ import type { NextPage } from 'next';
 // import Image from 'next/image'; // No longer used directly for venue image
 import { useRouter } from 'next/navigation'; 
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send } from 'lucide-react';
-import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment } from 'firebase/firestore'; // Added increment
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -601,6 +601,45 @@ const MapContentAndLogic = () => {
     }
 };
 
+ const handleShareEvent = async (partnerId: string, eventId: string) => {
+    if (!currentUser) {
+      toast({ title: "Login Necessário", description: "Faça login para compartilhar e ganhar moedas.", variant: "destructive" });
+      return;
+    }
+
+    const shareUrl = `${window.location.origin}/shared-event/${partnerId}/${eventId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Confira este Fervo: ${selectedVenue?.name} - ${selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento'}`,
+          text: `Olha esse evento que encontrei no Fervo App!`,
+          url: shareUrl,
+        });
+        toast({ title: "Compartilhado!", description: "Você ganhou 2 FervoCoins!", variant: "default", duration: 4000 });
+         // Award coins
+        const userDocRef = doc(firestore, "users", currentUser.uid);
+        await updateDoc(userDocRef, {
+            fervoCoins: increment(2)
+        });
+      } else {
+        // Fallback for browsers that don't support navigator.share
+        await navigator.clipboard.writeText(shareUrl);
+        toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins!", variant: "default", duration: 4000 });
+         // Award coins
+        const userDocRef = doc(firestore, "users", currentUser.uid);
+        await updateDoc(userDocRef, {
+            fervoCoins: increment(2)
+        });
+      }
+    } catch (err: any) {
+      // Handle errors, e.g., user cancelled share
+      if (err.name !== 'AbortError') {
+        console.error('Failed to share:', err);
+        toast({ title: "Erro ao Compartilhar", description: "Não foi possível compartilhar o evento.", variant: "destructive"});
+      }
+    }
+  };
+
 
   if (!userLocation) {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
@@ -865,16 +904,9 @@ const MapContentAndLogic = () => {
                                           variant="ghost" 
                                           size="icon" 
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
-                                          onClick={() => {
-                                            const shareUrl = `${window.location.origin}/shared-event/${selectedVenue.id}/${event.id}`;
-                                            navigator.clipboard.writeText(shareUrl).then(() => {
-                                                toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins! (Recurso em breve)", duration: 4000, variant: "default"});
-                                            }).catch(err => {
-                                                console.error('Failed to copy: ', err);
-                                                toast({ title: "Erro ao Copiar", description: "Não foi possível copiar o link.", variant: "destructive"});
-                                            });
-                                          }}
+                                          onClick={() => handleShareEvent(selectedVenue.id, event.id)}
                                           title="Compartilhar evento"
+                                          disabled={!currentUser} // Disable if user not logged in
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
@@ -1041,6 +1073,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
-    
-

@@ -82,6 +82,7 @@ export function LoginForm() {
         role: role,
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
+        fervoCoins: 0, // Initialize fervoCoins for new users
       });
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",

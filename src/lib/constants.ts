@@ -61,3 +61,6 @@ export const PRICING_TYPE_OPTIONS = [
   { value: PricingType.ENTRY_FEE, label: 'Taxa de Entrada' },
   { value: PricingType.CONSUMPTION, label: 'Consumação Mínima' },
 ];
+
+// Reward amount for sharing an event
+export const FERVO_COINS_SHARE_REWARD = 2;

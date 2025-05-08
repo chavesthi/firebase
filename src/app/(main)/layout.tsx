@@ -33,63 +33,24 @@ interface AppUser {
   preferredMusicStyles?: MusicStyle[];
   questionnaireCompleted?: boolean;
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
+  fervoCoins?: number;
 }
 
-const useAuth = () => {
-  const [appUser, setAppUser] = useState<AppUser | null>(null);
+// This custom hook now primarily handles Firebase Auth state.
+// User document data (including fervoCoins) will be handled by a separate onSnapshot listener in the layout component.
+const useAuthSubscription = () => {
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const pathname = usePathname();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        const userDocRef = doc(firestore, "users", firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef); 
-        let userRole: UserRole | null = null;
-        let userName: string = firebaseUser.displayName || "Usuário";
-        let preferredVenueTypes: VenueType[] = [];
-        let preferredMusicStyles: MusicStyle[] = [];
-        let questionnaireCompleted: boolean = false;
-        let lastNotificationCheckTimestamp: FirebaseTimestamp | undefined = undefined;
-
-
-        if (userDocSnap.exists()) { 
-          const userData = userDocSnap.data();
-          userRole = userData.role as UserRole || null;
-          userName = userData.name || userName; 
-          preferredVenueTypes = userData.preferredVenueTypes || [];
-          preferredMusicStyles = userData.preferredMusicStyles || [];
-          questionnaireCompleted = userData.questionnaireCompleted || false;
-          lastNotificationCheckTimestamp = userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined;
-        } else {
-           if (pathname.includes('/partner')) {
-            userRole = UserRole.PARTNER;
-            userName = "Parceiro Fervo";
-          } else {
-            userRole = UserRole.USER;
-          }
-        }
-        
-        setAppUser({
-          uid: firebaseUser.uid,
-          name: userName,
-          email: firebaseUser.email,
-          role: userRole,
-          preferredVenueTypes,
-          preferredMusicStyles,
-          questionnaireCompleted,
-          lastNotificationCheckTimestamp,
-        });
-      } else {
-        setAppUser(null);
-      }
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setFirebaseUser(user);
       setLoading(false);
     });
-
     return () => unsubscribe();
-  }, [pathname]);
-  
-  return { user: appUser, loading };
+  }, []);
+
+  return { firebaseUser, loading };
 };
 
 
@@ -98,7 +59,10 @@ export default function MainAppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { firebaseUser, loading: authLoading } = useAuthSubscription();
+  const [appUser, setAppUser] = useState<AppUser | null>(null);
+  const [userDocLoading, setUserDocLoading] = useState(true);
+
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -106,8 +70,64 @@ export default function MainAppLayout({
   const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); 
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
+  const loading = authLoading || userDocLoading;
+
   useEffect(() => {
-    if (!loading && !user) {
+    let unsubscribeUserDoc: (() => void) | undefined;
+
+    if (firebaseUser) {
+      setUserDocLoading(true);
+      const userDocRef = doc(firestore, "users", firebaseUser.uid);
+      unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          setAppUser({
+            uid: firebaseUser.uid,
+            name: userData.name || firebaseUser.displayName || (userData.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
+            email: firebaseUser.email,
+            role: userData.role as UserRole || (pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER), // Default role based on path if not in DB
+            preferredVenueTypes: userData.preferredVenueTypes || [],
+            preferredMusicStyles: userData.preferredMusicStyles || [],
+            questionnaireCompleted: userData.questionnaireCompleted || false,
+            lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
+            fervoCoins: userData.fervoCoins || 0,
+          });
+        } else {
+          // This case might happen if the user signed up but the document creation is pending
+          // Or if it's a very new user navigating before doc is fully written.
+          // Set a default structure, questionnaire will guide them.
+           const defaultRole = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
+           setAppUser({
+             uid: firebaseUser.uid,
+             name: firebaseUser.displayName || (defaultRole === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
+             email: firebaseUser.email,
+             role: defaultRole,
+             fervoCoins: 0,
+             questionnaireCompleted: false,
+           });
+        }
+        setUserDocLoading(false);
+      }, (error) => {
+        console.error("Error fetching user document with onSnapshot:", error);
+        setAppUser(null); // Clear appUser on error
+        setUserDocLoading(false);
+        toast({ title: "Erro ao carregar dados", description: "Não foi possível sincronizar os dados do usuário.", variant: "destructive" });
+      });
+    } else {
+      // No Firebase user (logged out)
+      setAppUser(null);
+      setUserDocLoading(false); // Not loading user doc if no firebaseUser
+    }
+    return () => {
+      if (unsubscribeUserDoc) {
+        unsubscribeUserDoc();
+      }
+    };
+  }, [firebaseUser, pathname, toast]);
+
+
+  useEffect(() => {
+    if (!loading && !appUser) { // Check appUser derived from firebaseUser and its doc
       const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
       const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
       
@@ -115,16 +135,16 @@ export default function MainAppLayout({
         router.push('/login');
       }
     }
-  }, [user, loading, router, pathname]);
+  }, [appUser, loading, router, pathname]);
 
   
   useEffect(() => {
-    if (loading || !user || !user.uid || !user.questionnaireCompleted || user.role !== UserRole.USER) {
+    if (loading || !appUser || !appUser.uid || !appUser.questionnaireCompleted || appUser.role !== UserRole.USER) {
       setHasNewNotifications(false);
       return;
     }
 
-    const userLastCheck = user.lastNotificationCheckTimestamp?.toDate() || new Date(0);
+    const userLastCheck = appUser.lastNotificationCheckTimestamp?.toDate() || new Date(0);
     
     const partnersRef = collection(firestore, 'users');
     const q = query(partnersRef,
@@ -141,8 +161,8 @@ export default function MainAppLayout({
         if (!partnerProfileCompletedAt) continue;
 
         if (partnerProfileCompletedAt > userLastCheck) {
-          const typeMatch = user.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
-          const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => user.preferredMusicStyles?.includes(style));
+          const typeMatch = appUser.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
+          const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => appUser.preferredMusicStyles?.includes(style));
 
           if (typeMatch || styleMatch) {
             foundNew = true;
@@ -157,7 +177,7 @@ export default function MainAppLayout({
     });
 
     return () => unsubscribe(); 
-  }, [user, loading]);
+  }, [appUser, loading]);
 
 
   const handleLogout = async () => {
@@ -172,19 +192,19 @@ export default function MainAppLayout({
   };
 
   const handleNotificationsClick = async () => {
-    if (!user || !user.uid) {
+    if (!appUser || !appUser.uid) {
       toast({ title: "Login Necessário", description: "Faça login para ver notificações." });
       return;
     }
 
-    if (!user.questionnaireCompleted) {
+    if (!appUser.questionnaireCompleted) {
       toast({ title: "Complete seu Perfil", description: "Preencha suas preferências para receber sugestões de Fervos!", duration: 5000 });
       return;
     }
 
     const userPrefs = {
-      venueTypes: user.preferredVenueTypes || [],
-      musicStyles: user.preferredMusicStyles || [],
+      venueTypes: appUser.preferredVenueTypes || [],
+      musicStyles: appUser.preferredMusicStyles || [],
     };
 
     if (userPrefs.venueTypes.length === 0 && userPrefs.musicStyles.length === 0) {
@@ -237,7 +257,7 @@ export default function MainAppLayout({
           }
       }
 
-      const userDocRef = doc(firestore, "users", user.uid);
+      const userDocRef = doc(firestore, "users", appUser.uid);
       await updateDoc(userDocRef, {
         lastNotificationCheckTimestamp: serverTimestamp()
       });
@@ -254,26 +274,29 @@ export default function MainAppLayout({
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-        Carregando...
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
       </div>
     );
   }
 
-  if (!user) {
+  // This check should be sufficient as loading is false here.
+  if (!appUser) {
      const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
      const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
      if (!isAllowedPath) {
-        
         return (
          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
             Redirecionando para login...
           </div>
         );
      }
+     // Allow rendering children for allowed unauthenticated paths if needed
+     // Or just return null if the layout shouldn't render anything for these paths
+     // This assumes children will handle their own content or redirection.
   }
   
-  const activeColorClass = user?.role === UserRole.PARTNER ? 'text-destructive' : 'text-primary';
-  const activeBorderColorClass = user?.role === UserRole.PARTNER ? 'border-destructive' : 'border-primary';
+  const activeColorClass = appUser?.role === UserRole.PARTNER ? 'text-destructive' : 'text-primary';
+  const activeBorderColorClass = appUser?.role === UserRole.PARTNER ? 'border-destructive' : 'border-primary';
 
 
   return (
@@ -282,7 +305,7 @@ export default function MainAppLayout({
         <div className="container flex items-center h-16 max-w-screen-2xl">
           <Logo iconClassName={activeColorClass} />
           <nav className="flex items-center gap-2 ml-auto md:gap-4">
-            {user?.role === UserRole.USER && (
+            {appUser?.role === UserRole.USER && (
               <>
                 <Link href="/map" passHref>
                   <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={cn(pathname === '/map' ? activeColorClass : '', 'hover:bg-primary/10')}>
@@ -311,30 +334,37 @@ export default function MainAppLayout({
                   {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
                   <span className="sr-only">Notificações</span>
                 </Button>
-                <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: "Recurso em breve! Você ganhará FervoCoins ao compartilhar eventos com amigos. Cada compartilhamento vale 2 moedas!", variant: "default"})}>
-                  <Coins className="w-5 h-5" />
-                  <span className="sr-only">Moedas</span>
-                </Button>
+                 <div className="relative">
+                    <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${appUser.fervoCoins || 0} moedas. Ganhe mais compartilhando eventos!`, variant: "default"})}>
+                    <Coins className="w-5 h-5" />
+                    <span className="sr-only">Moedas</span>
+                    </Button>
+                     {appUser.fervoCoins !== undefined && appUser.fervoCoins > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-accent-foreground text-[10px] font-bold">
+                         {appUser.fervoCoins > 9 ? '9+' : appUser.fervoCoins}
+                        </span>
+                    )}
+                 </div>
                 <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Cupons", description: "Recurso em breve!", variant: "default"})}>
                   <TicketPercent className="w-5 h-5" />
                   <span className="sr-only">Cupons de Desconto</span>
                 </Button>
               </>
             )}
-            {user?.role === UserRole.PARTNER && (
+            {appUser?.role === UserRole.PARTNER && (
               <Link href="/partner/dashboard" passHref>
                 <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={cn(pathname === '/partner/dashboard' ? activeColorClass : '', 'hover:bg-destructive/10')}>
                  <LayoutDashboard className="w-4 h-4 mr-2" /> Meu Painel
                 </Button>
               </Link>
             )}
-            {user && ( 
+            {appUser && ( 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
-                  {user?.name ? (
+                  {appUser?.name ? (
                     <span className={`text-lg font-semibold ${activeColorClass}`}>
-                      {user.name.charAt(0).toUpperCase()}
+                      {appUser.name.charAt(0).toUpperCase()}
                     </span>
                   ) : (
                     <UserCircle className={`w-6 h-6 ${activeColorClass}`} />
@@ -344,26 +374,26 @@ export default function MainAppLayout({
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user?.name || (user?.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo")}</p>
+                    <p className="text-sm font-medium leading-none">{appUser?.name || (appUser?.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo")}</p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      {user?.email}
+                      {appUser?.email}
                     </p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {user?.role === UserRole.USER && (
+                {appUser?.role === UserRole.USER && (
                   <DropdownMenuItem onClick={() => router.push('/user/profile')}>
                     <UserCircle className="w-4 h-4 mr-2" />
                     Meu Perfil
                   </DropdownMenuItem>
                 )}
-                 {user?.role === UserRole.PARTNER && (
+                 {appUser?.role === UserRole.PARTNER && (
                   <DropdownMenuItem onClick={() => router.push('/partner-questionnaire')}>
                     <Settings className="w-4 h-4 mr-2" />
                     Configurações do Local
                   </DropdownMenuItem>
                 )}
-                 {user?.role === UserRole.PARTNER && (
+                 {appUser?.role === UserRole.PARTNER && (
                   <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
                     <Settings className="w-4 h-4 mr-2" /> 
                     Configurações da Conta
@@ -380,15 +410,14 @@ export default function MainAppLayout({
           </nav>
         </div>
       </header>
-      <main className="flex-1">{user || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p)) ? children : null}</main>
-      {user && user.role === UserRole.USER && user.uid && (
+      <main className="flex-1">{appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p)) ? children : null}</main>
+      {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal 
           isOpen={isQrScannerOpen} 
           onClose={() => setIsQrScannerOpen(false)}
-          userId={user.uid}
+          userId={appUser.uid}
         />
       )}
     </div>
   );
 }
-
