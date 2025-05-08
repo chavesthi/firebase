@@ -7,7 +7,7 @@ import type { NextPage } from 'next';
 // import Image from 'next/image'; // No longer used directly for venue image
 import { useRouter } from 'next/navigation'; 
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send } from 'lucide-react';
-import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, getDoc, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -357,70 +357,73 @@ const MapContentAndLogic = () => {
     }
   }, []);
 
+  // Real-time fetching of venues
   useEffect(() => {
-    const fetchVenues = async () => {
-      setIsLoadingVenues(true);
-      try {
-        const usersCollectionRef = collection(firestore, 'users');
-        const qPartners = query(
-          usersCollectionRef,
-          where('role', '==', UserRole.PARTNER),
-          where('questionnaireCompleted', '==', true)
-        );
-        const partnersSnapshot = await getDocs(qPartners);
+    setIsLoadingVenues(true);
+    const usersCollectionRef = collection(firestore, 'users');
+    const qPartners = query(
+      usersCollectionRef,
+      where('role', '==', UserRole.PARTNER),
+      where('questionnaireCompleted', '==', true)
+    );
+
+    const unsubscribeVenues = onSnapshot(qPartners, async (partnersSnapshot) => {
+      const venuePromises = partnersSnapshot.docs.map(async (partnerDoc) => {
+        const partnerData = partnerDoc.data();
         
-        const venuePromises = partnersSnapshot.docs.map(async (partnerDoc) => {
-          const partnerData = partnerDoc.data();
-          
-          let hasActiveEvent = false;
-          let activeEventName: string | null = null;
+        let hasActiveEvent = false;
+        let activeEventName: string | null = null;
 
-          const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
-          const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
-          const eventsSnapshot = await getDocs(eventsQuery);
+        // Fetch events for this partner to determine active status
+        // This is a one-time fetch per partner update for performance reasons
+        // rather than listening to all events of all partners constantly.
+        const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
+        const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
+        const eventsSnapshot = await getDocs(eventsQuery);
 
-          if (!eventsSnapshot.empty) {
-            for (const eventDoc of eventsSnapshot.docs) {
-              const eventData = eventDoc.data();
-              if (eventData.startDateTime && eventData.endDateTime && 
-                  isEventHappeningNow(eventData.startDateTime as FirebaseTimestamp, eventData.endDateTime as FirebaseTimestamp)) {
-                hasActiveEvent = true;
-                activeEventName = eventData.eventName as string;
-                break; 
-              }
+        if (!eventsSnapshot.empty) {
+          for (const eventDoc of eventsSnapshot.docs) {
+            const eventData = eventDoc.data();
+            if (eventData.startDateTime && eventData.endDateTime && 
+                isEventHappeningNow(eventData.startDateTime as FirebaseTimestamp, eventData.endDateTime as FirebaseTimestamp)) {
+              hasActiveEvent = true;
+              activeEventName = eventData.eventName as string;
+              break; 
             }
           }
+        }
 
-          return {
-            id: partnerDoc.id,
-            name: partnerData.venueName || 'Nome Indisponível',
-            type: partnerData.venueType as VenueType,
-            musicStyles: partnerData.musicStyles || [],
-            location: partnerData.location,
-            youtubeUrl: partnerData.youtubeUrl,
-            instagramUrl: partnerData.instagramUrl,
-            facebookUrl: partnerData.facebookUrl,
-            whatsappPhone: partnerData.whatsappPhone,
-            averageVenueRating: partnerData.averageVenueRating, 
-            venueRatingCount: partnerData.venueRatingCount,     
-            hasActiveEvent,
-            activeEventName,
-          };
-        });
+        return {
+          id: partnerDoc.id,
+          name: partnerData.venueName || 'Nome Indisponível',
+          type: partnerData.venueType as VenueType,
+          musicStyles: partnerData.musicStyles || [],
+          location: partnerData.location,
+          youtubeUrl: partnerData.youtubeUrl,
+          instagramUrl: partnerData.instagramUrl,
+          facebookUrl: partnerData.facebookUrl,
+          whatsappPhone: partnerData.whatsappPhone,
+          averageVenueRating: partnerData.averageVenueRating, 
+          venueRatingCount: partnerData.venueRatingCount,     
+          hasActiveEvent,
+          activeEventName,
+        };
+      });
 
-        const fetchedVenues = (await Promise.all(venuePromises))
-          .filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
-        
-        setVenues(fetchedVenues);
-      } catch (error) {
-        console.error("Error fetching venues:", error);
-      } finally {
-        setIsLoadingVenues(false);
-      }
-    };
+      const fetchedVenues = (await Promise.all(venuePromises))
+        .filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
+      
+      setVenues(fetchedVenues);
+      setIsLoadingVenues(false);
+    }, (error) => {
+      console.error("Error fetching venues with onSnapshot:", error);
+      toast({ title: "Erro ao Carregar Locais", description: "Não foi possível buscar os locais em tempo real.", variant: "destructive" });
+      setIsLoadingVenues(false);
+    });
 
-    fetchVenues();
-  }, []);
+    return () => unsubscribeVenues(); // Cleanup listener
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array to run once and set up listener
 
   const fetchVenueEvents = async (venueId: string) => {
     if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return; 
@@ -583,18 +586,11 @@ const MapContentAndLogic = () => {
         setCurrentComment('');
         setCurrentlyRatingEventId(null);
         
+        // Trigger update of partner's overall rating AFTER the transaction
         if (selectedVenue) {
             await updatePartnerOverallRating(selectedVenue.id);
-            const updatedVenueDoc = await getDoc(doc(firestore, 'users', selectedVenue.id));
-            if (updatedVenueDoc.exists()) {
-                const updatedData = updatedVenueDoc.data();
-                setSelectedVenue(prev => prev ? {
-                    ...prev,
-                    averageVenueRating: updatedData.averageVenueRating,
-                    venueRatingCount: updatedData.venueRatingCount
-                } : null);
-                setVenues(prevVenues => prevVenues.map(v => v.id === selectedVenue.id ? {...v, averageVenueRating: updatedData.averageVenueRating, venueRatingCount: updatedData.venueRatingCount} : v));
-            }
+            // No need to manually update local state for partner rating here, 
+            // as the onSnapshot listener for venues should pick up the change.
         }
 
     } catch (error: any) {
@@ -919,7 +915,13 @@ const MapContentAndLogic = () => {
                               {currentUser && userHasCheckedIn && !userHasRated && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
                                   <h4 className="text-sm font-semibold text-primary mb-1.5">Avalie este evento:</h4>
-                                  <StarRating rating={currentlyRatingEventId === event.id ? currentRating : 0} setRating={setCurrentRating} />
+                                  <StarRating 
+                                    rating={currentlyRatingEventId === event.id ? currentRating : 0} 
+                                    setRating={setCurrentRating} 
+                                    readOnly={isSubmittingRating && currentlyRatingEventId === event.id} 
+                                    totalStars={5}
+                                    size={20}
+                                  />
                                   <Textarea 
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
@@ -929,16 +931,18 @@ const MapContentAndLogic = () => {
                                     }}
                                     className="mt-2 text-xs"
                                     rows={2}
+                                    disabled={isSubmittingRating && currentlyRatingEventId === event.id}
                                   />
                                   <Button 
                                     size="sm" 
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
                                         if(currentlyRatingEventId !== event.id) { 
-                                            setCurrentRating(0);
+                                            // Reset if starting to rate a different event
+                                            setCurrentRating(0); 
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id);
+                                        setCurrentlyRatingEventId(event.id); // Ensure correct event ID is set before submitting
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1039,3 +1043,4 @@ const MapPage: NextPage = () => {
 export default MapPage;
 
     
+

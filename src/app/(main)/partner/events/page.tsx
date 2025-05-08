@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 
@@ -82,6 +82,8 @@ interface EventDocument extends EventFormInputs {
   updatedAt?: Timestamp;
   checkInToken?: string; 
   pricingValue?: number | null; // Allow null for Firestore
+  averageRating?: number; // Added for potential future use or display
+  ratingCount?: number;   // Added for potential future use or display
 }
 
 const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
@@ -118,37 +120,54 @@ const ManageEventsPage: NextPage = () => {
 
   const watchedPricingType = watch('pricingType');
 
-  const fetchEvents = async (userId: string) => {
-    if (!userId) return;
-    setLoading(true);
-    try {
-      const eventsCollectionRef = collection(firestore, 'users', userId, 'events');
-      const q = query(eventsCollectionRef); 
-      const snapshot = await getDocs(q);
-      const eventsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as EventDocument)).sort((a,b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-      setPartnerEvents(eventsData);
-    } catch (error) {
-      console.error("Error fetching events:", error);
-      toast({ title: "Erro ao buscar eventos", variant: "destructive" });
-    }
-    setLoading(false);
-  };
-
+  // Listener for real-time event updates
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    let unsubscribeEvents: (() => void) | null = null;
+    
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
-        fetchEvents(user.uid);
+        setLoading(true); // Start loading when user is confirmed
+
+        const eventsCollectionRef = collection(firestore, 'users', user.uid, 'events');
+        const q = query(eventsCollectionRef, orderBy('createdAt', 'desc')); // Order by creation time
+
+        // Detach previous listener if exists
+        if (unsubscribeEvents) {
+          unsubscribeEvents();
+        }
+
+        unsubscribeEvents = onSnapshot(q, (snapshot) => {
+          const eventsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          } as EventDocument));
+          setPartnerEvents(eventsData);
+          setLoading(false); // Stop loading after initial data load or update
+        }, (error) => {
+          console.error("Error fetching events with onSnapshot:", error);
+          toast({ title: "Erro ao buscar eventos", variant: "destructive" });
+          setLoading(false); // Stop loading on error
+        });
+
       } else {
         router.push('/login');
+        // Cleanup listener if user logs out
+        if (unsubscribeEvents) {
+          unsubscribeEvents();
+        }
       }
     });
-    return () => unsubscribe();
-  }, [router, toast]);
 
+    return () => {
+      unsubscribeAuth();
+      // Cleanup listener on component unmount
+      if (unsubscribeEvents) {
+        unsubscribeEvents();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, toast]); // currentUser dependency removed as auth state handles it
 
   const combineDateAndTime = (date: Date, time: string): Timestamp => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -164,11 +183,11 @@ const ManageEventsPage: NextPage = () => {
     }
 
     const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
-
-    if (!editingEventId) { 
-        const visibleEventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
-        const visibleEventsSnapshot = await getDocs(visibleEventsQuery);
-        if (visibleEventsSnapshot.size >= 5 && data.visibility) {
+    
+    // Check visible event limit only when adding a new visible event
+    if (!editingEventId && data.visibility) { 
+        const visibleEvents = partnerEvents.filter(event => event.visibility);
+        if (visibleEvents.length >= 5) {
             toast({
                 title: "Limite de Eventos Visíveis Atingido",
                 description: "Você pode ter no máximo 5 eventos visíveis. Crie como não visível ou oculte um evento existente.",
@@ -180,12 +199,9 @@ const ManageEventsPage: NextPage = () => {
     }
 
     const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
-    // Generate checkInToken if it's a new event or if an existing event doesn't have one.
-    // Ensures token is a random string of 10 characters, good enough for uniqueness per partner.
     const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10);
 
-
-    const eventPayload: Omit<EventDocument, 'id' | 'createdAt'> & { createdAt?: Timestamp, pricingValue?: number | null } = {
+    const eventPayload: Omit<EventDocument, 'id' | 'createdAt' | 'averageRating' | 'ratingCount'> & { createdAt?: Timestamp, pricingValue?: number | null, updatedAt?: Timestamp, averageRating?: number, ratingCount?: number } = {
       partnerId: currentUser.uid,
       eventName: data.eventName,
       startDateTime: combineDateAndTime(data.startDate, data.startTime),
@@ -196,25 +212,25 @@ const ManageEventsPage: NextPage = () => {
       description: data.description || '',
       visibility: data.visibility,
       checkInToken: checkInToken,
-      updatedAt: serverTimestamp(),
     };
-    
 
     try {
       if (editingEventId) {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', editingEventId);
-        // Retain original createdAt if editing
-        eventPayload.createdAt = existingEvent?.createdAt;
-        await updateDoc(eventDocRef, eventPayload as any); // Use 'as any' to bypass strict type checking for optional fields if needed
+        eventPayload.createdAt = existingEvent?.createdAt; // Preserve original createdAt
+        eventPayload.updatedAt = serverTimestamp(); 
+        await updateDoc(eventDocRef, eventPayload as any); 
         toast({ title: "Evento Atualizado!", description: "O evento foi atualizado com sucesso." });
       } else {
         eventPayload.createdAt = serverTimestamp();
+        eventPayload.averageRating = 0; // Initialize rating fields for new events
+        eventPayload.ratingCount = 0;
         await addDoc(eventsCollectionRef, eventPayload as any); 
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
       reset(); 
       setEditingEventId(null);
-      fetchEvents(currentUser.uid); 
+      // No need to call fetchEvents manually, onSnapshot will update the list
     } catch (error) {
       console.error("Error saving event:", error);
       toast({ title: "Erro ao Salvar Evento", description: "Não foi possível salvar o evento.", variant: "destructive" });
@@ -255,7 +271,7 @@ const ManageEventsPage: NextPage = () => {
       await batch.commit();
       
       toast({ title: "Evento Excluído", description: "O evento e suas avaliações foram excluídos com sucesso." });
-      fetchEvents(currentUser.uid);
+      // No need to call fetchEvents, onSnapshot handles update
       if (editingEventId === eventId) {
         setEditingEventId(null);
         reset();
@@ -272,18 +288,8 @@ const ManageEventsPage: NextPage = () => {
     const newVisibility = !event.visibility;
 
     if (newVisibility) { 
-        const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
-        const visibleEventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
-        const visibleEventsSnapshot = await getDocs(visibleEventsQuery);
-        
-        let visibleCount = 0;
-        visibleEventsSnapshot.docs.forEach(doc => {
-            if (doc.id !== event.id) { 
-                visibleCount++;
-            }
-        });
-        
-        if (visibleCount >= 5) {
+        const visibleEvents = partnerEvents.filter(e => e.visibility && e.id !== event.id);
+        if (visibleEvents.length >= 5) {
              toast({
                 title: "Limite de Eventos Visíveis Atingido",
                 description: "Você pode ter no máximo 5 eventos visíveis. Oculte outro evento para tornar este visível.",
@@ -294,23 +300,21 @@ const ManageEventsPage: NextPage = () => {
         }
     }
 
-
     try {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', event.id);
       await updateDoc(eventDocRef, { visibility: newVisibility, updatedAt: serverTimestamp() });
       toast({ title: `Visibilidade Alterada`, description: `Evento agora está ${newVisibility ? 'visível' : 'oculto'}.` });
-      fetchEvents(currentUser.uid);
+      // No need to call fetchEvents, onSnapshot handles update
     } catch (error) {
       console.error("Error toggling visibility:", error);
       toast({ title: "Erro ao Alterar Visibilidade", variant: "destructive" });
     }
   };
 
-
   if (loading && !currentUser) { 
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <p className="text-xl text-destructive animate-pulse">Carregando...</p>
+        <Loader2 className="w-12 h-12 text-destructive animate-spin" />
       </div>
     );
   }
@@ -468,7 +472,7 @@ const ManageEventsPage: NextPage = () => {
           <CardDescription className="text-xs sm:text-sm">Gerencie seus eventos existentes.</CardDescription>
         </CardHeader>
         <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-          {loading && <p className="text-center text-muted-foreground">Carregando eventos...</p>}
+          {loading && partnerEvents.length === 0 && <p className="text-center text-muted-foreground"><Loader2 className="inline w-4 h-4 mr-2 animate-spin"/> Carregando eventos...</p>}
           {!loading && partnerEvents.length === 0 && (
             <p className="text-center text-muted-foreground">Nenhum evento cadastrado ainda.</p>
           )}

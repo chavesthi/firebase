@@ -17,7 +17,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
@@ -44,7 +44,7 @@ const useAuth = () => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         const userDocRef = doc(firestore, "users", firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
+        const userDocSnap = await getDoc(userDocRef); // Changed from userDoc to userDocSnap for consistency
         let userRole: UserRole | null = null;
         let userName: string = firebaseUser.displayName || "Usuário";
         let preferredVenueTypes: VenueType[] = [];
@@ -53,8 +53,8 @@ const useAuth = () => {
         let lastNotificationCheckTimestamp: FirebaseTimestamp | undefined = undefined;
 
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
+        if (userDocSnap.exists()) { // Changed from userDoc to userDocSnap
+          const userData = userDocSnap.data();
           userRole = userData.role as UserRole || null;
           userName = userData.name || userName; 
           preferredVenueTypes = userData.preferredVenueTypes || [];
@@ -103,7 +103,7 @@ export default function MainAppLayout({
   const pathname = usePathname();
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
-  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
+  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); // Used for click action, not for bell pulsing
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
@@ -117,48 +117,46 @@ export default function MainAppLayout({
     }
   }, [user, loading, router, pathname]);
 
+  // Real-time check for new partner notifications
   useEffect(() => {
     if (loading || !user || !user.uid || !user.questionnaireCompleted || user.role !== UserRole.USER) {
       setHasNewNotifications(false);
       return;
     }
 
-    const checkNewNotifications = async () => {
-      const userLastCheck = user.lastNotificationCheckTimestamp?.toDate() || new Date(0); 
+    const userLastCheck = user.lastNotificationCheckTimestamp?.toDate() || new Date(0);
+    
+    const partnersRef = collection(firestore, 'users');
+    const q = query(partnersRef,
+      where('role', '==', UserRole.PARTNER),
+      where('questionnaireCompleted', '==', true)
+    );
 
-      const partnersRef = collection(firestore, 'users');
-      const q = query(partnersRef,
-        where('role', '==', UserRole.PARTNER),
-        where('questionnaireCompleted', '==', true)
-      );
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      let foundNew = false;
+      for (const partnerDoc of querySnapshot.docs) {
+        const partnerData = partnerDoc.data();
+        const partnerProfileCompletedAt = (partnerData.questionnaireCompletedAt as FirebaseTimestamp)?.toDate();
 
-      try {
-        const querySnapshot = await getDocs(q);
-        let foundNew = false;
-        for (const partnerDoc of querySnapshot.docs) {
-          const partnerData = partnerDoc.data();
-          const partnerProfileCompletedAt = (partnerData.questionnaireCompletedAt as FirebaseTimestamp)?.toDate();
+        if (!partnerProfileCompletedAt) continue;
 
-          if (!partnerProfileCompletedAt) continue; 
+        if (partnerProfileCompletedAt > userLastCheck) {
+          const typeMatch = user.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
+          const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => user.preferredMusicStyles?.includes(style));
 
-          if (partnerProfileCompletedAt > userLastCheck) {
-            const typeMatch = user.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
-            const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => user.preferredMusicStyles?.includes(style));
-
-            if (typeMatch || styleMatch) {
-              foundNew = true;
-              break;
-            }
+          if (typeMatch || styleMatch) {
+            foundNew = true;
+            break;
           }
         }
-        setHasNewNotifications(foundNew);
-      } catch (error) {
-        console.error("Error checking for new notifications:", error);
-        setHasNewNotifications(false);
       }
-    };
+      setHasNewNotifications(foundNew);
+    }, (error) => {
+      console.error("Error listening for new partner notifications:", error);
+      setHasNewNotifications(false);
+    });
 
-    checkNewNotifications();
+    return () => unsubscribe(); // Cleanup listener on component unmount or when dependencies change
   }, [user, loading]);
 
 
@@ -194,16 +192,19 @@ export default function MainAppLayout({
        return;
     }
 
-    setIsFetchingNotifications(true);
-    let foundNewForToast = false;
+    setIsFetchingNotifications(true); // For the click action spinner
+    // The actual new venues list for the toast will be fetched here on click, 
+    // as the `hasNewNotifications` state is now just for the bell icon.
     try {
       const partnersRef = collection(firestore, 'users');
       const q = query(partnersRef,
         where('role', '==', UserRole.PARTNER),
-        where('questionnaireCompleted', '==', true)
+        where('questionnaireCompleted', '==', true),
+        // We fetch all and filter client-side for the toast message to show names
       );
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(q); // Using getDocs for the click action
       const allVenues: Array<{ id: string, venueName: string, venueType: VenueType, musicStyles: MusicStyle[] }> = [];
+      
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         if(data.venueName && data.venueType) { 
@@ -226,7 +227,6 @@ export default function MainAppLayout({
           });
     
           if (matchingVenues.length > 0) {
-            foundNewForToast = true;
             const venueNames = matchingVenues.slice(0, 2).map(v => v.venueName).join(', ');
             const andMore = matchingVenues.length > 2 ? ` e mais ${matchingVenues.length - 2}!` : '.';
             toast({
@@ -239,12 +239,12 @@ export default function MainAppLayout({
           }
       }
 
-      // Update last check timestamp and clear notification indicator
+      // Update last check timestamp and this will make the bell stop pulsing via the onSnapshot listener
       const userDocRef = doc(firestore, "users", user.uid);
       await updateDoc(userDocRef, {
         lastNotificationCheckTimestamp: serverTimestamp()
       });
-      setHasNewNotifications(false);
+      // setHasNewNotifications(false); // This will be handled by the onSnapshot listener reacting to the timestamp update
 
     } catch (error) {
       console.error("Error fetching notifications data or updating timestamp:", error);
@@ -267,6 +267,7 @@ export default function MainAppLayout({
      const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
      const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
      if (!isAllowedPath) {
+        // Router push is handled by useEffect above, this is a fallback UI
         return (
          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
             Redirecionando para login...
@@ -383,7 +384,7 @@ export default function MainAppLayout({
           </nav>
         </div>
       </header>
-      <main className="flex-1">{user ? children : null}</main>
+      <main className="flex-1">{user || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p)) ? children : null}</main>
       {user && user.role === UserRole.USER && user.uid && (
         <QrScannerModal 
           isOpen={isQrScannerOpen} 
