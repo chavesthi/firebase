@@ -433,11 +433,10 @@ const PartnerQuestionnairePage: NextPage = () => {
                             <GoogleMap
                                 defaultCenter={initialMapCenter}
                                 defaultZoom={venueLocation ? 17 : 3}
-                                mapId="partnerQuestionnaireMap"
+                                mapId="ec411dbe9f75cb23"
                                 gestureHandling="greedy"
                                 disableDefaultUI={true}
                                 className="w-full h-full"
-                                options={{ styles: [ { elementType: "geometry", stylers: [{ color: "#242f3e" }] }, { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] }, { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] } ]}} 
                             >
                                 <MapUpdater center={venueLocation || initialMapCenter} />
                                 {venueLocation && <Marker position={venueLocation} title={watch('venueName') || "Seu Local"} />}
