@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, updateDoc, getDoc } from 'firebase/firestore'; // Added getDoc
+import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // Added getDoc and serverTimestamp
 import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
 
 import { Button } from '@/components/ui/button';
@@ -74,6 +74,8 @@ const PartnerQuestionnairePage: NextPage = () => {
   const [venueLocation, setVenueLocation] = useState<Location | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isProfileLocked, setIsProfileLocked] = useState(false);
+  const [initialQuestionnaireCompletedState, setInitialQuestionnaireCompletedState] = useState(false);
+
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch, getValues, setValue, reset } = useForm<PartnerQuestionnaireFormInputs>({
     resolver: zodResolver(partnerQuestionnaireSchema),
@@ -104,6 +106,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
+          setInitialQuestionnaireCompletedState(userData.questionnaireCompleted || false);
           if (userData.questionnaireCompleted) {
             setIsProfileLocked(true);
             toast({
@@ -136,6 +139,7 @@ const PartnerQuestionnairePage: NextPage = () => {
           }
         } else {
           setIsProfileLocked(false);
+          setInitialQuestionnaireCompletedState(false);
         }
       } else {
         router.push('/login');
@@ -199,18 +203,21 @@ const PartnerQuestionnairePage: NextPage = () => {
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
       
-      let dataToUpdate: any = {};
+      let dataToUpdate: any = {
+        questionnaireCompleted: true, // Always set this on successful submission
+      };
 
       if (isProfileLocked) {
         dataToUpdate = {
+          ...dataToUpdate,
           instagramUrl: data.instagramUrl,
           facebookUrl: data.facebookUrl,
           youtubeUrl: data.youtubeUrl,
           whatsappPhone: data.whatsappPhone,
-          questionnaireCompleted: true, 
         };
       } else {
         dataToUpdate = {
+          ...dataToUpdate,
           venueName: data.venueName,
           venueType: data.venueType,
           musicStyles: data.musicStyles || [],
@@ -228,10 +235,13 @@ const PartnerQuestionnairePage: NextPage = () => {
           facebookUrl: data.facebookUrl,
           youtubeUrl: data.youtubeUrl,
           whatsappPhone: data.whatsappPhone,
-          questionnaireCompleted: true,
-          averageVenueRating: 0, // Initialize overall rating fields
-          venueRatingCount: 0,   // Initialize overall rating fields
+          averageVenueRating: 0, 
+          venueRatingCount: 0,   
         };
+        // Only set questionnaireCompletedAt if it's the first time completing
+        if (!initialQuestionnaireCompletedState) {
+            dataToUpdate.questionnaireCompletedAt = serverTimestamp();
+        }
       }
       
       ['phone', 'instagramUrl', 'facebookUrl', 'youtubeUrl', 'whatsappPhone'].forEach(key => {
@@ -250,6 +260,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       
       if (!isProfileLocked) { 
         setIsProfileLocked(true); 
+        setInitialQuestionnaireCompletedState(true); // Update local state to reflect completion
       }
     } catch (error) {
       console.error("Error saving partner questionnaire:", error);
@@ -507,3 +518,4 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
+

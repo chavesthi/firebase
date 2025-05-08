@@ -17,10 +17,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
+import { cn } from '@/lib/utils';
 
 
 interface AppUser {
@@ -31,6 +32,7 @@ interface AppUser {
   preferredVenueTypes?: VenueType[];
   preferredMusicStyles?: MusicStyle[];
   questionnaireCompleted?: boolean;
+  lastNotificationCheckTimestamp?: FirebaseTimestamp;
 }
 
 const useAuth = () => {
@@ -48,6 +50,7 @@ const useAuth = () => {
         let preferredVenueTypes: VenueType[] = [];
         let preferredMusicStyles: MusicStyle[] = [];
         let questionnaireCompleted: boolean = false;
+        let lastNotificationCheckTimestamp: FirebaseTimestamp | undefined = undefined;
 
 
         if (userDoc.exists()) {
@@ -57,6 +60,7 @@ const useAuth = () => {
           preferredVenueTypes = userData.preferredVenueTypes || [];
           preferredMusicStyles = userData.preferredMusicStyles || [];
           questionnaireCompleted = userData.questionnaireCompleted || false;
+          lastNotificationCheckTimestamp = userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined;
         } else {
            if (pathname.includes('/partner')) {
             userRole = UserRole.PARTNER;
@@ -74,6 +78,7 @@ const useAuth = () => {
           preferredVenueTypes,
           preferredMusicStyles,
           questionnaireCompleted,
+          lastNotificationCheckTimestamp,
         });
       } else {
         setAppUser(null);
@@ -99,6 +104,7 @@ export default function MainAppLayout({
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
+  const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -110,6 +116,50 @@ export default function MainAppLayout({
       }
     }
   }, [user, loading, router, pathname]);
+
+  useEffect(() => {
+    if (loading || !user || !user.uid || !user.questionnaireCompleted || user.role !== UserRole.USER) {
+      setHasNewNotifications(false);
+      return;
+    }
+
+    const checkNewNotifications = async () => {
+      const userLastCheck = user.lastNotificationCheckTimestamp?.toDate() || new Date(0); 
+
+      const partnersRef = collection(firestore, 'users');
+      const q = query(partnersRef,
+        where('role', '==', UserRole.PARTNER),
+        where('questionnaireCompleted', '==', true)
+      );
+
+      try {
+        const querySnapshot = await getDocs(q);
+        let foundNew = false;
+        for (const partnerDoc of querySnapshot.docs) {
+          const partnerData = partnerDoc.data();
+          const partnerProfileCompletedAt = (partnerData.questionnaireCompletedAt as FirebaseTimestamp)?.toDate();
+
+          if (!partnerProfileCompletedAt) continue; 
+
+          if (partnerProfileCompletedAt > userLastCheck) {
+            const typeMatch = user.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
+            const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => user.preferredMusicStyles?.includes(style));
+
+            if (typeMatch || styleMatch) {
+              foundNew = true;
+              break;
+            }
+          }
+        }
+        setHasNewNotifications(foundNew);
+      } catch (error) {
+        console.error("Error checking for new notifications:", error);
+        setHasNewNotifications(false);
+      }
+    };
+
+    checkNewNotifications();
+  }, [user, loading]);
 
 
   const handleLogout = async () => {
@@ -145,6 +195,7 @@ export default function MainAppLayout({
     }
 
     setIsFetchingNotifications(true);
+    let foundNewForToast = false;
     try {
       const partnersRef = collection(firestore, 'users');
       const q = query(partnersRef,
@@ -155,7 +206,7 @@ export default function MainAppLayout({
       const allVenues: Array<{ id: string, venueName: string, venueType: VenueType, musicStyles: MusicStyle[] }> = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        if(data.venueName && data.venueType) { // Ensure essential data exists
+        if(data.venueName && data.venueType) { 
             allVenues.push({
                 id: doc.id,
                 venueName: data.venueName,
@@ -167,28 +218,36 @@ export default function MainAppLayout({
 
       if (allVenues.length === 0) {
         toast({ title: "Nenhum Fervo Encontrado", description: "Ainda não há locais parceiros cadastrados." });
-        return;
-      }
-
-      const matchingVenues = allVenues.filter(venue => {
-        const typeMatch = userPrefs.venueTypes.includes(venue.venueType);
-        const styleMatch = Array.isArray(venue.musicStyles) && venue.musicStyles.some(style => userPrefs.musicStyles.includes(style));
-        return typeMatch || styleMatch;
-      });
-
-      if (matchingVenues.length > 0) {
-        const venueNames = matchingVenues.slice(0, 2).map(v => v.venueName).join(', ');
-        const andMore = matchingVenues.length > 2 ? ` e mais ${matchingVenues.length - 2}!` : '.';
-        toast({
-          title: "Novos Fervos que Combinam com Você!",
-          description: `Encontramos: ${venueNames}${andMore} Explore no mapa!`,
-          duration: 7000,
-        });
       } else {
-        toast({ title: "Nada de Novo por Enquanto", description: "Nenhum Fervo encontrado que corresponda às suas preferências atuais. Explore o mapa para descobrir mais!", duration: 7000 });
+          const matchingVenues = allVenues.filter(venue => {
+            const typeMatch = userPrefs.venueTypes.includes(venue.venueType);
+            const styleMatch = Array.isArray(venue.musicStyles) && venue.musicStyles.some(style => userPrefs.musicStyles.includes(style));
+            return typeMatch || styleMatch;
+          });
+    
+          if (matchingVenues.length > 0) {
+            foundNewForToast = true;
+            const venueNames = matchingVenues.slice(0, 2).map(v => v.venueName).join(', ');
+            const andMore = matchingVenues.length > 2 ? ` e mais ${matchingVenues.length - 2}!` : '.';
+            toast({
+              title: "Novos Fervos que Combinam com Você!",
+              description: `Encontramos: ${venueNames}${andMore} Explore no mapa!`,
+              duration: 7000,
+            });
+          } else {
+            toast({ title: "Nada de Novo por Enquanto", description: "Nenhum Fervo encontrado que corresponda às suas preferências atuais. Explore o mapa para descobrir mais!", duration: 7000 });
+          }
       }
+
+      // Update last check timestamp and clear notification indicator
+      const userDocRef = doc(firestore, "users", user.uid);
+      await updateDoc(userDocRef, {
+        lastNotificationCheckTimestamp: serverTimestamp()
+      });
+      setHasNewNotifications(false);
+
     } catch (error) {
-      console.error("Error fetching notifications data:", error);
+      console.error("Error fetching notifications data or updating timestamp:", error);
       toast({ title: "Erro ao Buscar Sugestões", description: "Não foi possível verificar novos Fervos.", variant: "destructive" });
     } finally {
       setIsFetchingNotifications(false);
@@ -247,7 +306,7 @@ export default function MainAppLayout({
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className={activeColorClass} 
+                  className={cn(activeColorClass, hasNewNotifications && 'animate-pulse')}
                   onClick={handleNotificationsClick}
                   disabled={isFetchingNotifications}
                   title="Verificar novos Fervos"
@@ -335,3 +394,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
