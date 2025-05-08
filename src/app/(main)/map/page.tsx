@@ -14,7 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle as UICardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS } from '@/lib/constants';
+import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
 import { 
   IconBar, 
@@ -661,11 +661,17 @@ const MapContentAndLogic = () => {
       try {
         const userDocRef = doc(firestore, "users", currentUser.uid);
         await updateDoc(userDocRef, {
-            fervoCoins: increment(2)
+            fervoCoins: increment(FERVO_COINS_SHARE_REWARD)
         });
-        toast({ title: "Recompensa!", description: "Você ganhou 2 FervoCoins por compartilhar!", variant: "default", duration: 3000 });
+        toast({ title: "Recompensa!", description: `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins por compartilhar!`, variant: "default", duration: 3000 });
       } catch (coinError) {
         console.error("Error awarding FervoCoins:", coinError);
+        toast({ 
+          title: "Erro na Recompensa", 
+          description: `Não foi possível adicionar suas ${FERVO_COINS_SHARE_REWARD} FervoCoins desta vez. Tente compartilhar novamente mais tarde.`, 
+          variant: "destructive",
+          duration: 5000
+        });
       }
     }
   };
@@ -1103,3 +1109,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
