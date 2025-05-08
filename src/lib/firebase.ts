@@ -13,7 +13,7 @@ const firebaseConfig = {
   authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
   databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
   projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected from .firebasestorage.app
+  storageBucket: "fervoappusuarioeparceiro.firebasestorage.app", // Updated as per user request
   messagingSenderId: "762698655248",
   appId: "1:762698655248:web:ef79742c8b4e53eccb0c95",
   measurementId: "G-GXSK4Y4P7V"
@@ -68,3 +68,4 @@ if (!getApps().length) {
 
 
 export { app, auth, firestore, analytics, googleAuthProvider };
+
