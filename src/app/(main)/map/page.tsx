@@ -608,34 +608,64 @@ const MapContentAndLogic = () => {
     }
 
     const shareUrl = `${window.location.origin}/shared-event/${partnerId}/${eventId}`;
-    try {
-      if (navigator.share) {
+    let sharedSuccessfully = false;
+
+    if (navigator.share) {
+      try {
         await navigator.share({
           title: `Confira este Fervo: ${selectedVenue?.name} - ${selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento'}`,
           text: `Olha esse evento que encontrei no Fervo App!`,
           url: shareUrl,
         });
-        toast({ title: "Compartilhado!", description: "Você ganhou 2 FervoCoins!", variant: "default", duration: 4000 });
-         // Award coins
-        const userDocRef = doc(firestore, "users", currentUser.uid);
-        await updateDoc(userDocRef, {
-            fervoCoins: increment(2)
-        });
-      } else {
-        // Fallback for browsers that don't support navigator.share
-        await navigator.clipboard.writeText(shareUrl);
-        toast({ title: "Link Copiado!", description: "Compartilhe este link e ganhe 2 FervoCoins!", variant: "default", duration: 4000 });
-         // Award coins
-        const userDocRef = doc(firestore, "users", currentUser.uid);
-        await updateDoc(userDocRef, {
-            fervoCoins: increment(2)
-        });
+        toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
+        sharedSuccessfully = true;
+      } catch (shareError: any) {
+        if (shareError.name === 'AbortError') {
+          console.log('Share operation cancelled by user.');
+          return; 
+        } else if (shareError.name === 'NotAllowedError') {
+          console.error('Share permission denied:', shareError);
+          toast({ 
+            title: "Compartilhamento Bloqueado", 
+            description: "O navegador bloqueou o compartilhamento. Tentando copiar o link...", 
+            variant: "destructive",
+            duration: 5000
+          });
+        } else {
+          console.error('Failed to share via navigator.share:', shareError);
+          toast({ title: "Erro ao Compartilhar", description: "Não foi possível usar o compartilhamento nativo. Tentando copiar o link...", variant: "destructive", duration: 5000});
+        }
+        // Fallback to clipboard if navigator.share failed (and was not AbortError)
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
+          sharedSuccessfully = true;
+        } catch (clipError) {
+          console.error('Failed to copy link to clipboard:', clipError);
+          toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link automaticamente.", variant: "destructive"});
+        }
       }
-    } catch (err: any) {
-      // Handle errors, e.g., user cancelled share
-      if (err.name !== 'AbortError') {
-        console.error('Failed to share:', err);
-        toast({ title: "Erro ao Compartilhar", description: "Não foi possível compartilhar o evento.", variant: "destructive"});
+    } else {
+      // Fallback for browsers that don't support navigator.share at all
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
+        sharedSuccessfully = true;
+      } catch (clipError) {
+        console.error('Failed to copy link to clipboard (fallback):', clipError);
+        toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
+      }
+    }
+
+    if (sharedSuccessfully && currentUser) {
+      try {
+        const userDocRef = doc(firestore, "users", currentUser.uid);
+        await updateDoc(userDocRef, {
+            fervoCoins: increment(2)
+        });
+        toast({ title: "Recompensa!", description: "Você ganhou 2 FervoCoins por compartilhar!", variant: "default", duration: 3000 });
+      } catch (coinError) {
+        console.error("Error awarding FervoCoins:", coinError);
       }
     }
   };
