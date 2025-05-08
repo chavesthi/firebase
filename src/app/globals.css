@@ -7,7 +7,7 @@ body {
 }
 
 @layer base {
-  :root {
+  :root { /* Dark theme (default) */
     --background: 224 71% 4%; /* Dark Blue/Black */
     --foreground: 210 20% 98%; /* Light Grey/Off-White */
     --card: 224 71% 9%; /* Slightly Lighter Dark Blue */
@@ -57,7 +57,53 @@ body {
     --sidebar-ring: 190 100% 50%;
   }
 
-  /* No .dark class needed if default is dark theme */
+  .light { /* Light theme variables */
+    --background: 0 0% 100%; /* White */
+    --foreground: 224 71% 4%; /* Dark Blue/Black (text on white) */
+    --card: 0 0% 97%; /* Light Grey */
+    --card-foreground: 224 71% 4%;
+    --popover: 0 0% 97%;
+    --popover-foreground: 224 71% 4%;
+
+    /* User context / Primary - keep neon for vibrancy, or adjust if too harsh on light */
+    --primary: 190 80% 45%; /* Slightly desaturated/darker Neon Blue */
+    --primary-foreground: 0 0% 100%; /* White text on this blue */
+
+    /* General accents - keep neon or adjust */
+    --secondary: 280 80% 60%; /* Slightly desaturated/darker Neon Purple */
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 90%; /* Lighter grey for muted elements */
+    --muted-foreground: 0 0% 40%; /* Darker grey for muted text */
+
+    /* Interactive elements */
+    --accent: 130 80% 45%; /* Slightly desaturated/darker Neon Green */
+    --accent-foreground: 0 0% 100%;
+
+    /* Partner context / Destructive */
+    --destructive: 0 80% 50%; /* Slightly desaturated/darker Neon Red */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 85%; /* Light grey for borders */
+    --input: 0 0% 90%; /* Slightly darker grey for input backgrounds */
+    --ring: 190 80% 45%; /* Primary color for focus rings */
+
+    --chart-1: 190 80% 45%;
+    --chart-2: 280 80% 60%;
+    --chart-3: 130 80% 45%;
+    --chart-4: 0 80% 50%;
+    --chart-5: 210 80% 55%;
+
+    /* Sidebar specific theme adjustments for light mode */
+    --sidebar-background: 0 0% 95%; /* Very light grey for sidebar background */
+    --sidebar-foreground: 224 71% 10%; /* Dark text for sidebar foreground */
+    --sidebar-primary: 190 80% 45%; /* Consistent primary for sidebar */
+    --sidebar-primary-foreground: 0 0% 100%; /* White text on primary */
+    --sidebar-accent: 130 80% 45%; /* Consistent accent for sidebar */
+    --sidebar-accent-foreground: 0 0% 100%; /* White text on accent */
+    --sidebar-border: 0 0% 80%; /* Lighter border for sidebar */
+    --sidebar-ring: 190 80% 45%; /* Consistent ring color */
+  }
 }
 
 @layer base {

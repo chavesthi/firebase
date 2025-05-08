@@ -16,11 +16,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { UserCircle, Edit3, Save, Loader2 } from 'lucide-react';
+import { UserCircle, Edit3, Save, Loader2, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch'; // Added Switch
+import { useTheme } from '@/contexts/theme-provider'; // Added useTheme
+import { Separator } from '@/components/ui/separator';
 
 const userProfileSchema = z.object({
   name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
@@ -48,6 +51,7 @@ const UserProfilePage: NextPage = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { theme, setTheme, toggleTheme } = useTheme(); // Theme hook
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<UserProfileFormInputs>({
     resolver: zodResolver(userProfileSchema),
@@ -78,7 +82,6 @@ const UserProfilePage: NextPage = () => {
               preferredMusicStyles: userData.preferredMusicStyles || [],
             });
           } else {
-            // Should not happen if user went through questionnaire, but as a fallback
             toast({ title: "Dados não encontrados", description: "Não foi possível carregar seus dados de perfil.", variant: "destructive" });
           }
         } catch (error) {
@@ -110,9 +113,6 @@ const UserProfilePage: NextPage = () => {
         age: data.age,
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
-        // questionnaireCompleted should already be true if they are here.
-        // If it wasn't, they'd be at /questionnaire.
-        // No need to update questionnaireCompleted here unless specifically required.
       });
 
       toast({
@@ -281,6 +281,29 @@ const UserProfilePage: NextPage = () => {
               </ScrollArea>
               {errors.preferredMusicStyles && <p className="mt-1 text-sm text-destructive">{errors.preferredMusicStyles.message}</p>}
             </div>
+            
+            <Separator className="my-6" />
+
+            <div className="space-y-2">
+                <h3 className="text-lg font-medium text-primary/90">Configurações de Tema</h3>
+                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="dark-mode-switch" className="text-base text-primary/80">
+                            Modo Noturno
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            Ative para uma experiência visual escura.
+                        </p>
+                    </div>
+                    <Switch
+                        id="dark-mode-switch"
+                        checked={theme === 'dark'}
+                        onCheckedChange={toggleTheme}
+                        aria-label="Alternar modo noturno"
+                    />
+                </div>
+            </div>
+
 
           </CardContent>
           <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">
@@ -295,6 +318,3 @@ const UserProfilePage: NextPage = () => {
 };
 
 export default UserProfilePage;
-
-
-    
