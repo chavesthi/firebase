@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -207,7 +206,7 @@ const PartnerQuestionnairePage: NextPage = () => {
           facebookUrl: data.facebookUrl,
           youtubeUrl: data.youtubeUrl,
           whatsappPhone: data.whatsappPhone,
-          questionnaireCompleted: true, // Ensure this is always true if profile was locked
+          questionnaireCompleted: true, 
         };
       } else {
         dataToUpdate = {
@@ -229,10 +228,11 @@ const PartnerQuestionnairePage: NextPage = () => {
           youtubeUrl: data.youtubeUrl,
           whatsappPhone: data.whatsappPhone,
           questionnaireCompleted: true,
+          averageVenueRating: 0, // Initialize overall rating fields
+          venueRatingCount: 0,   // Initialize overall rating fields
         };
       }
       
-      // Set empty optional string fields to null for Firestore to potentially remove them or store as null
       ['phone', 'instagramUrl', 'facebookUrl', 'youtubeUrl', 'whatsappPhone'].forEach(key => {
         if (dataToUpdate[key] === '') {
           dataToUpdate[key] = null; 
@@ -248,8 +248,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       });
       
       if (!isProfileLocked) { 
-        setIsProfileLocked(true); // Lock after initial full save
-        // No automatic redirect to dashboard, user might want to stay on this page
+        setIsProfileLocked(true); 
       }
     } catch (error) {
       console.error("Error saving partner questionnaire:", error);
@@ -498,4 +497,3 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
-
