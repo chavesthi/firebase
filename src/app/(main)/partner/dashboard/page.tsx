@@ -9,9 +9,10 @@ import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText } from 'lucide-react'; // Added Gift, ScrollText
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle } from 'lucide-react'; // Added CheckCircle
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle } from '@/lib/constants';
+import { StarRating } from '@/components/ui/star-rating'; // Import StarRating
 
 interface VenueData {
   venueName: string;
@@ -31,6 +32,8 @@ interface VenueData {
   facebookUrl?: string;
   youtubeUrl?: string;
   questionnaireCompleted?: boolean;
+  averageVenueRating?: number; // Added for statistics
+  venueRatingCount?: number;   // Added for statistics
 }
 
 
@@ -69,6 +72,8 @@ export default function PartnerDashboardPage() {
                 facebookUrl: data.facebookUrl,
                 youtubeUrl: data.youtubeUrl,
                 questionnaireCompleted: data.questionnaireCompleted,
+                averageVenueRating: data.averageVenueRating, // Load rating
+                venueRatingCount: data.venueRatingCount,     // Load count
               });
               setLoading(false);
             }
@@ -144,22 +149,50 @@ export default function PartnerDashboardPage() {
           </CardContent>
         </Card>
 
+        {/* Statistics Card Updated */}
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
-              <Star className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-              Avaliações e Comentários
+              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
+              Estatísticas Gerais
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Veja o que os usuários acharam dos seus eventos.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Visão geral das interações no seu local.</CardDescription>
           </CardHeader>
-          <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-             <Button
-                variant="outline"
-                className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
-                onClick={() => router.push('/partner/ratings')}
-            >
-              Ver Avaliações
-            </Button>
+          <CardContent className="space-y-4 p-4 sm:p-6 pt-0 sm:pt-0">
+            <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Avaliação Geral do Local:</p>
+                {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 ? (
+                    <div className="flex items-center gap-2">
+                        <StarRating rating={venueData.averageVenueRating} readOnly size={20}/>
+                        <span className="text-sm text-foreground">({venueData.averageVenueRating.toFixed(1)})</span>
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground italic">Nenhuma avaliação de evento registrada ainda.</p>
+                )}
+            </div>
+             <div className="space-y-1">
+                 <p className="text-sm font-medium text-muted-foreground">Total de Avaliações Recebidas:</p>
+                 <p className="text-lg font-semibold text-destructive">{venueData.venueRatingCount || 0}</p>
+            </div>
+             {/* Removed Check-in count - needs separate calculation */}
+            <div className="flex flex-col gap-2 pt-2">
+              <Button
+                    variant="outline"
+                    className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
+                    onClick={() => router.push('/partner/ratings')}
+                >
+                 Ver Avaliações e Comentários
+                </Button>
+               {/* Placeholder for future Check-in report */}
+               <Button
+                    variant="outline"
+                    className="w-full border-destructive/50 text-destructive/70 text-sm sm:text-base cursor-not-allowed"
+                    disabled={true}
+                    title="Em breve"
+                >
+                 <CheckCircle className="w-4 h-4 mr-2"/> Ver Check-ins por Evento (Em Breve)
+               </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -201,20 +234,6 @@ export default function PartnerDashboardPage() {
             </CardContent>
         </Card>
 
-
-        <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
-          <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
-              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-              Estatísticas (Em Breve)
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Acompanhe o desempenho dos seus eventos e visualizações.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-            <p className="text-muted-foreground text-xs sm:text-sm">Funcionalidade em desenvolvimento.</p>
-          </CardContent>
-        </Card>
-
         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
@@ -233,9 +252,28 @@ export default function PartnerDashboardPage() {
             </Button>
           </CardContent>
         </Card>
+
+         {/* QR Code Card - Kept as is */}
+         <Card className="border-destructive/50 shadow-lg shadow-destructive/15 hover:shadow-destructive/30 transition-shadow">
+            <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center text-lg sm:text-xl text-destructive">
+                    <QrCode className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
+                    QR Codes de Eventos
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Gere e visualize os QR Codes para check-in nos seus eventos.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
+                <Button
+                variant="outline"
+                className="w-full border-destructive text-destructive hover:bg-destructive/10 text-sm sm:text-base"
+                onClick={() => router.push('/partner/events')} // Link to events page where QR can be accessed
+                >
+                Ver Eventos e QR Codes
+                </Button>
+            </CardContent>
+        </Card>
+
       </div>
     </div>
   );
 }
-
-    
