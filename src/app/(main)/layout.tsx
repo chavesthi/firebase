@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -16,7 +17,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs } from 'firebase/firestore'; // Added getDocs
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
@@ -36,21 +37,70 @@ interface AppUser {
   fervoCoins?: number;
 }
 
-// This custom hook now primarily handles Firebase Auth state.
-// User document data (including fervoCoins) will be handled by a separate onSnapshot listener in the layout component.
-const useAuthSubscription = () => {
+const useAuthAndUserSubscription = () => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const pathname = usePathname(); // Get pathname here for use in appUser default creation
+  const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setFirebaseUser(user);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+    let unsubscribeUserDoc: (() => void) | undefined;
 
-  return { firebaseUser, loading };
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      setFirebaseUser(user);
+      if (user) {
+        const userDocRef = doc(firestore, "users", user.uid);
+        unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            setAppUser({
+              uid: user.uid,
+              name: userData.name || user.displayName || (userData.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
+              email: user.email,
+              role: userData.role as UserRole || UserRole.USER,
+              preferredVenueTypes: userData.preferredVenueTypes || [],
+              preferredMusicStyles: userData.preferredMusicStyles || [],
+              questionnaireCompleted: userData.questionnaireCompleted || false,
+              lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
+              fervoCoins: userData.fervoCoins || 0,
+            });
+          } else {
+            // User exists in Auth, but not in Firestore. Create a default appUser for questionnaire flow.
+            // Role guess based on path is temporary. Login/Signup flow should create the definitive doc.
+            const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
+            setAppUser({
+              uid: user.uid,
+              name: user.displayName || (defaultRoleBasedOnInitialAuthAttempt === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
+              email: user.email,
+              role: defaultRoleBasedOnInitialAuthAttempt,
+              fervoCoins: 0,
+              questionnaireCompleted: false,
+            });
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error("Error fetching user document with onSnapshot:", error);
+          setAppUser(null);
+          setLoading(false);
+          toast({ title: "Erro ao carregar dados", description: "Não foi possível sincronizar os dados do usuário.", variant: "destructive" });
+        });
+      } else {
+        // No Firebase user (logged out)
+        setAppUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUserDoc) {
+        unsubscribeUserDoc();
+      }
+    };
+  }, [pathname, toast]);
+
+  return { firebaseUser, appUser, loading };
 };
 
 
@@ -59,9 +109,7 @@ export default function MainAppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { firebaseUser, loading: authLoading } = useAuthSubscription();
-  const [appUser, setAppUser] = useState<AppUser | null>(null);
-  const [userDocLoading, setUserDocLoading] = useState(true);
+  const { appUser, loading } = useAuthAndUserSubscription();
   const { theme, setTheme } = useTheme();
 
   const router = useRouter();
@@ -71,73 +119,24 @@ export default function MainAppLayout({
   const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); 
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
-  const loading = authLoading || userDocLoading;
-
+  // Redirect logic effect
   useEffect(() => {
-    let unsubscribeUserDoc: (() => void) | undefined;
-
-    if (firebaseUser) {
-      setUserDocLoading(true);
-      const userDocRef = doc(firestore, "users", firebaseUser.uid);
-      unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
-          setAppUser({
-            uid: firebaseUser.uid,
-            name: userData.name || firebaseUser.displayName || (userData.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
-            email: firebaseUser.email,
-            // Ensure role from DB is primary, fallback to USER if missing/undefined for an existing doc.
-            // Pathname-based inference should only be for truly new users if doc doesn't exist at all.
-            role: userData.role as UserRole || UserRole.USER, 
-            preferredVenueTypes: userData.preferredVenueTypes || [],
-            preferredMusicStyles: userData.preferredMusicStyles || [],
-            questionnaireCompleted: userData.questionnaireCompleted || false,
-            lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
-            fervoCoins: userData.fervoCoins || 0,
-          });
-        } else {
-          // This case might happen if the user signed up (e.g. Google) but the document creation by loginForm is slightly delayed,
-          // or if it's a very new user navigating before doc is fully written by loginForm.
-          // loginForm's handleSuccessfulAuth should create the doc with the correct role.
-          // If it's still not found, create a default appUser for questionnaire flow.
-           const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
-           setAppUser({
-             uid: firebaseUser.uid,
-             name: firebaseUser.displayName || (defaultRoleBasedOnInitialAuthAttempt === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
-             email: firebaseUser.email,
-             role: defaultRoleBasedOnInitialAuthAttempt, // Role based on path is a temporary guess until questionnaire
-             fervoCoins: 0,
-             questionnaireCompleted: false, // This is critical, will send to questionnaire
-           });
-        }
-        setUserDocLoading(false);
-      }, (error) => {
-        console.error("Error fetching user document with onSnapshot:", error);
-        setAppUser(null); // Clear appUser on error
-        setUserDocLoading(false);
-        toast({ title: "Erro ao carregar dados", description: "Não foi possível sincronizar os dados do usuário.", variant: "destructive" });
-      });
-    } else {
-      // No Firebase user (logged out)
-      setAppUser(null);
-      setUserDocLoading(false); // Not loading user doc if no firebaseUser
-    }
-    return () => {
-      if (unsubscribeUserDoc) {
-        unsubscribeUserDoc();
-      }
-    };
-  }, [firebaseUser]); // Removed pathname and toast from dependencies
-
-
-  useEffect(() => {
-    if (!loading && !appUser) { 
-      const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
-      const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
+    if (!loading) { // Only run redirect logic after loading is complete
+      const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
+      const isSharedEventPage = pathname.startsWith('/shared-event');
       
-      if (!isAllowedPath) {
+      if (!appUser && !isAuthPage && !isSharedEventPage) {
         router.push('/login');
+      } else if (appUser && !appUser.questionnaireCompleted) {
+        // If user is logged in but questionnaire is not complete
+        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage) {
+          router.push('/questionnaire');
+        } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage) {
+          router.push('/partner-questionnaire');
+        }
       }
+      // No explicit redirect if questionnaire is complete and user is on other pages,
+      // or if on auth pages / shared event page.
     }
   }, [appUser, loading, router, pathname]);
 
@@ -274,7 +273,6 @@ export default function MainAppLayout({
     }
   };
 
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
@@ -282,143 +280,134 @@ export default function MainAppLayout({
       </div>
     );
   }
-
-  // This check should be sufficient as loading is false here.
-  if (!appUser) {
-     const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
-     const isAllowedPath = allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
-     if (!isAllowedPath) {
-        return (
-         <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-            Redirecionando para login...
-          </div>
-        );
-     }
-     // Allow rendering children for allowed unauthenticated paths if needed
-     // Or just return null if the layout shouldn't render anything for these paths
-     // This assumes children will handle their own content or redirection.
-  }
   
+  // Determine if children should be rendered or if a redirect is pending/occurred
+  // This allows auth pages and shared event page to render their own content without appUser
+  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
+  const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
+
   const activeColorClass = appUser?.role === UserRole.PARTNER ? 'text-destructive' : 'text-primary';
   const activeBorderColorClass = appUser?.role === UserRole.PARTNER ? 'border-destructive' : 'border-primary';
 
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex items-center h-16 max-w-screen-2xl">
-          <Logo iconClassName={activeColorClass} />
-          <nav className="flex items-center gap-2 ml-auto md:gap-4">
-            {appUser?.role === UserRole.USER && (
-              <>
-                <Link href="/map" passHref>
-                  <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={cn(pathname === '/map' ? activeColorClass : '', 'hover:bg-primary/10')}>
-                    <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
+      {appUser && ( // Only render header if appUser exists (logged in and data loaded)
+        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex items-center h-16 max-w-screen-2xl">
+            <Logo iconClassName={activeColorClass} />
+            <nav className="flex items-center gap-2 ml-auto md:gap-4">
+              {appUser?.role === UserRole.USER && (
+                <>
+                  <Link href="/map" passHref>
+                    <Button variant={pathname === '/map' ? 'secondary': 'ghost'} className={cn(pathname === '/map' ? activeColorClass : '', 'hover:bg-primary/10')}>
+                      <Map className="w-4 h-4 mr-0 md:mr-2" /> <span className="hidden md:inline">Mapa de Eventos</span>
+                    </Button>
+                  </Link>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className={cn(activeColorClass, 'hover:bg-primary/10')} 
+                    onClick={() => setIsQrScannerOpen(true)} 
+                    title="Check-in com QR Code"
+                    disabled={isFetchingNotifications}
+                  >
+                    <ScanLine className="w-5 h-5" />
+                    <span className="sr-only">Check-in QR Code</span>
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', 'hover:bg-primary/10')}
+                    onClick={handleNotificationsClick}
+                    disabled={isFetchingNotifications}
+                    title="Verificar novos Fervos"
+                  >
+                    {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
+                    <span className="sr-only">Notificações</span>
+                  </Button>
+                  <div className="relative">
+                      <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${appUser.fervoCoins || 0} moedas. Ganhe mais compartilhando eventos!`, variant: "default"})}>
+                      <Coins className="w-5 h-5" />
+                      <span className="sr-only">Moedas</span>
+                      </Button>
+                      {appUser.fervoCoins !== undefined && appUser.fervoCoins > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-accent-foreground text-[10px] font-bold">
+                          {appUser.fervoCoins > 9 ? '9+' : appUser.fervoCoins}
+                          </span>
+                      )}
+                  </div>
+                  <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Cupons", description: "Recurso em breve!", variant: "default"})}>
+                    <TicketPercent className="w-5 h-5" />
+                    <span className="sr-only">Cupons de Desconto</span>
+                  </Button>
+                </>
+              )}
+              {appUser?.role === UserRole.PARTNER && (
+                <Link href="/partner/dashboard" passHref>
+                  <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={cn(pathname === '/partner/dashboard' ? activeColorClass : '', 'hover:bg-destructive/10')}>
+                  <LayoutDashboard className="w-4 h-4 mr-2" /> Meu Painel
                   </Button>
                 </Link>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className={cn(activeColorClass, 'hover:bg-primary/10')} 
-                  onClick={() => setIsQrScannerOpen(true)} 
-                  title="Check-in com QR Code"
-                  disabled={isFetchingNotifications}
-                >
-                  <ScanLine className="w-5 h-5" />
-                  <span className="sr-only">Check-in QR Code</span>
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', 'hover:bg-primary/10')}
-                  onClick={handleNotificationsClick}
-                  disabled={isFetchingNotifications}
-                  title="Verificar novos Fervos"
-                >
-                  {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
-                  <span className="sr-only">Notificações</span>
-                </Button>
-                 <div className="relative">
-                    <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${appUser.fervoCoins || 0} moedas. Ganhe mais compartilhando eventos!`, variant: "default"})}>
-                    <Coins className="w-5 h-5" />
-                    <span className="sr-only">Moedas</span>
-                    </Button>
-                     {appUser.fervoCoins !== undefined && appUser.fervoCoins > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-accent-foreground text-[10px] font-bold">
-                         {appUser.fervoCoins > 9 ? '9+' : appUser.fervoCoins}
-                        </span>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
+                    {appUser?.name ? (
+                      <span className={`text-lg font-semibold ${activeColorClass}`}>
+                        {appUser.name.charAt(0).toUpperCase()}
+                      </span>
+                    ) : (
+                      <UserCircle className={`w-6 h-6 ${activeColorClass}`} />
                     )}
-                 </div>
-                <Button variant="ghost" size="icon" className={cn(activeColorClass, 'hover:bg-primary/10')} onClick={() => toast({ title: "Cupons", description: "Recurso em breve!", variant: "default"})}>
-                  <TicketPercent className="w-5 h-5" />
-                  <span className="sr-only">Cupons de Desconto</span>
-                </Button>
-              </>
-            )}
-            {appUser?.role === UserRole.PARTNER && (
-              <Link href="/partner/dashboard" passHref>
-                <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={cn(pathname === '/partner/dashboard' ? activeColorClass : '', 'hover:bg-destructive/10')}>
-                 <LayoutDashboard className="w-4 h-4 mr-2" /> Meu Painel
-                </Button>
-              </Link>
-            )}
-            {appUser && ( 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
-                  {appUser?.name ? (
-                    <span className={`text-lg font-semibold ${activeColorClass}`}>
-                      {appUser.name.charAt(0).toUpperCase()}
-                    </span>
-                  ) : (
-                    <UserCircle className={`w-6 h-6 ${activeColorClass}`} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{appUser?.name || (appUser?.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo")}</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {appUser?.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {appUser?.role === UserRole.USER && (
+                    <DropdownMenuItem onClick={() => router.push('/user/profile')}>
+                      <UserCircle className="w-4 h-4 mr-2" />
+                      Meu Perfil
+                    </DropdownMenuItem>
                   )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{appUser?.name || (appUser?.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo")}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {appUser?.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {appUser?.role === UserRole.USER && (
-                  <DropdownMenuItem onClick={() => router.push('/user/profile')}>
-                    <UserCircle className="w-4 h-4 mr-2" />
-                    Meu Perfil
+                  {appUser?.role === UserRole.PARTNER && (
+                    <DropdownMenuItem onClick={() => router.push('/partner-questionnaire')}>
+                      <Settings className="w-4 h-4 mr-2" />
+                      Configurações do Local
+                    </DropdownMenuItem>
+                  )}
+                  {appUser?.role === UserRole.PARTNER && (
+                    <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
+                      <Settings className="w-4 h-4 mr-2" /> 
+                      Configurações da Conta
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+                      {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
+                      {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
                   </DropdownMenuItem>
-                )}
-                 {appUser?.role === UserRole.PARTNER && (
-                  <DropdownMenuItem onClick={() => router.push('/partner-questionnaire')}>
-                    <Settings className="w-4 h-4 mr-2" />
-                    Configurações do Local
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sair
                   </DropdownMenuItem>
-                )}
-                 {appUser?.role === UserRole.PARTNER && (
-                  <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
-                    <Settings className="w-4 h-4 mr-2" /> 
-                    Configurações da Conta
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                    {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
-                    {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            )}
-          </nav>
-        </div>
-      </header>
-      <main className="flex-1">{appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p)) ? children : null}</main>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </nav>
+          </div>
+        </header>
+      )}
+      <main className="flex-1">
+        {canRenderChildren ? children : null /* Render null or specific redirect loading if preferred */}
+      </main>
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal 
           isOpen={isQrScannerOpen} 
@@ -429,4 +418,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-

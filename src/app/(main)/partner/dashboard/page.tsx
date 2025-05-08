@@ -7,11 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore'; // Changed getDoc to onSnapshot
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star } from 'lucide-react';
-import type { Location } from '@/services/geocoding'; // For type consistency
-import { VenueType, MusicStyle } from '@/lib/constants'; // For type consistency
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2 } from 'lucide-react';
+import type { Location } from '@/services/geocoding';
+import { VenueType, MusicStyle } from '@/lib/constants';
 
 interface VenueData {
   venueName: string;
@@ -30,6 +30,7 @@ interface VenueData {
   instagramUrl?: string;
   facebookUrl?: string;
   youtubeUrl?: string;
+  questionnaireCompleted?: boolean; // Added to ensure we can check this from snapshot
 }
 
 
@@ -41,45 +42,70 @@ export default function PartnerDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setCurrentUser(user);
+        setLoading(true);
         const userDocRef = doc(firestore, "users", user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          if (!data.questionnaireCompleted) {
-            toast({ title: "Questionário Pendente", description: "Complete seu perfil para acessar o painel.", variant: "destructive" });
-            router.push('/partner-questionnaire');
+        
+        unsubscribeSnapshot = onSnapshot(userDocRef, (userDocSnap) => {
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data() as VenueData; // Cast to VenueData
+            if (!data.questionnaireCompleted) {
+              toast({ title: "Questionário Pendente", description: "Complete seu perfil para acessar o painel.", variant: "destructive" });
+              router.push('/partner-questionnaire');
+              setLoading(false); // Stop loading if redirecting
+            } else {
+              setVenueData({
+                venueName: data.venueName,
+                venueType: data.venueType,
+                musicStyles: data.musicStyles,
+                address: data.address,
+                location: data.location,
+                phone: data.phone,
+                instagramUrl: data.instagramUrl,
+                facebookUrl: data.facebookUrl,
+                youtubeUrl: data.youtubeUrl,
+                questionnaireCompleted: data.questionnaireCompleted,
+              });
+              setLoading(false);
+            }
           } else {
-            setVenueData({
-              venueName: data.venueName,
-              venueType: data.venueType,
-              musicStyles: data.musicStyles,
-              address: data.address,
-              location: data.location,
-              phone: data.phone,
-              instagramUrl: data.instagramUrl,
-              facebookUrl: data.facebookUrl,
-              youtubeUrl: data.youtubeUrl,
-            });
+             toast({ title: "Erro", description: "Dados do parceiro não encontrados. Por favor, complete seu cadastro.", variant: "destructive" });
+             router.push('/partner-questionnaire'); // Redirect to questionnaire if doc doesn't exist
+             setLoading(false);
           }
-        } else {
-           toast({ title: "Erro", description: "Dados do parceiro não encontrados.", variant: "destructive" });
-           router.push('/login'); // Or some error page
-        }
+        }, (error) => {
+          console.error("Error fetching partner data with onSnapshot:", error);
+          toast({ title: "Erro ao Carregar Dados", description: "Não foi possível buscar os dados do painel.", variant: "destructive" });
+          router.push('/login');
+          setLoading(false);
+        });
+
       } else {
         router.push('/login');
+        setLoading(false);
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot(); // Clean up snapshot listener if user logs out
+        }
       }
-      setLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+    };
   }, [router, toast]);
 
   if (loading || !currentUser || !venueData) {
     return (
-      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <p className="text-xl text-destructive animate-pulse">Carregando dados do parceiro...</p>
+      <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
+        <Loader2 className="w-12 h-12 text-destructive animate-spin mb-4" />
+        <p className="text-lg text-destructive">Carregando dados do parceiro...</p>
       </div>
     );
   }
