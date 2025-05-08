@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -38,6 +37,8 @@ interface RedeemedCoupon {
   couponCode: string;
   description: string;
   redeemedAt: FirebaseTimestamp;
+  // Add the document path for deletion
+  docPath: string; 
 }
 
 const PartnerCouponReportPage: NextPage = () => {
@@ -46,7 +47,7 @@ const PartnerCouponReportPage: NextPage = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [redeemedCoupons, setRedeemedCoupons] = useState<RedeemedCoupon[]>([]);
-  const [showClearConfirm, setShowClearConfirm] = useState(false); // Keep state for dialog visibility if needed
+  const [showClearConfirm, setShowClearConfirm] = useState(false); 
   const [password, setPassword] = useState('');
   const [isClearing, setIsClearing] = useState(false);
 
@@ -85,6 +86,7 @@ const PartnerCouponReportPage: NextPage = () => {
         const data = docSnap.data();
         let userName = 'Usuário Desconhecido';
         const userId = data.userId; // Get userId from data
+        const docPath = docSnap.ref.path; // Get the full document path
 
         if (userId && typeof userId === 'string') { // Check if userId exists and is a string
             try {
@@ -94,7 +96,6 @@ const PartnerCouponReportPage: NextPage = () => {
                 userName = userDoc.data().name || userName;
               }
             } catch (error) {
-              // Check the template literal syntax here. It seems correct.
               console.error(`Failed to fetch user name for userId ${userId}:`, error); // This line seems syntactically correct. Ensure surrounding blocks are okay.
             }
         } else {
@@ -110,6 +111,7 @@ const PartnerCouponReportPage: NextPage = () => {
             couponCode: data.couponCode,
             description: data.description,
             redeemedAt: data.redeemedAt as FirebaseTimestamp,
+            docPath: docPath, // Store the path
           });
         } else {
            console.warn(`Incomplete coupon data for ${docSnap.id}, skipping.`);
@@ -129,14 +131,56 @@ const PartnerCouponReportPage: NextPage = () => {
 
   // Placeholder for Clear Report functionality
   const handleClearReport = async () => {
-      toast({
-          title: "Funcionalidade Indisponível",
-          description: "A limpeza do relatório de cupons ainda não está implementada.",
-          variant: "default",
-          duration: 5000,
-      });
-      // setShowClearConfirm(false); // If using state for dialog
-      setPassword('');
+      if (!currentUser || redeemedCoupons.length === 0) return;
+      setIsClearing(true);
+
+      try {
+          // 1. Verify password
+          const partnerDocRef = doc(firestore, `users/${currentUser.uid}`);
+          const partnerDocSnap = await getDoc(partnerDocRef);
+
+          if (!partnerDocSnap.exists()) {
+              throw new Error("Dados do parceiro não encontrados.");
+          }
+          const partnerData = partnerDocSnap.data();
+          const storedPassword = partnerData.couponReportClearPassword;
+
+          if (!storedPassword) {
+              toast({ title: "Senha Não Definida", description: "Defina uma senha nas configurações da conta para limpar o relatório.", variant: "destructive", duration: 5000 });
+              setIsClearing(false);
+              setShowClearConfirm(false);
+              setPassword('');
+              return;
+          }
+
+          if (storedPassword !== password) {
+              toast({ title: "Senha Incorreta", description: "A senha inserida está incorreta.", variant: "destructive" });
+              setIsClearing(false);
+              return;
+          }
+
+          // 2. Password is correct, proceed with deletion
+          const batch = writeBatch(firestore);
+          
+          redeemedCoupons.forEach(coupon => {
+              // Use the stored docPath to reference the document for deletion
+              const couponDocRef = doc(firestore, coupon.docPath); 
+              batch.delete(couponDocRef);
+          });
+
+          await batch.commit();
+
+          toast({ title: "Relatório Limpo!", description: "Todos os cupons resgatados foram removidos deste relatório.", variant: "default" });
+          setRedeemedCoupons([]); // Clear local state immediately after successful deletion
+          setShowClearConfirm(false); // Close the dialog
+          setPassword(''); // Clear password input
+
+      } catch (error: any) {
+          console.error("Error clearing coupon report:", error);
+          toast({ title: "Erro ao Limpar", description: error.message || "Não foi possível limpar o relatório.", variant: "destructive" });
+      } finally {
+          setIsClearing(false);
+      }
   };
 
 
@@ -195,11 +239,11 @@ const PartnerCouponReportPage: NextPage = () => {
         </CardContent>
          {redeemedCoupons.length > 0 && (
           <CardFooter className="p-4 sm:p-6 border-t border-destructive/20 justify-end">
-             <AlertDialog>
+             <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
                <AlertDialogTrigger asChild>
-                  {/* Temporarily disabling the button itself */}
-                  <Button variant="destructive" size="sm" disabled>
-                      <Trash2 className="w-4 h-4 mr-2" /> Limpar Relatório (Indisponível)
+                  {/* Enable the button */}
+                  <Button variant="destructive" size="sm" onClick={() => setShowClearConfirm(true)} >
+                      <Trash2 className="w-4 h-4 mr-2" /> Limpar Relatório
                   </Button>
                </AlertDialogTrigger>
                <AlertDialogContent>
@@ -210,25 +254,25 @@ const PartnerCouponReportPage: NextPage = () => {
                    </AlertDialogDescription>
                  </AlertDialogHeader>
                  <div className="space-y-2">
-                   <Label htmlFor="password">Senha</Label>
+                   <Label htmlFor="password">Senha do Relatório</Label>
                    <Input
                      id="password"
                      type="password"
                      value={password}
                      onChange={(e) => setPassword(e.target.value)}
-                     placeholder="Sua senha de login"
+                     placeholder="Senha definida nas configurações"
                    />
                  </div>
                  <AlertDialogFooter>
-                   <AlertDialogCancel onClick={() => setPassword('')}>Cancelar</AlertDialogCancel>
-                   {/* Action button also disabled for safety until implemented */}
+                   <AlertDialogCancel onClick={() => {setPassword(''); setShowClearConfirm(false)}}>Cancelar</AlertDialogCancel>
+                   {/* Action button also enabled */}
                    <AlertDialogAction
                      onClick={handleClearReport}
-                     disabled={!password || isClearing || true} // Explicitly disable
+                     disabled={!password || isClearing} 
                      className="bg-destructive hover:bg-destructive/90"
                    >
                      {isClearing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                     Limpar Relatório (Indisponível)
+                     Limpar Relatório
                    </AlertDialogAction>
                  </AlertDialogFooter>
                </AlertDialogContent>
