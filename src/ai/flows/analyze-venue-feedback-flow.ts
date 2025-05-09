@@ -17,13 +17,13 @@ const FeedbackItemSchema = z.object({
 });
 export type FeedbackItem = z.infer<typeof FeedbackItemSchema>;
 
-export const AnalyzeVenueFeedbackInputSchema = z.object({
+const AnalyzeVenueFeedbackInputSchema = z.object({
   venueName: z.string().describe('The name of the venue being analyzed.'),
   feedbackItems: z.array(FeedbackItemSchema).min(1, {message: "Pelo menos um item de feedback é necessário para análise."}).describe('An array of feedback items, each containing a rating and an optional comment.'),
 });
 export type AnalyzeVenueFeedbackInput = z.infer<typeof AnalyzeVenueFeedbackInputSchema>;
 
-export const AnalyzeVenueFeedbackOutputSchema = z.object({
+const AnalyzeVenueFeedbackOutputSchema = z.object({
   positiveAspects: z.array(z.string()).describe('List of key positive themes or frequently mentioned compliments.'),
   negativeAspects: z.array(z.string()).describe('List of key negative themes or frequently mentioned complaints.'),
   improvementSuggestions: z.array(z.string()).describe('Actionable suggestions for the venue to improve based on the feedback.'),
