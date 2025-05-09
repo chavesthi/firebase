@@ -349,30 +349,56 @@ const MapContentAndLogic = () => {
         setUserCheckIns(checkInsData);
       });
 
-      // Listener for user's ratings on events
-      // This query fetches ratings submitted *by* the current user
-      const ratingsQuery = query(collectionGroup(firestore, 'eventRatings'), where('userId', '==', currentUser.uid));
-      const unsubscribeRatings = onSnapshot(ratingsQuery, (snapshot) => {
-        const ratingsData: Record<string, UserRatingData> = {};
-        snapshot.docs.forEach(docSnap => {
-            const data = docSnap.data();
-            ratingsData[data.eventId] = { // Key by eventId for easy lookup
-                rating: data.rating,
-                comment: data.comment,
-                createdAt: data.createdAt as FirebaseTimestamp,
-                userName: data.userName, // This is the user's name on their rating
-                eventName: data.eventName, // Event name stored on the rating
-            };
-        });
-        setUserRatings(ratingsData);
-      });
+      // The problematic collectionGroup query for user ratings is removed from here.
+      // User ratings for specific events will be fetched in another useEffect
+      // when selectedVenue.events are available.
 
       return () => {
         unsubscribeCheckIns();
-        unsubscribeRatings();
+        // No global userRatings listener to unsubscribe from here anymore
       };
     }
   }, [currentUser]);
+
+  // New useEffect to fetch current user's ratings for the selected venue's events
+  useEffect(() => {
+    if (!currentUser || !selectedVenue || !selectedVenue.events || selectedVenue.events.length === 0) {
+      // Optionally clear or manage userRatings when context changes
+      // For instance, if you want ratings to only be for the currently selected venue's events:
+      // setUserRatings({}); 
+      return;
+    }
+
+    const fetchUserRatingsForVenueEvents = async () => {
+      const newRatingsData: Record<string, UserRatingData> = {};
+      for (const event of selectedVenue.events!) {
+        try {
+          // Assuming eventRatings documents are named `${eventId}_${userId}`
+          // This fetches a specific document, not a query that needs indexing.
+          const ratingDocRef = doc(firestore, 'eventRatings', `${event.id}_${currentUser.uid}`);
+          const ratingDocSnap = await getDoc(ratingDocRef);
+          if (ratingDocSnap.exists()) {
+            const data = ratingDocSnap.data();
+            newRatingsData[event.id] = {
+              rating: data.rating,
+              comment: data.comment,
+              createdAt: data.createdAt as FirebaseTimestamp,
+              userName: data.userName,
+              eventName: data.eventName, // Ensure eventName is on the rating document
+            };
+          }
+        } catch (error) {
+          console.warn(`Could not fetch user rating for event ${event.id}:`, error);
+        }
+      }
+      // Update userRatings state. Consider if merging or replacing is better.
+      // If ratings are only for the current venue, replace: setUserRatings(newRatingsData);
+      // If you want to accumulate ratings from different venues (less likely for this UI):
+      setUserRatings(prevRatings => ({ ...prevRatings, ...newRatingsData }));
+    };
+
+    fetchUserRatingsForVenueEvents();
+  }, [currentUser, selectedVenue, selectedVenue?.events]);
 
 
   useEffect(() => {
