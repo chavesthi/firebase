@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff } from 'lucide-react'; // Added Eye, EyeOff
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard } from 'lucide-react'; // Added Eye, EyeOff and CreditCard
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
@@ -130,49 +130,38 @@ export default function PartnerSettingsPage() {
         settingsUpdatedAt: serverTimestamp(),
       };
 
-      // **SECURITY WARNING:** Storing plain text passwords is not recommended for production.
-      // This should ideally be hashed server-side.
-      // Only update password if it's provided and validated (schema handles validation)
       if (data.couponReportClearPassword && data.couponReportClearPassword === data.confirmCouponReportClearPassword) {
-          dataToUpdate.couponReportClearPassword = data.couponReportClearPassword; // Store plain text - **NOT SECURE**
+          dataToUpdate.couponReportClearPassword = data.couponReportClearPassword; 
           toast({ title: "Senha do Relatório Definida", description: "Senha para limpar relatório de cupons foi definida/atualizada.", variant: "default" });
       } else if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
-         // This case should ideally be caught by zod refine, but as a fallback
          toast({ title: "Erro na Senha", description: "As senhas do relatório não coincidem ou estão incompletas.", variant: "destructive" });
-         return; // Prevent saving if passwords are provided but invalid
+         return; 
       }
 
 
-      // Update Firestore document
       await updateDoc(userDocRef, dataToUpdate);
 
-      // Update auth email ONLY if it changed and user confirms
       let emailUpdateMessage = "";
       if (data.email !== initialEmail) {
         if (window.confirm(`Deseja realmente alterar seu e-mail de login de ${initialEmail} para ${data.email}? Esta ação pode exigir reverificação.`)) {
           try {
             await updateEmail(currentUser, data.email);
-            setInitialEmail(data.email); // Update initialEmail after successful change
+            setInitialEmail(data.email); 
             emailUpdateMessage = "Seu e-mail de login foi alterado com sucesso.";
-            // Potentially force re-authentication here if needed
           } catch (authError: any) {
             console.error("Error updating auth email:", authError);
             let authErrorMessage = "Não foi possível atualizar o e-mail de login. Verifique a senha ou tente novamente.";
             if (authError.code === 'auth/requires-recent-login') {
               authErrorMessage = "Esta operação requer login recente. Por favor, faça login novamente e tente atualizar o e-mail.";
-              // Consider redirecting to login here
             } else if (authError.code === 'auth/email-already-in-use') {
               authErrorMessage = "Este e-mail já está em uso por outra conta.";
             }
             toast({ title: "Erro ao Atualizar E-mail", description: authErrorMessage, variant: "destructive", duration: 7000 });
-            // Revert email in the form if auth update fails
-            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); // Also clear password fields on error
-             // Skip the general success toast below if email update failed
+            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); 
              return;
           }
         } else {
-           // User cancelled email change, revert in form
-           reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); // Also clear password fields on cancel
+           reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); 
            emailUpdateMessage = "Alteração de e-mail cancelada.";
         }
       }
@@ -180,10 +169,9 @@ export default function PartnerSettingsPage() {
       toast({
         title: "Configurações Salvas!",
         description: `Suas informações foram atualizadas. ${emailUpdateMessage}`,
-        variant: "default", // Use default (primary) for partner success
+        variant: "default", 
       });
 
-      // Clear password fields after successful save
       reset({ ...data, email: data.email, couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
 
 
@@ -200,9 +188,7 @@ export default function PartnerSettingsPage() {
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-         {/* Changed loader color to primary */}
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
-         {/* Changed text color to primary */}
         <p className="ml-4 text-lg text-primary">Carregando configurações...</p>
       </div>
     );
@@ -211,23 +197,19 @@ export default function PartnerSettingsPage() {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
         <div className="flex items-center justify-between mb-4 sm:mb-6 max-w-2xl mx-auto">
-             {/* Changed button colors to primary */}
             <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
                 <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
                 Painel
             </Button>
         </div>
-       {/* Changed card border/shadow to primary */}
       <Card className="max-w-2xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
         <CardHeader className="text-center p-4 sm:p-6">
-           {/* Changed title text color to primary */}
           <CardTitle className="text-2xl sm:text-3xl text-primary">Configurações da Conta</CardTitle>
           <CardDescription className="text-sm sm:text-base">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
             <div className="flex flex-col items-center space-y-2">
-               {/* Changed avatar border and text color */}
               <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted">
                 {watchedName ? (
                   <span className="text-2xl sm:text-3xl text-primary font-semibold">
@@ -237,13 +219,12 @@ export default function PartnerSettingsPage() {
                   <UserCircle className="w-14 h-14 sm:w-16 sm:h-16 text-primary" />
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
+               <p className="text-xs sm:text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
             </div>
 
             {/* Basic Info Section */}
             <div className="space-y-4">
                 <div className="space-y-2">
-                   {/* Changed label text color */}
                   <Label htmlFor="contactName" className="text-primary/90">Nome do Contato</Label>
                    <Controller
                     name="contactName"
@@ -255,7 +236,6 @@ export default function PartnerSettingsPage() {
                   {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                   {/* Changed label text color */}
                   <Label htmlFor="companyName" className="text-primary/90">Nome da Empresa/Estabelecimento</Label>
                    <Controller
                     name="companyName"
@@ -267,7 +247,6 @@ export default function PartnerSettingsPage() {
                    {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                   {/* Changed label text color */}
                   <Label htmlFor="email" className="text-primary/90">E-mail de Login</Label>
                    <Controller
                     name="email"
@@ -281,7 +260,6 @@ export default function PartnerSettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                   {/* Changed label text color and switch checked color */}
                   <Label htmlFor="notificationsEnabled" className="text-primary/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
                    <Controller
                       name="notificationsEnabled"
@@ -299,17 +277,14 @@ export default function PartnerSettingsPage() {
                  {errors.notificationsEnabled && <p className="mt-1 text-sm text-destructive">{errors.notificationsEnabled.message}</p>}
             </div>
 
-             {/* Changed separator color */}
             <Separator className="my-6 border-primary/20" />
 
             {/* Coupon Report Password Section */}
             <div className="space-y-4">
-                 {/* Changed heading text color */}
                 <h3 className="text-lg font-medium text-primary">Senha para Limpar Relatório de Cupons</h3>
                 <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
 
                  <div className="space-y-2">
-                     {/* Changed label text color */}
                     <Label htmlFor="couponReportClearPassword" className="text-primary/90">Nova Senha</Label>
                     <div className="relative">
                         <Controller
@@ -340,7 +315,6 @@ export default function PartnerSettingsPage() {
                  </div>
 
                  <div className="space-y-2">
-                     {/* Changed label text color */}
                     <Label htmlFor="confirmCouponReportClearPassword" className="text-primary/90">Confirmar Nova Senha</Label>
                      <div className="relative">
                         <Controller
@@ -371,7 +345,22 @@ export default function PartnerSettingsPage() {
                  </div>
             </div>
 
-             {/* Changed button colors to primary */}
+            <Separator className="my-6 border-primary/20" />
+
+            {/* Subscription Plans Section */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-medium text-primary flex items-center">
+                    <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
+                </h3>
+                <CardDescription className="text-xs sm:text-sm">
+                    Aqui você poderá gerenciar sua assinatura e acessar as funcionalidades premium do Fervo App.
+                    Detalhes sobre os planos e opções de pagamento serão disponibilizados em breve.
+                </CardDescription>
+                <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary/10" disabled>
+                    Gerenciar Assinatura (Em Breve)
+                </Button>
+            </div>
+
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base mt-6" disabled={isSubmitting}>
                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
             </Button>
