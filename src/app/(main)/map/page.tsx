@@ -1,10 +1,11 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import { useRouter } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc } from 'firebase/firestore'; // Added increment, writeBatch, addDoc
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -84,17 +85,12 @@ interface UserVenueCoins {
     [partnerId: string]: number;
 }
 
-interface AppUser {
+// This AppUser interface is specific to this page, might differ from MainAppLayout's one
+interface MapPageAppUser {
     uid: string;
     name: string;
-    email: string | null;
-    role: UserRole | null;
-    preferredVenueTypes?: VenueType[];
-    preferredMusicStyles?: MusicStyle[];
-    questionnaireCompleted?: boolean;
-    lastNotificationCheckTimestamp?: FirebaseTimestamp;
-    venueCoins?: UserVenueCoins; // Replaced fervoCoins with venueCoins map
-  }
+    favoriteVenueIds?: string[];
+}
 
 
 const venueTypeIcons: Record<VenueType, React.ElementType> = {
@@ -276,7 +272,7 @@ const updatePartnerOverallRating = async (partnerId: string) => {
 
 const MapContentAndLogic = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+  const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null); // Store app user data including favorites
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
@@ -304,22 +300,23 @@ const MapContentAndLogic = () => {
       setCurrentUser(user);
       if (user) {
         const userDocRef = doc(firestore, "users", user.uid);
-        // Use onSnapshot to keep username updated if it changes
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
-              setCurrentUserName(userDocSnap.data().name || "Usuário Fervo");
-              // Note: We don't need to fetch AppUser here, as venueCoins logic is handled in handleShareEvent
+              const userData = userDocSnap.data();
+              setCurrentAppUser({
+                uid: user.uid,
+                name: userData.name || "Usuário Fervo",
+                favoriteVenueIds: userData.favoriteVenueIds || [],
+              });
             } else {
-              setCurrentUserName("Usuário Fervo");
+              setCurrentAppUser({ uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [] });
             }
         });
-        // Return the user listener unsubscribe function
         return () => unsubscribeUser();
       } else {
-        setCurrentUserName(null);
+        setCurrentAppUser(null);
       }
     });
-    // Return the auth listener unsubscribe function
     return () => unsubscribeAuth();
   }, []);
 
@@ -492,7 +489,7 @@ const MapContentAndLogic = () => {
 
   const toggleMusicStyleFilter = useCallback((style: MusicStyle) => {
     setActiveMusicStyleFilters(prev =>
-      prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]
+      prev.includes(style) ? prev.filter(s => s !== style) : [...prev, s]
     );
   }, []);
 
@@ -538,7 +535,7 @@ const MapContentAndLogic = () => {
   };
 
   const handleRateEvent = async (eventId: string, partnerId: string) => {
-    if (!currentUser || !currentUserName) {
+    if (!currentUser || !currentAppUser?.name) { // Check currentAppUser.name
         toast({ title: "Não Autenticado", description: "Você precisa estar logado para avaliar.", variant: "destructive" });
         return;
     }
@@ -586,7 +583,7 @@ const MapContentAndLogic = () => {
                 eventId: eventId,
                 partnerId: partnerId,
                 userId: currentUser.uid,
-                userName: currentUserName,
+                userName: currentAppUser.name, // Use name from currentAppUser
                 rating: currentRating,
                 comment: currentComment || null,
                 createdAt: serverTimestamp(),
@@ -727,6 +724,42 @@ const MapContentAndLogic = () => {
           duration: 5000
         });
       }
+    }
+  };
+
+  const handleToggleFavorite = async (venueId: string, venueName: string) => {
+    if (!currentUser?.uid) {
+      toast({ title: "Login Necessário", description: "Faça login para favoritar locais.", variant: "destructive" });
+      return;
+    }
+
+    const userDocRef = doc(firestore, "users", currentUser.uid);
+    try {
+      await runTransaction(firestore, async (transaction) => {
+        const userSnap = await transaction.get(userDocRef);
+        if (!userSnap.exists()) throw new Error("Usuário não encontrado.");
+
+        const userData = userSnap.data();
+        const currentFavorites: string[] = userData.favoriteVenueIds || [];
+        let updatedFavorites: string[];
+
+        if (currentFavorites.includes(venueId)) {
+          updatedFavorites = currentFavorites.filter(id => id !== venueId);
+          toast({ title: "Removido dos Favoritos!", description: `${venueName} não é mais um dos seus fervos favoritos.` });
+        } else {
+          if (currentFavorites.length >= 20) { // Example limit
+              toast({ title: "Limite de Favoritos Atingido", description: "Você pode ter no máximo 20 locais favoritos.", variant: "destructive", duration: 4000 });
+              return; 
+          }
+          updatedFavorites = [...currentFavorites, venueId];
+          toast({ title: "Adicionado aos Favoritos!", description: `${venueName} agora é um dos seus fervos favoritos!`, variant: "default" });
+        }
+        transaction.update(userDocRef, { favoriteVenueIds: updatedFavorites });
+      });
+      // Local state currentAppUser.favoriteVenueIds will update via the onSnapshot listener
+    } catch (error: any) {
+      console.error("Error toggling favorite:", error);
+      toast({ title: "Erro ao Favoritar", description: error.message || "Não foi possível atualizar seus favoritos.", variant: "destructive" });
     }
   };
 
@@ -885,12 +918,28 @@ const MapContentAndLogic = () => {
                         <p className="text-xs text-muted-foreground mt-1">Este local ainda não foi avaliado.</p>
                     )}
                 </div>
-                 <SheetClose asChild>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground flex-shrink-0 -mt-1 -mr-2 sm:-mr-0">
-                    <X className="w-5 h-5" />
-                    <span className="sr-only">Fechar</span>
-                  </Button>
-                </SheetClose>
+                <div className="flex items-center">
+                   {currentUser && (
+                     <Button
+                        variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "secondary" : "outline"}
+                        size="icon"
+                        className={cn(
+                           "text-primary hover:text-primary/80 mr-2 h-8 w-8 sm:h-9 sm:w-9",
+                           currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && "bg-primary/20 text-primary border-primary animate-pulse"
+                        )}
+                        onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
+                        title={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
+                      >
+                        <Heart className={cn("w-4 h-4 sm:w-5 sm:w-5", currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && "fill-primary")} />
+                      </Button>
+                   )}
+                   <SheetClose asChild>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground flex-shrink-0 -mt-1 -mr-2 sm:-mr-0 h-8 w-8 sm:h-9 sm:w-9">
+                        <X className="w-4 h-4 sm:w-5 sm:w-5" />
+                        <span className="sr-only">Fechar</span>
+                    </Button>
+                   </SheetClose>
+                </div>
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
 
@@ -1164,3 +1213,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+

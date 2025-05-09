@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -10,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2 } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -50,6 +51,7 @@ interface AppUser {
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
   venueCoins?: UserVenueCoins; 
   notifications?: Notification[];
+  favoriteVenueIds?: string[]; // Added for favorite venues
 }
 
 const useAuthAndUserSubscription = () => {
@@ -80,6 +82,7 @@ const useAuthAndUserSubscription = () => {
               lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
               venueCoins: userData.venueCoins || {}, 
               notifications: userData.notifications || [],
+              favoriteVenueIds: userData.favoriteVenueIds || [], // Populate favoriteVenueIds
             });
           } else {
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
@@ -91,6 +94,7 @@ const useAuthAndUserSubscription = () => {
               venueCoins: {},
               questionnaireCompleted: false,
               notifications: [],
+              favoriteVenueIds: [], // Initialize favoriteVenueIds
             });
           }
           setLoading(false);
@@ -158,7 +162,7 @@ export default function MainAppLayout({
       if (!appUser && !isAuthPage && !isSharedEventPage) {
         router.push('/login');
       } else if (appUser && !appUser.questionnaireCompleted) {
-        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage) {
+        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && pathname !== '/user/favorites') { // Allow favorites page
           router.push('/questionnaire');
         } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage) {
           router.push('/partner-questionnaire');
@@ -363,7 +367,7 @@ export default function MainAppLayout({
     );
   }
 
-  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
+  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event', '/user/favorites']; // Added /user/favorites
   const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
 
   const activeColorClass = 'text-primary';
@@ -501,10 +505,16 @@ export default function MainAppLayout({
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {appUser?.role === UserRole.USER && (
+                    <>
                     <DropdownMenuItem onClick={() => router.push('/user/profile')}>
                       <UserCircle className="w-4 h-4 mr-2" />
                       Meu Perfil
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/user/favorites')}>
+                      <Heart className="w-4 h-4 mr-2" /> 
+                      Meus Fervos Favoritos
+                    </DropdownMenuItem>
+                    </>
                   )}
                   {appUser?.role === UserRole.PARTNER && (
                     <DropdownMenuItem onClick={() => router.push('/partner-questionnaire')}>
@@ -546,3 +556,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
