@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Added CardFooter
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
@@ -34,24 +34,23 @@ import { Label } from '@/components/ui/label';
 interface RedeemedCoupon {
   id: string; // coupon document id
   userId: string;
-  userName: string; // Added this field
+  userName: string;
   couponCode: string;
   description: string;
   redeemedAt: FirebaseTimestamp;
-  // Add the document path for deletion
-  docPath: string;
+  docPath: string; // Full path to the coupon document for deletion
 }
 
 const PartnerCouponReportPage: NextPage = () => {
   const router = useRouter();
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingUser, setIsLoadingUser] = useState(true); // For auth loading
+  const [isLoadingData, setIsLoadingData] = useState(true); // For coupon data loading
   const [redeemedCoupons, setRedeemedCoupons] = useState<RedeemedCoupon[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [password, setPassword] = useState('');
   const [isClearing, setIsClearing] = useState(false);
-
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -60,17 +59,18 @@ const PartnerCouponReportPage: NextPage = () => {
       } else {
         router.push('/login');
       }
+      setIsLoadingUser(false);
     });
     return () => unsubscribeAuth();
   }, [router]);
 
   useEffect(() => {
-    if (!currentUser) {
-      setIsLoading(false); // Stop loading if user is not available
+    if (isLoadingUser || !currentUser) {
+      if (!isLoadingUser) setIsLoadingData(false); // If auth is done but no user, stop data loading
       return;
     }
 
-    setIsLoading(true);
+    setIsLoadingData(true);
     const couponsRef = collectionGroup(firestore, 'coupons');
     const q = query(
       couponsRef,
@@ -81,18 +81,16 @@ const PartnerCouponReportPage: NextPage = () => {
 
     const unsubscribeCoupons = onSnapshot(q, async (snapshot) => {
       const fetchedCoupons: RedeemedCoupon[] = [];
-
-      // Fetch user names for each coupon
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
         let userName = 'Usuário Desconhecido';
-        const userId = data.userId; // Get userId from data
-        const docPath = docSnap.ref.path; // Get the full document path
+        const userId = data.userId;
+        const docPath = docSnap.ref.path;
 
-        if (userId && typeof userId === 'string') { // Check if userId exists and is a string
+        if (userId && typeof userId === 'string') {
             try {
-              const userDocRef = doc(firestore, 'users', userId); // Use the extracted userId
-              const userDoc = await getDoc(userDocRef); // Ensure getDoc is imported and used correctly
+              const userDocRef = doc(firestore, 'users', userId);
+              const userDoc = await getDoc(userDocRef);
               if (userDoc.exists()) {
                 userName = userDoc.data().name || userName;
               }
@@ -103,39 +101,36 @@ const PartnerCouponReportPage: NextPage = () => {
              console.warn(`Missing or invalid userId for coupon ${docSnap.id}`);
         }
 
-        // Check if all necessary data exists before pushing
         if (data.userId && data.couponCode && data.description && data.redeemedAt) {
           fetchedCoupons.push({
             id: docSnap.id,
             userId: data.userId,
-            userName: userName, // Use fetched or default name
+            userName: userName,
             couponCode: data.couponCode,
             description: data.description,
             redeemedAt: data.redeemedAt as FirebaseTimestamp,
-            docPath: docPath, // Store the path
+            docPath: docPath,
           });
         } else {
            console.warn(`Incomplete coupon data for ${docSnap.id}, skipping.`);
         }
-      } // End of for loop
+      }
       setRedeemedCoupons(fetchedCoupons);
-      setIsLoading(false);
+      setIsLoadingData(false);
     }, (error) => {
       console.error("Error fetching redeemed coupons:", error);
       toast({ title: "Erro ao Carregar Relatório", description: "Não foi possível buscar os cupons resgatados.", variant: "destructive" });
-      setIsLoading(false);
+      setIsLoadingData(false);
     });
 
     return () => unsubscribeCoupons();
-  }, [currentUser, toast]);
-
+  }, [currentUser, isLoadingUser, toast]);
 
   const handleClearReport = async () => {
       if (!currentUser || redeemedCoupons.length === 0) return;
       setIsClearing(true);
 
       try {
-          // 1. Verify password
           const partnerDocRef = doc(firestore, `users/${currentUser.uid}`);
           const partnerDocSnap = await getDoc(partnerDocRef);
 
@@ -159,22 +154,17 @@ const PartnerCouponReportPage: NextPage = () => {
               return;
           }
 
-          // 2. Password is correct, proceed with deletion
           const batch = writeBatch(firestore);
-
           redeemedCoupons.forEach(coupon => {
-              // Use the stored docPath to reference the document for deletion
               const couponDocRef = doc(firestore, coupon.docPath);
               batch.delete(couponDocRef);
           });
-
           await batch.commit();
 
           toast({ title: "Relatório Limpo!", description: "Todos os cupons resgatados foram removidos deste relatório.", variant: "default" });
-          setRedeemedCoupons([]); // Clear local state immediately after successful deletion
-          setShowClearConfirm(false); // Close the dialog
-          setPassword(''); // Clear password input
-
+          setRedeemedCoupons([]);
+          setShowClearConfirm(false);
+          setPassword('');
       } catch (error: any) {
           console.error("Error clearing coupon report:", error);
           toast({ title: "Erro ao Limpar", description: error.message || "Não foi possível limpar o relatório.", variant: "destructive" });
@@ -183,21 +173,24 @@ const PartnerCouponReportPage: NextPage = () => {
       }
   };
 
+  if (isLoadingUser) {
+    return (
+      <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-         {/* Changed button colors to primary */}
         <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
           <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
           Painel
         </Button>
       </div>
-
-       {/* Changed card border/shadow to primary */}
       <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          {/* Changed title text color to primary */}
           <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <ScrollText className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Relatório de Cupons Resgatados
@@ -207,9 +200,8 @@ const PartnerCouponReportPage: NextPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          {isLoading ? (
+          {isLoadingData ? (
             <div className="flex justify-center items-center h-60">
-               {/* Changed loader color to primary */}
               <Loader2 className="w-10 h-10 text-primary animate-spin" />
             </div>
           ) : redeemedCoupons.length === 0 ? (
@@ -219,7 +211,6 @@ const PartnerCouponReportPage: NextPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                     {/* Changed table head text color */}
                     <TableHead className="text-primary/90">Usuário</TableHead>
                     <TableHead className="text-primary/90">Cupom</TableHead>
                     <TableHead className="text-primary/90">Descrição</TableHead>
@@ -242,12 +233,10 @@ const PartnerCouponReportPage: NextPage = () => {
             </ScrollArea>
           )}
         </CardContent>
-         {redeemedCoupons.length > 0 && (
-           {/* Changed footer border color */}
+        {redeemedCoupons.length > 0 && (
           <CardFooter className="p-4 sm:p-6 border-t border-primary/20 justify-end">
              <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
                <AlertDialogTrigger asChild>
-                  {/* Changed button variant to destructive (still red for delete action) */}
                   <Button variant="destructive" size="sm" onClick={() => setShowClearConfirm(true)} >
                       <Trash2 className="w-4 h-4 mr-2" /> Limpar Relatório
                   </Button>
@@ -271,7 +260,6 @@ const PartnerCouponReportPage: NextPage = () => {
                  </div>
                  <AlertDialogFooter>
                    <AlertDialogCancel onClick={() => {setPassword(''); setShowClearConfirm(false)}}>Cancelar</AlertDialogCancel>
-                   {/* Kept destructive style for confirm delete */}
                    <AlertDialogAction
                      onClick={handleClearReport}
                      disabled={!password || isClearing}
@@ -292,3 +280,4 @@ const PartnerCouponReportPage: NextPage = () => {
 
 export default PartnerCouponReportPage;
 
+    
