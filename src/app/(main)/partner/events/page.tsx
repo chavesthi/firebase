@@ -256,23 +256,17 @@ const ManageEventsPage: NextPage = () => {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
 
-      const ratingsQuery = query(collection(firestore, 'eventRatings'), where('eventId', '==', eventId), where('partnerId', '==', currentUser.uid));
-      const ratingsSnapshot = await getDocs(ratingsQuery);
+      // Ratings in 'eventRatings' collection are no longer deleted here.
+      // They will persist and contribute to overall statistics.
 
-      const batch = writeBatch(firestore);
-      ratingsSnapshot.forEach(ratingDoc => {
-        batch.delete(ratingDoc.ref);
-      });
-      await batch.commit();
-
-      toast({ title: "Evento Excluído", description: "O evento e suas avaliações foram excluídos com sucesso." });
+      toast({ title: "Evento Excluído", description: "O evento foi excluído. Suas avaliações e comentários foram preservados para estatísticas." });
       if (editingEventId === eventId) {
         setEditingEventId(null);
         reset();
       }
     } catch (error) {
-      console.error("Error deleting event and ratings:", error);
-      toast({ title: "Erro ao Excluir", description: "Não foi possível excluir o evento e/ou suas avaliações.", variant: "destructive" });
+      console.error("Error deleting event:", error);
+      toast({ title: "Erro ao Excluir", description: "Não foi possível excluir o evento.", variant: "destructive" });
     }
   };
 
@@ -307,7 +301,6 @@ const ManageEventsPage: NextPage = () => {
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        {/* Changed loader color to primary */}
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
       </div>
     );
@@ -316,16 +309,13 @@ const ManageEventsPage: NextPage = () => {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-         {/* Changed button colors to primary */}
         <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
             <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
             Painel
         </Button>
       </div>
-      {/* Changed card border/shadow to primary */}
       <Card className="mb-8 border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          {/* Changed title text color to primary */}
           <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <PlusCircle className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             {editingEventId ? 'Editar Evento' : 'Adicionar Novo Evento'}
@@ -338,40 +328,34 @@ const ManageEventsPage: NextPage = () => {
           <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               <div className="md:col-span-2">
-                {/* Changed label text color */}
                 <Label htmlFor="eventName" className="text-primary/90">Nome do Evento</Label>
                 <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-red-500' : ''} />} />
                 {errors.eventName && <p className="mt-1 text-sm text-red-500">{errors.eventName.message}</p>}
               </div>
 
               <div>
-                {/* Changed label text color */}
                 <Label htmlFor="startDate" className="text-primary/90">Data de Início</Label>
                 <Controller name="startDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.startDate ? 'border-red-500' : ''} />} />
                 {errors.startDate && <p className="mt-1 text-sm text-red-500">{errors.startDate.message}</p>}
               </div>
               <div>
-                 {/* Changed label text color */}
                 <Label htmlFor="startTime" className="text-primary/90">Hora de Início</Label>
                 <Controller name="startTime" control={control} render={({ field }) => <Input id="startTime" type="time" {...field} className={errors.startTime ? 'border-red-500' : ''} />} />
                 {errors.startTime && <p className="mt-1 text-sm text-red-500">{errors.startTime.message}</p>}
               </div>
 
               <div>
-                 {/* Changed label text color */}
                 <Label htmlFor="endDate" className="text-primary/90">Data de Fim</Label>
                 <Controller name="endDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.endDate ? 'border-red-500' : ''} />} />
                 {errors.endDate && <p className="mt-1 text-sm text-red-500">{errors.endDate.message}</p>}
               </div>
               <div>
-                 {/* Changed label text color */}
                 <Label htmlFor="endTime" className="text-primary/90">Hora de Fim</Label>
                 <Controller name="endTime" control={control} render={({ field }) => <Input id="endTime" type="time" {...field} className={errors.endTime ? 'border-red-500' : ''} />} />
                 {errors.endTime && <p className="mt-1 text-sm text-red-500">{errors.endTime.message}</p>}
               </div>
 
               <div className="md:col-span-2">
-                 {/* Changed label text color */}
                 <Label className="text-primary/90">Estilos Musicais (Máx. 4)</Label>
                 <ScrollArea className="h-32 p-2 border rounded-md border-input">
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -411,7 +395,6 @@ const ManageEventsPage: NextPage = () => {
               </div>
 
               <div>
-                 {/* Changed label text color */}
                 <Label htmlFor="pricingType" className="text-primary/90">Tipo de Preço</Label>
                 <Controller
                   name="pricingType"
@@ -434,7 +417,6 @@ const ManageEventsPage: NextPage = () => {
 
               {watchedPricingType !== PricingType.FREE && (
                 <div>
-                   {/* Changed label text color */}
                   <Label htmlFor="pricingValue" className="text-primary/90">Valor (R$)</Label>
                   <Controller name="pricingValue" control={control} render={({ field }) => <Input id="pricingValue" type="number" step="0.01" placeholder="Ex: 25.50" {...field} value={field.value ?? ''} className={errors.pricingValue ? 'border-red-500' : ''} />} />
                   {errors.pricingValue && <p className="mt-1 text-sm text-red-500">{errors.pricingValue.message}</p>}
@@ -442,7 +424,6 @@ const ManageEventsPage: NextPage = () => {
               )}
 
               <div className="md:col-span-2">
-                 {/* Changed label text color */}
                 <Label htmlFor="description" className="text-primary/90">Descrição do Evento (Opcional)</Label>
                 <Controller name="description" control={control} render={({ field }) => <Textarea id="description" placeholder="Detalhes sobre o evento, atrações, etc." {...field} className={errors.description ? 'border-red-500' : ''} />} />
                 {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description.message}</p>}
@@ -450,7 +431,6 @@ const ManageEventsPage: NextPage = () => {
 
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Controller name="visibility" control={control} render={({ field }) => <Switch id="visibility" checked={field.value} onCheckedChange={field.onChange} />} />
-                 {/* Changed label text color */}
                 <Label htmlFor="visibility" className="text-primary/90">Visível para usuários?</Label>
                 {errors.visibility && <p className="mt-1 text-sm text-red-500">{errors.visibility.message}</p>}
               </div>
@@ -458,12 +438,10 @@ const ManageEventsPage: NextPage = () => {
           </CardContent>
           <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 p-4 sm:p-6">
              {editingEventId && (
-                // Changed button colors to primary for outline
                 <Button type="button" variant="outline" onClick={() => { setEditingEventId(null); reset(); }} className="w-full sm:w-auto border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
                     Cancelar Edição
                 </Button>
             )}
-            {/* Changed button colors to primary */}
             <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm" disabled={isSubmitting}>
               <Save className="w-4 h-4 mr-2" /> {isSubmitting ? 'Salvando...' : (editingEventId ? 'Salvar Alterações' : 'Criar Evento')}
             </Button>
@@ -471,10 +449,8 @@ const ManageEventsPage: NextPage = () => {
         </form>
       </Card>
 
-      {/* Changed card border/shadow to primary */}
       <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          {/* Changed title text color to primary */}
           <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <CalendarDays className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Meus Eventos Cadastrados
@@ -514,7 +490,6 @@ const ManageEventsPage: NextPage = () => {
                           {event.visibility ? <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />}
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEditEvent(event)} title="Editar evento">
-                           {/* Changed icon color */}
                           <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(event.id)} title="Excluir evento">
@@ -522,7 +497,6 @@ const ManageEventsPage: NextPage = () => {
                         </Button>
                         {event.checkInToken && (
                           <Button variant="ghost" size="icon" onClick={() => router.push(`/partner/qr-code/${event.id}`)} title="Ver QR Code do Evento">
-                             {/* Changed icon color */}
                             <QrCode className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                           </Button>
                         )}
