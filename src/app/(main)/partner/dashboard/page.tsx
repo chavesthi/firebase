@@ -9,7 +9,7 @@ import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { doc, onSnapshot, collection, getDocs, query, where } from 'firebase/firestore'; // Added query, where
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart } from 'lucide-react'; // Added Heart
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb } from 'lucide-react'; // Added Heart, Lightbulb
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle } from '@/lib/constants';
 import { StarRating } from '@/components/ui/star-rating';
@@ -326,6 +326,27 @@ export default function PartnerDashboardPage() {
                 </Button>
             </CardContent>
         </Card>
+        
+        <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
+              Fervo App Recomendações
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Receba dicas e insights para melhorar seu Fervo e atrair mais clientes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-3 p-4 sm:p-6 pt-0 sm:pt-0">
+            <Button
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
+              onClick={() => toast({ title: "Em Breve!", description: "Recomendações personalizadas com IA estarão disponíveis aqui para otimizar seus eventos e engajamento."})}
+            >
+              <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Ver Recomendações (Em Breve)
+            </Button>
+          </CardContent>
+        </Card>
+
 
         <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
