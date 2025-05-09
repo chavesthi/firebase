@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -116,10 +117,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15',
+  [VenueType.STAND_UP]: '#FACC15', // Yellow-ish for standup
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
-  [VenueType.LGBT]: '#F97316',
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Pink for adult ent.
+  [VenueType.LGBT]: '#F97316', // Orange for LGBT
 };
 
 const MapUpdater = ({ center }: { center: Location }) => {
@@ -144,17 +145,20 @@ const VenueCustomMapMarker = ({
   hasActiveEvent?: boolean
 }) => {
   const IconComponent = venueTypeIcons[type];
-  const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
+  const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))'; // Default to primary if type unknown
 
-  let effectiveBlinkHighlightColor = '#FACC15';
+  // Ensure blink highlight color is distinct from base pin color
+  let effectiveBlinkHighlightColor = '#FACC15'; // Default bright yellow
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : normalizeHex(basePinColor);
 
 
+  // If basePinColor is too similar to yellow, pick another highlight (e.g., white or a light primary shade)
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor)) {
-    effectiveBlinkHighlightColor = 'white';
+    effectiveBlinkHighlightColor = 'white'; // Or another contrasting color like 'hsl(var(--primary), 0.7)'
   }
 
+  // Create a unique animation name per type to avoid style conflicts if multiple types blink
   const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
   return (
@@ -180,7 +184,7 @@ const VenueCustomMapMarker = ({
         <div
           className={cn(
             "flex items-center justify-center w-10 h-10 rounded-full z-10",
-            isFilterActive ? 'shadow-xl' : 'shadow-lg',
+            isFilterActive ? 'shadow-xl' : 'shadow-lg', // Keep shadow subtle if not blinking
           )}
           style={{
             backgroundColor: basePinColor,
@@ -202,7 +206,7 @@ const UserCustomMapMarker = () => {
   return (
     <div className="flex flex-col items-center" title="Sua Localização" style={{ transform: 'translate(-50%, -100%)' }}>
       <div
-        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md"
+        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" // Blue color for user marker
       >
         <UserIconLucide className="w-5 h-5 text-white" />
       </div>
@@ -222,10 +226,12 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
     if (urlObj.hostname === 'www.youtube.com' || urlObj.hostname === 'youtube.com') {
       videoId = urlObj.searchParams.get('v');
     } else if (urlObj.hostname === 'youtu.be') {
+      // For youtu.be links, the video ID is part of the pathname
       const pathParts = urlObj.pathname.substring(1).split('/');
       videoId = pathParts[0];
     }
   } catch (e) {
+    // Log error or handle gracefully if URL parsing fails
     console.warn("Could not parse YouTube URL for embed: ", url, e);
     return null;
   }
@@ -239,6 +245,7 @@ const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: Fire
   return now >= startTime && now <= endTime;
 };
 
+// Function to update partner's overall rating based on their event ratings
 const updatePartnerOverallRating = async (partnerId: string) => {
     try {
         const eventsCollectionRef = collection(firestore, 'users', partnerId, 'events');
@@ -249,6 +256,7 @@ const updatePartnerOverallRating = async (partnerId: string) => {
 
         eventsSnapshot.forEach(eventDoc => {
             const eventData = eventDoc.data();
+            // Ensure we only consider events that have been rated
             if (typeof eventData.averageRating === 'number' && typeof eventData.ratingCount === 'number' && eventData.ratingCount > 0) {
                 totalWeightedSum += (eventData.averageRating * eventData.ratingCount);
                 totalRatingsCount += eventData.ratingCount;
@@ -256,16 +264,18 @@ const updatePartnerOverallRating = async (partnerId: string) => {
         });
 
         const averageVenueRating = totalRatingsCount > 0 ? parseFloat((totalWeightedSum / totalRatingsCount).toFixed(2)) : 0;
-        const venueRatingCount = totalRatingsCount;
+        const venueRatingCount = totalRatingsCount; // This is the sum of rating counts from all events
 
         const partnerDocRef = doc(firestore, 'users', partnerId);
         await updateDoc(partnerDocRef, {
             averageVenueRating: averageVenueRating,
-            venueRatingCount: venueRatingCount,
+            venueRatingCount: venueRatingCount, // Store the total number of ratings
         });
 
+        // console.log(`Partner ${partnerId} overall rating updated: ${averageVenueRating} from ${venueRatingCount} ratings.`);
     } catch (error) {
         console.error("Error updating partner overall rating:", error);
+        // Optionally, inform the user or log more detailed error information
     }
 };
 
@@ -285,7 +295,7 @@ const MapContentAndLogic = () => {
   const router = useRouter();
 
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
-  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({});
+  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({}); // Store user's own ratings: { eventId: UserRatingData }
 
   const [currentRating, setCurrentRating] = useState(0);
   const [currentComment, setCurrentComment] = useState('');
@@ -293,36 +303,39 @@ const MapContentAndLogic = () => {
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
 
-  const mapsApi = useMapsLibrary('maps');
+  const mapsApi = useMapsLibrary('maps'); // Use the hook to get maps API
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
       if (user) {
         const userDocRef = doc(firestore, "users", user.uid);
+        // Use onSnapshot for real-time updates to favoriteVenueIds
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data();
               setCurrentAppUser({
                 uid: user.uid,
-                name: userData.name || "Usuário Fervo",
+                name: userData.name || "Usuário Fervo", // Fallback name
                 favoriteVenueIds: userData.favoriteVenueIds || [],
               });
             } else {
+              // Handle case where user document might not exist yet (e.g., new signup)
               setCurrentAppUser({ uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [] });
             }
         });
-        return () => unsubscribeUser();
+        return () => unsubscribeUser(); // Cleanup user snapshot listener
       } else {
         setCurrentAppUser(null);
       }
     });
-    return () => unsubscribeAuth();
+    return () => unsubscribeAuth(); // Cleanup auth listener
   }, []);
 
 
   useEffect(() => {
     if (currentUser) {
+      // Listener for user's checked-in events
       const checkInsRef = collection(firestore, `users/${currentUser.uid}/checkedInEvents`);
       const unsubscribeCheckIns = onSnapshot(checkInsRef, (snapshot) => {
         const checkInsData: Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }> = {};
@@ -332,16 +345,18 @@ const MapContentAndLogic = () => {
         setUserCheckIns(checkInsData);
       });
 
+      // Listener for user's ratings on events
+      // This query fetches ratings submitted *by* the current user
       const ratingsQuery = query(collection(firestore, 'eventRatings'), where('userId', '==', currentUser.uid));
       const unsubscribeRatings = onSnapshot(ratingsQuery, (snapshot) => {
         const ratingsData: Record<string, UserRatingData> = {};
         snapshot.docs.forEach(docSnap => {
             const data = docSnap.data();
-            ratingsData[data.eventId] = {
+            ratingsData[data.eventId] = { // Key by eventId for easy lookup
                 rating: data.rating,
                 comment: data.comment,
                 createdAt: data.createdAt as FirebaseTimestamp,
-                userName: data.userName,
+                userName: data.userName, // This is the user's name on their rating
             };
         });
         setUserRatings(ratingsData);
@@ -366,10 +381,12 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
+          // Fallback to a default location (e.g., São Paulo)
           setUserLocation({ lat: -23.55052, lng: -46.633308 });
         }
       );
     } else {
+      // Geolocation not supported
       console.error("Geolocation is not supported by this browser.");
       setUserLocation({ lat: -23.55052, lng: -46.633308 });
     }
@@ -381,19 +398,21 @@ const MapContentAndLogic = () => {
     const qPartners = query(
       usersCollectionRef,
       where('role', '==', UserRole.PARTNER),
-      where('questionnaireCompleted', '==', true)
+      where('questionnaireCompleted', '==', true) // Only fetch partners who completed setup
     );
 
+    // Use onSnapshot for real-time updates of venues
     const unsubscribeVenues = onSnapshot(qPartners, async (partnersSnapshot) => {
       const venuePromises = partnersSnapshot.docs.map(async (partnerDoc) => {
         const partnerData = partnerDoc.data();
 
+        // Determine if venue has an active event
         let hasActiveEvent = false;
         let activeEventName: string | null = null;
 
         const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
         const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
-        const eventsSnapshot = await getDocs(eventsQuery);
+        const eventsSnapshot = await getDocs(eventsQuery); // Fetch once for active event check
 
         if (!eventsSnapshot.empty) {
           for (const eventDoc of eventsSnapshot.docs) {
@@ -402,7 +421,7 @@ const MapContentAndLogic = () => {
                 isEventHappeningNow(eventData.startDateTime as FirebaseTimestamp, eventData.endDateTime as FirebaseTimestamp)) {
               hasActiveEvent = true;
               activeEventName = eventData.eventName as string;
-              break;
+              break; // Found an active event, no need to check further
             }
           }
         }
@@ -417,14 +436,15 @@ const MapContentAndLogic = () => {
           instagramUrl: partnerData.instagramUrl,
           facebookUrl: partnerData.facebookUrl,
           whatsappPhone: partnerData.whatsappPhone,
-          averageVenueRating: partnerData.averageVenueRating,
-          venueRatingCount: partnerData.venueRatingCount,
+          averageVenueRating: partnerData.averageVenueRating, // Get overall venue rating
+          venueRatingCount: partnerData.venueRatingCount, // Get total ratings for venue
           hasActiveEvent,
           activeEventName,
         };
       });
 
       const fetchedVenues = (await Promise.all(venuePromises))
+        // Filter out venues without valid location or type (essential for map display)
         .filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
 
       setVenues(fetchedVenues);
@@ -435,21 +455,25 @@ const MapContentAndLogic = () => {
       setIsLoadingVenues(false);
     });
 
-    return () => unsubscribeVenues();
+    return () => unsubscribeVenues(); // Cleanup listener on component unmount
   }, [toast]);
 
+  // Fetch events for a selected venue
   const fetchVenueEvents = async (venueId: string) => {
+    // Avoid re-fetching if events are already loaded for this venue or if it's not the selected one
     if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return;
     setIsLoadingEvents(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
+      // Query for visible events, ordered by start time
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
 
+      // Use onSnapshot for real-time event updates
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-        } as VenueEvent));
+        } as VenueEvent)); // Cast to VenueEvent type
 
         setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
         setIsLoadingEvents(false);
@@ -458,7 +482,7 @@ const MapContentAndLogic = () => {
         toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
         setIsLoadingEvents(false);
       });
-      return unsubscribe;
+      return unsubscribe; // Return the unsubscriber function for cleanup
     } catch (error) {
       console.error("Error fetching venue events:", error);
       toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
@@ -466,19 +490,22 @@ const MapContentAndLogic = () => {
     }
   };
 
+  // Effect to fetch events when a venue is selected or if events are not yet loaded for it
   useEffect(() => {
     let unsubscribeEvents: (() => void) | undefined;
-    if (selectedVenue && !selectedVenue.events) {
+    if (selectedVenue && !selectedVenue.events) { // Only fetch if events are not already loaded
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
+      // Reset rating state when a new venue with events is selected, or when venue data updates
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
     }
+    // Cleanup function for the events listener
     return () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
-  }, [selectedVenue]);
+  }, [selectedVenue]); // Re-run when selectedVenue changes
 
 
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
@@ -495,41 +522,49 @@ const MapContentAndLogic = () => {
 
   const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
 
+  // Memoized list of venues that match active filters (for blinking effect)
   const filteredVenuesForBlinking = useMemo(() => {
-    if (!isAnyFilterActive) return [];
+    if (!isAnyFilterActive) return []; // No filters active, so no venues should blink
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
       const musicStyleMatch = activeMusicStyleFilters.length === 0 ||
                              (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
 
+      // Logic for combining filters:
+      // If both types of filters are active, venue must match both (AND logic)
       if (activeVenueTypeFilters.length > 0 && activeMusicStyleFilters.length > 0) {
         return venueTypeMatch && musicStyleMatch;
       }
+      // If only venue type filters are active, match venue type
       if (activeVenueTypeFilters.length > 0) {
         return venueTypeMatch;
       }
+      // If only music style filters are active, match music style
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false;
+      return false; // Should not be reached if isAnyFilterActive is true
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
+  // All venues are always displayed on the map; blinking highlights filtered ones.
   const displayedVenues = useMemo(() => {
     return venues;
   }, [venues]);
 
 
+  // Helper component to display venue type icons in the filter sidebar
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground";
+    // Dynamically assign color class based on venue type for filter buttons
+    let colorClass = "text-foreground"; // Default color
 
     if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
     else if (type === VenueType.BAR) colorClass = "text-accent";
-    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
+    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; // Example: yellow for stand-up
     else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
-    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
-    else if (type === VenueType.LGBT) colorClass = "text-orange-500";
+    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; // Example: pink for adult
+    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; // Example: orange for LGBT
 
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
@@ -544,12 +579,14 @@ const MapContentAndLogic = () => {
         return;
     }
     setIsSubmittingRating(true);
-    setCurrentlyRatingEventId(eventId);
+    setCurrentlyRatingEventId(eventId); // Keep track of which event is being rated
 
     try {
         const eventDocRef = doc(firestore, `users/${partnerId}/events/${eventId}`);
+        // Unique ID for the rating document: eventId_userId
         const ratingDocRef = doc(firestore, 'eventRatings', `${eventId}_${currentUser.uid}`);
 
+        // Firestore transaction to update event's average rating and rating count atomically
         await runTransaction(firestore, async (transaction) => {
             const eventSnap = await transaction.get(eventDocRef);
             if (!eventSnap.exists()) throw new Error("Evento não encontrado para atualizar avaliação.");
@@ -558,47 +595,59 @@ const MapContentAndLogic = () => {
             const oldRatingCount = eventData.ratingCount || 0;
             const oldAverageRating = eventData.averageRating || 0;
 
+            // Check if this user has already rated this event
             const existingRatingSnap = await transaction.get(ratingDocRef);
             let newRatingCount = oldRatingCount;
             let newAverageRating = oldAverageRating;
 
             if (existingRatingSnap.exists()) {
+                // User is updating their previous rating
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
+                // Adjust average: (old_avg * old_count - prev_rating + new_rating) / old_count
+                // Important: newRatingCount does NOT change if user is updating their rating
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
-                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) {
+                 // Edge case: if only one rating existed and it's being updated
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { // simplified: if (oldRatingCount === 1)
                     newAverageRating = currentRating;
                 }
 
             } else {
+                // New rating from this user
                 newRatingCount = oldRatingCount + 1;
+                // Adjust average: (old_avg * old_count + new_rating) / new_count
                 newAverageRating = newRatingCount > 0 ? ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount : currentRating;
             }
 
+            // Update the event document with new average and count
             transaction.update(eventDocRef, {
-                averageRating: parseFloat(newAverageRating.toFixed(2)),
+                averageRating: parseFloat(newAverageRating.toFixed(2)), // Store with 2 decimal places
                 ratingCount: newRatingCount,
             });
 
+            // Create or update the user's rating document in 'eventRatings' collection
             transaction.set(ratingDocRef, {
                 eventId: eventId,
-                partnerId: partnerId,
+                partnerId: partnerId, // Store partnerId for easier querying if needed
                 userId: currentUser.uid,
                 userName: currentAppUser.name, // Use name from currentAppUser
                 rating: currentRating,
-                comment: currentComment || null,
-                createdAt: serverTimestamp(),
-            }, { merge: true });
+                comment: currentComment || null, // Store comment or null
+                createdAt: serverTimestamp(), // Use server timestamp
+            }, { merge: true }); // Use merge:true if you want to update existing rating fields selectively
 
+            // Mark that the user has rated this event in their `checkedInEvents` subcollection
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
             transaction.update(userCheckedInEventRef, { hasRated: true });
         });
 
         toast({ title: "Avaliação Enviada!", description: "Obrigado pelo seu feedback!", variant: "default" });
+        // Reset rating form state
         setCurrentRating(0);
         setCurrentComment('');
         setCurrentlyRatingEventId(null);
 
-        if (selectedVenue) {
+        // After successfully rating an event, update the partner's overall venue rating
+        if (selectedVenue) { // Ensure selectedVenue is defined
             await updatePartnerOverallRating(selectedVenue.id);
         }
 
@@ -616,6 +665,7 @@ const MapContentAndLogic = () => {
       return;
     }
 
+    // Prevent sharing of past events
     if (eventEndDateTime.toDate() < new Date()) {
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
         return;
@@ -636,6 +686,7 @@ const MapContentAndLogic = () => {
         sharedSuccessfully = true;
       } catch (shareError: any) {
         if (shareError.name === 'AbortError') {
+          // User cancelled the share operation
           console.log('Share operation cancelled by user.');
           return; // Don't award coins if cancelled
         } else { // Handle other share errors by falling back to clipboard
@@ -692,11 +743,11 @@ const MapContentAndLogic = () => {
             const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
             const newCouponRef = doc(couponCollectionRef); // Auto-generates ID
             transaction.set(newCouponRef, {
-              userId: currentUser.uid,
+              userId: currentUser.uid, // Store userId on the coupon document
               couponCode: couponCode,
               description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`, // Venue-specific description
               createdAt: serverTimestamp(),
-              status: 'active',
+              status: 'active', // Coupons are active by default
               validAtPartnerId: partnerId, // Store partner ID where coupon is valid
               partnerVenueName: partnerName, // Store partner name for display
             });
@@ -747,16 +798,16 @@ const MapContentAndLogic = () => {
           updatedFavorites = currentFavorites.filter(id => id !== venueId);
           toast({ title: "Removido dos Favoritos!", description: `${venueName} não é mais um dos seus fervos favoritos.` });
         } else {
-          if (currentFavorites.length >= 20) { // Example limit
+          if (currentFavorites.length >= 20) { // Example limit for favorites
               toast({ title: "Limite de Favoritos Atingido", description: "Você pode ter no máximo 20 locais favoritos.", variant: "destructive", duration: 4000 });
-              return; 
+              return; // Stop execution if limit is reached
           }
           updatedFavorites = [...currentFavorites, venueId];
           toast({ title: "Adicionado aos Favoritos!", description: `${venueName} agora é um dos seus fervos favoritos!`, variant: "default" });
         }
         transaction.update(userDocRef, { favoriteVenueIds: updatedFavorites });
       });
-      // Local state currentAppUser.favoriteVenueIds will update via the onSnapshot listener
+      // Local state currentAppUser.favoriteVenueIds will update via the onSnapshot listener in the auth useEffect
     } catch (error: any) {
       console.error("Error toggling favorite:", error);
       toast({ title: "Erro ao Favoritar", description: error.message || "Não foi possível atualizar seus favoritos.", variant: "destructive" });
@@ -764,10 +815,11 @@ const MapContentAndLogic = () => {
   };
 
 
-  if (!userLocation) {
+  if (!userLocation) { // Show loading until user location is determined
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
+  // Check if mapsApi is loaded, only if API key is valid
   if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
@@ -783,14 +835,15 @@ const MapContentAndLogic = () => {
 
 
   return (
-    <div className="relative flex w-full h-[calc(100vh-4rem)]">
-      <div className="absolute top-4 left-4 z-30">
+    <div className="relative flex w-full h-[calc(100vh-4rem)]"> {/* Ensure map takes full height minus header */}
+      <div className="absolute top-4 left-4 z-30"> {/* Logo with higher z-index */}
           <Logo iconClassName="text-primary" />
       </div>
+      {/* Filter Sidebar */}
       <Card
         className={cn(
-          "absolute z-20 top-16 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
-          filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'
+          "absolute z-20 top-16 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50", // Added primary border
+          filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]' // Adjust for better hide on md
         )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -800,7 +853,8 @@ const MapContentAndLogic = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-15rem)] pr-3">
+          <ScrollArea className="h-[calc(100vh-15rem)] pr-3"> {/* Adjusted height */}
+            {/* Venue Type Filters */}
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Tipo de Local</h3>
               {VENUE_TYPE_OPTIONS.map((option) => (
@@ -816,7 +870,8 @@ const MapContentAndLogic = () => {
                 </Button>
               ))}
             </div>
-            <Separator className="my-4 bg-primary/30" />
+            <Separator className="my-4 bg-primary/30" /> {/* Primary separator */}
+            {/* Music Style Filters */}
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Estilo Musical do Local</h3>
               {MUSIC_STYLE_OPTIONS.map((option) => (
@@ -827,7 +882,7 @@ const MapContentAndLogic = () => {
                   className={`w-full justify-start ${activeMusicStyleFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
                   aria-pressed={activeMusicStyleFilters.includes(option.value)}
                 >
-                  <Music2 className="w-5 h-5 text-primary/70" />
+                  <Music2 className="w-5 h-5 text-primary/70" /> {/* Primary tint for icon */}
                   <span className="ml-2">{option.label}</span>
                 </Button>
               ))}
@@ -836,35 +891,40 @@ const MapContentAndLogic = () => {
         </CardContent>
       </Card>
 
+      {/* Main Map Area */}
       <div className="flex-1 h-full">
         {!filterSidebarOpen && (
           <Button
             variant="outline"
             size="icon"
             onClick={() => setFilterSidebarOpen(true)}
-            className="absolute z-20 p-2 rounded-full top-16 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
+            className="absolute z-20 p-2 rounded-full top-16 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg" // Primary styles
             aria-label="Abrir filtros"
           >
             <Filter className="w-5 h-5" />
           </Button>
         )}
+        {/* Conditionally render GoogleMap based on API key and mapsApi loaded status */}
         {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
             <GoogleMap
-                defaultCenter={userLocation}
+                defaultCenter={userLocation} // Use determined userLocation
                 defaultZoom={15}
-                mapId="ec411dbe9f75cb23"
+                mapId="ec411dbe9f75cb23" // Your Map ID
                 gestureHandling="greedy"
                 disableDefaultUI={true}
-                className="w-full h-full"
+                className="w-full h-full" // Ensure map fills its container
             >
+                {/* Component to smoothly update map camera when userLocation changes */}
                 <MapUpdater center={userLocation} />
 
+                {/* User's current location marker */}
                 {userLocation && (
                     <AdvancedMarker position={userLocation} title="Sua Localização">
                         <UserCustomMapMarker />
                     </AdvancedMarker>
                 )}
 
+                {/* Venue markers */}
                 {displayedVenues.map((venue) => {
                     const isVenueFilteredForBlinking = filteredVenuesForBlinking.some(fv => fv.id === venue.id);
 
@@ -872,9 +932,9 @@ const MapContentAndLogic = () => {
                     <AdvancedMarker
                         key={venue.id}
                         position={venue.location}
-                        onClick={() => { setSelectedVenue(venue); }}
+                        onClick={() => { setSelectedVenue(venue); }} // Select venue on click
                         title={venue.name}
-                        zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1}
+                        zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1} // Higher zIndex for active/filtered
                     >
                         <VenueCustomMapMarker
                             type={venue.type}
@@ -887,6 +947,7 @@ const MapContentAndLogic = () => {
                 })}
             </GoogleMap>
         )}
+        {/* Fallback if API key is missing or mapsApi not loaded */}
         {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE") && (
              <div className="flex items-center justify-center h-full bg-background text-destructive">
                 API Key do Google Maps não configurada ou inválida.
@@ -894,12 +955,13 @@ const MapContentAndLogic = () => {
         )}
       </div>
 
+      {/* Venue Details Sheet */}
       {selectedVenue && (
         <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { if (!isOpen) setSelectedVenue(null); }}>
           <SheetContent
             side="right"
-            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto"
-            onOpenAutoFocus={(e) => e.preventDefault()}
+            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto" // Allows scrolling within the sheet
+            onOpenAutoFocus={(e) => e.preventDefault()} // Prevent focus trap issues
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4">
@@ -907,11 +969,12 @@ const MapContentAndLogic = () => {
                     <SheetTitle className="text-2xl font-bold text-secondary">
                     {selectedVenue.name}
                     </SheetTitle>
+                    {/* Display overall venue rating */}
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly />
                             <span className="text-xs text-muted-foreground">
-                                (Avaliação Geral: {selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
+                                (Avaliação Geral: {selectedVenue.averageVenueRating.toFixed(1)} de {selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
                             </span>
                         </div>
                     ): (
@@ -919,20 +982,27 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                 <div className="flex items-center">
-                   {currentUser && (
+                   {/* Favorite Button */}
+                   {currentUser && ( // Only show if user is logged in
                      <Button
-                        variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "secondary" : "outline"}
+                        variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "destructive" : "outline"}
                         size="icon"
                         className={cn(
-                           "text-primary hover:text-primary/80 mr-2 h-8 w-8 sm:h-9 sm:w-9",
-                           currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && "bg-primary/20 text-primary border-primary animate-pulse"
+                           "mr-2 h-8 w-8 sm:h-9 sm:w-9",
+                           !currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && 
+                             "border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground", // Style for not favorited
+                           currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && 
+                             "animate-pulse" // Style for favorited (destructive variant handles colors)
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
                         title={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
                       >
-                        <Heart className={cn("w-4 h-4 sm:w-5 sm:w-5", currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && "fill-primary")} />
+                        <Heart 
+                          className="w-4 h-4 sm:w-5 sm:w-5 fill-current" // fill-current uses button's text color
+                        />
                       </Button>
                    )}
+                   {/* Close Button */}
                    <SheetClose asChild>
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground flex-shrink-0 -mt-1 -mr-2 sm:-mr-0 h-8 w-8 sm:h-9 sm:w-9">
                         <X className="w-4 h-4 sm:w-5 sm:w-5" />
@@ -943,11 +1013,12 @@ const MapContentAndLogic = () => {
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
 
-            <ScrollArea className="h-[calc(100vh-6rem)]">
+            <ScrollArea className="h-[calc(100vh-6rem)]"> {/* Adjust height based on header */}
               <div className="px-4 sm:px-6 pb-6 pt-4 space-y-6">
+                  {/* YouTube Video Embed */}
                   {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
                     <div className="mb-4">
-                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' }}>
+                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' }}> {/* 16:9 Aspect Ratio */}
                         <iframe
                           src={getYouTubeEmbedUrl(selectedVenue.youtubeUrl)!}
                           title="YouTube video player"
@@ -960,10 +1031,12 @@ const MapContentAndLogic = () => {
                     </div>
                   ) : null}
 
+                  {/* Venue Type */}
                   <div className="space-y-1">
                     <Badge variant="outline" className="border-secondary text-secondary">{venueTypeLabels[selectedVenue.type]}</Badge>
                   </div>
 
+                  {/* Music Styles */}
                   {selectedVenue.musicStyles && selectedVenue.musicStyles.length > 0 && (
                     <div>
                       <h3 className="text-lg font-semibold text-foreground mb-2">Estilos Musicais do Local</h3>
@@ -975,6 +1048,7 @@ const MapContentAndLogic = () => {
                     </div>
                   )}
 
+                  {/* Social Links & WhatsApp */}
                   {(selectedVenue.instagramUrl || selectedVenue.facebookUrl || selectedVenue.youtubeUrl || selectedVenue.whatsappPhone) && (
                     <div className="pt-4 mt-4 border-t border-border">
                       <h3 className="text-lg font-semibold text-foreground mb-3">Contatos e Redes Sociais</h3>
@@ -1001,7 +1075,7 @@ const MapContentAndLogic = () => {
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && (
+                        {selectedVenue.youtubeUrl && ( // Ensure YouTube link is also shown here if it exists and is not the main video
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1010,6 +1084,7 @@ const MapContentAndLogic = () => {
                     </div>
                   )}
 
+                  {/* Events List */}
                   <div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">Próximos Eventos</h3>
                     {isLoadingEvents && <p className="text-muted-foreground text-center"><Loader2 className="inline w-4 h-4 mr-2 animate-spin"/> Carregando eventos...</p>}
@@ -1025,8 +1100,8 @@ const MapContentAndLogic = () => {
                           const eventHasEnded = event.endDateTime.toDate() < new Date();
                           const userCheckedInData = userCheckIns[event.id];
                           const userHasCheckedIn = !!userCheckedInData;
-                          const userHasRated = userHasCheckedIn && !!userCheckedInData.hasRated;
-                          const existingRatingForEvent = userRatings[event.id];
+                          const userHasRated = userHasCheckedIn && !!userCheckedInData.hasRated; // Check if user has rated THIS event
+                          const existingRatingForEvent = userRatings[event.id]; // Get user's own rating for this event
 
                           return (
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
@@ -1040,16 +1115,18 @@ const MapContentAndLogic = () => {
                                     )}
                                   </div>
                                   <div className="flex items-center space-x-1">
+                                      {/* Share Button */}
                                       <Button
                                           variant="ghost"
                                           size="icon"
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
                                           onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime)}
                                           title={eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!"}
-                                          disabled={!currentUser || eventHasEnded}
+                                          disabled={!currentUser || eventHasEnded} // Disable if not logged in or event ended
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
+                                      {/* Notification Button */}
                                       <Button
                                           variant="ghost"
                                           size="icon"
@@ -1070,6 +1147,7 @@ const MapContentAndLogic = () => {
                                 {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
                                 {event.pricingType !== PricingType.FREE && event.pricingValue ? `: R$ ${event.pricingValue.toFixed(2)}` : ''}
                               </p>
+                               {/* Display average event rating and count */}
                                {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
                                 <div className="flex items-center gap-1 mt-1">
                                     <StarRating rating={event.averageRating} totalStars={5} size={14} readOnly />
@@ -1085,21 +1163,22 @@ const MapContentAndLogic = () => {
                               )}
                               {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
 
+                              {/* Rating section - only if user is logged in AND has checked in AND has NOT rated yet */}
                               {currentUser && userHasCheckedIn && !userHasRated && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
                                   <h4 className="text-sm font-semibold text-primary mb-1.5">Avalie este evento:</h4>
                                   <StarRating
                                     rating={currentlyRatingEventId === event.id ? currentRating : 0}
-                                    setRating={setCurrentRating}
+                                    setRating={setCurrentRating} // Pass the setter
                                     readOnly={isSubmittingRating && currentlyRatingEventId === event.id}
                                     totalStars={5}
-                                    size={20}
+                                    size={20} // Larger stars for rating input
                                   />
                                   <Textarea
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
                                     onChange={(e) => {
-                                      setCurrentlyRatingEventId(event.id);
+                                      setCurrentlyRatingEventId(event.id); // Set this event as the one being rated
                                       setCurrentComment(e.target.value);
                                     }}
                                     className="mt-2 text-xs"
@@ -1110,11 +1189,14 @@ const MapContentAndLogic = () => {
                                     size="sm"
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
+                                        // Ensure rating state is for THIS event before submitting
                                         if(currentlyRatingEventId !== event.id) {
-                                            setCurrentRating(0);
+                                            // This can happen if user interacts with another rating form then clicks submit on this one
+                                            // Ideally, each event's rating form would manage its own state, or we clear global state when switching
+                                            setCurrentRating(0); // Reset if context switched
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id);
+                                        setCurrentlyRatingEventId(event.id); // Confirm context
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1124,6 +1206,7 @@ const MapContentAndLogic = () => {
                                   </Button>
                                 </div>
                               )}
+                              {/* Display user's existing rating if they have already rated */}
                               {currentUser && userHasCheckedIn && userHasRated && existingRatingForEvent && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
                                     <h4 className="text-sm font-semibold text-primary mb-1.5">Sua avaliação:</h4>
@@ -1139,7 +1222,8 @@ const MapContentAndLogic = () => {
                       </div>
                     )}
                   </div>
-                   {selectedVenue.location && (
+                  {/* Navigation Button */}
+                   {selectedVenue.location && ( // Only show if location exists
                     <div className="pt-6 mt-6 border-t border-border">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1173,7 +1257,7 @@ const MapContentAndLogic = () => {
                             className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
-                              const venueName = encodeURIComponent(selectedVenue.name);
+                              const venueName = encodeURIComponent(selectedVenue.name); // URL encode venue name
                               window.open(`https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[formatted_address]=${venueName}`, '_blank');
                               toast({
                                 title: "Uber (Redirecionando)",
@@ -1202,10 +1286,12 @@ const MapContentAndLogic = () => {
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
 
+  // Check if API key is valid and configured
   if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
+    // Wrap the map content with APIProvider
     <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic" libraries={['marker', 'maps']}>
       <MapContentAndLogic />
     </APIProvider>
@@ -1213,4 +1299,5 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
 

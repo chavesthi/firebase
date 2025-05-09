@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -173,7 +174,7 @@ const UserFavoritesPage: NextPage = () => {
       <Card className="max-w-3xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
         <CardHeader className="text-center p-4 sm:p-6">
           <CardTitle className="text-2xl sm:text-3xl text-primary flex items-center justify-center">
-            <Heart className="w-7 h-7 sm:w-8 sm:h-8 mr-2 sm:mr-3 fill-primary text-primary-foreground" />
+            <Heart className="w-7 h-7 sm:w-8 sm:h-8 mr-2 sm:mr-3 fill-destructive" />
             Meus Fervos Favoritos
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
@@ -259,4 +260,5 @@ const UserFavoritesPage: NextPage = () => {
 };
 
 export default UserFavoritesPage;
+
 
