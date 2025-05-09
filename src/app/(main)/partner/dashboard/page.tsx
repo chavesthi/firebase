@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -7,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore'; // Added collection, getDocs
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle } from 'lucide-react'; // Added CheckCircle
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users } from 'lucide-react'; // Added Users icon
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle } from '@/lib/constants';
-import { StarRating } from '@/components/ui/star-rating'; // Import StarRating
+import { StarRating } from '@/components/ui/star-rating';
 
 interface VenueData {
   venueName: string;
@@ -32,8 +31,8 @@ interface VenueData {
   facebookUrl?: string;
   youtubeUrl?: string;
   questionnaireCompleted?: boolean;
-  averageVenueRating?: number; // Added for statistics
-  venueRatingCount?: number;   // Added for statistics
+  averageVenueRating?: number;
+  venueRatingCount?: number;
 }
 
 
@@ -43,6 +42,8 @@ export default function PartnerDashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [venueData, setVenueData] = useState<VenueData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [totalCheckIns, setTotalCheckIns] = useState<number | null>(null);
+  const [loadingCheckIns, setLoadingCheckIns] = useState(true);
 
   useEffect(() => {
     let unsubscribeSnapshot: (() => void) | null = null;
@@ -72,8 +73,8 @@ export default function PartnerDashboardPage() {
                 facebookUrl: data.facebookUrl,
                 youtubeUrl: data.youtubeUrl,
                 questionnaireCompleted: data.questionnaireCompleted,
-                averageVenueRating: data.averageVenueRating, // Load rating
-                venueRatingCount: data.venueRatingCount,     // Load count
+                averageVenueRating: data.averageVenueRating,
+                venueRatingCount: data.venueRatingCount,
               });
               setLoading(false);
             }
@@ -106,12 +107,55 @@ export default function PartnerDashboardPage() {
     };
   }, [router, toast]);
 
+  useEffect(() => {
+    if (!currentUser || !venueData?.questionnaireCompleted) {
+      setLoadingCheckIns(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchTotalCheckIns = async () => {
+      setLoadingCheckIns(true);
+      let count = 0;
+      try {
+        const eventsCollectionRef = collection(firestore, `users/${currentUser.uid}/events`);
+        const eventsSnapshot = await getDocs(eventsCollectionRef);
+
+        for (const eventDoc of eventsSnapshot.docs) {
+          // Check if the event has a checkIns subcollection path defined, even if empty
+          const checkInsCollectionRef = collection(firestore, `users/${currentUser.uid}/events/${eventDoc.id}/checkIns`);
+          const checkInsSnapshot = await getDocs(checkInsCollectionRef);
+          count += checkInsSnapshot.size;
+        }
+        if (isMounted) {
+          setTotalCheckIns(count);
+        }
+      } catch (error) {
+        console.error("Error fetching total check-ins:", error);
+        if (isMounted) {
+          setTotalCheckIns(0);
+          toast({ title: "Erro ao buscar total de check-ins", variant: "destructive", duration: 3000 });
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingCheckIns(false);
+        }
+      }
+    };
+
+    fetchTotalCheckIns();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser, venueData?.questionnaireCompleted, toast]);
+
+
   if (loading || !currentUser || !venueData) {
     return (
       <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-         {/* Changed loader color to primary */}
         <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-         {/* Changed text color to primary */}
         <p className="text-lg text-primary">Carregando dados do parceiro...</p>
       </div>
     );
@@ -122,24 +166,19 @@ export default function PartnerDashboardPage() {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <header className="mb-8 sm:mb-10 text-center">
-         {/* Changed header text color to primary */}
         <h1 className="text-3xl sm:text-4xl font-bold text-primary">{venueData.venueName}</h1>
         <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center px-2">
-             {/* Changed icon color to primary */}
             <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-primary/70 shrink-0"/>
             <span className="truncate">{fullAddress}</span>
         </p>
-         {/* Changed button colors to primary */}
          <Button variant="outline" size="sm" className="mt-4 border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm" onClick={() => router.push('/partner-questionnaire')}>
             <Edit className="w-3 h-3 mr-1.5" /> Editar Info. do Local
         </Button>
       </header>
 
       <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
-         {/* Changed card border/shadow to primary */}
         <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
-            {/* Changed title text color to primary */}
             <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
               <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Gerenciar Eventos
@@ -147,7 +186,6 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm">Crie, edite e visualize seus próximos eventos.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-3 p-4 sm:p-6 pt-0 sm:pt-0">
-            {/* Changed button colors to primary */}
             <Button
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
               onClick={() => router.push('/partner/events')}
@@ -157,11 +195,8 @@ export default function PartnerDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Statistics Card Updated */}
-         {/* Changed card border/shadow to primary */}
         <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
-             {/* Changed title text color to primary */}
             <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
               <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Estatísticas Gerais
@@ -182,12 +217,20 @@ export default function PartnerDashboardPage() {
             </div>
              <div className="space-y-1">
                  <p className="text-sm font-medium text-muted-foreground">Total de Avaliações Recebidas:</p>
-                  {/* Changed text color to primary */}
                  <p className="text-lg font-semibold text-primary">{venueData.venueRatingCount || 0}</p>
             </div>
-             {/* Removed Check-in count - needs separate calculation */}
+            <div className="space-y-1">
+                 <p className="text-sm font-medium text-muted-foreground">Total de Check-ins no Local:</p>
+                 {loadingCheckIns ? (
+                     <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                 ) : (
+                    <p className="text-lg font-semibold text-primary flex items-center">
+                        <Users className="w-5 h-5 mr-2"/>
+                        {totalCheckIns ?? 0}
+                    </p>
+                 )}
+            </div>
             <div className="flex flex-col gap-2 pt-2">
-               {/* Changed button colors to primary */}
               <Button
                     variant="outline"
                     className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
@@ -195,12 +238,11 @@ export default function PartnerDashboardPage() {
                 >
                  Ver Avaliações e Comentários
                 </Button>
-               {/* Placeholder for future Check-in report */}
                <Button
                     variant="outline"
                     className="w-full border-primary/50 text-primary/70 text-sm sm:text-base cursor-not-allowed"
                     disabled={true}
-                    title="Em breve"
+                    title="Em breve: Relatório detalhado de check-ins por evento"
                 >
                  <CheckCircle className="w-4 h-4 mr-2"/> Ver Check-ins por Evento (Em Breve)
                </Button>
@@ -208,10 +250,8 @@ export default function PartnerDashboardPage() {
           </CardContent>
         </Card>
 
-         {/* Changed card border/shadow to primary */}
         <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
-            {/* Changed title text color to primary */}
             <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
               <Gift className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Resgatar Cupons
@@ -219,7 +259,6 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm">Valide cupons de usuários aqui.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-              {/* Changed button colors to primary */}
              <Button
                 variant="outline"
                 className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
@@ -230,10 +269,8 @@ export default function PartnerDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Changed card border/shadow to primary */}
         <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-                {/* Changed title text color to primary */}
                 <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <ScrollText className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Relatório de Cupons
@@ -241,7 +278,6 @@ export default function PartnerDashboardPage() {
                 <CardDescription className="text-xs sm:text-sm">Visualize os cupons que você resgatou.</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-                 {/* Changed button colors to primary */}
                 <Button
                 variant="outline"
                 className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
@@ -252,10 +288,8 @@ export default function PartnerDashboardPage() {
             </CardContent>
         </Card>
 
-         {/* Changed card border/shadow to primary */}
         <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
           <CardHeader className="p-4 sm:p-6">
-            {/* Changed title text color to primary */}
             <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
               <Settings className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
               Configurações da Conta
@@ -263,7 +297,6 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm">Ajuste suas preferências e informações de contato.</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-              {/* Changed button colors to primary */}
              <Button
                 variant="outline"
                 className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
@@ -274,11 +307,8 @@ export default function PartnerDashboardPage() {
           </CardContent>
         </Card>
 
-         {/* QR Code Card */}
-         {/* Changed card border/shadow to primary */}
          <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-                 {/* Changed title text color to primary */}
                 <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                     <QrCode className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                     QR Codes de Eventos
@@ -286,11 +316,10 @@ export default function PartnerDashboardPage() {
                 <CardDescription className="text-xs sm:text-sm">Gere e visualize os QR Codes para check-in nos seus eventos.</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
-                 {/* Changed button colors to primary */}
                 <Button
                 variant="outline"
                 className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
-                onClick={() => router.push('/partner/events')} // Link to events page where QR can be accessed
+                onClick={() => router.push('/partner/events')} 
                 >
                 Ver Eventos e QR Codes
                 </Button>
@@ -301,4 +330,3 @@ export default function PartnerDashboardPage() {
     </div>
   );
 }
-
