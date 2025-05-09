@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -11,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -29,6 +28,17 @@ interface UserVenueCoins {
     [partnerId: string]: number;
 }
 
+interface Notification {
+  id: string; // Using partnerId as notification ID for simplicity
+  partnerId: string;
+  venueName: string;
+  message: string;
+  createdAt: FirebaseTimestamp;
+  read: boolean;
+  venueType?: VenueType;
+  musicStyles?: MusicStyle[];
+}
+
 interface AppUser {
   uid: string;
   name: string;
@@ -39,6 +49,7 @@ interface AppUser {
   questionnaireCompleted?: boolean;
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
   venueCoins?: UserVenueCoins; 
+  notifications?: Notification[];
 }
 
 const useAuthAndUserSubscription = () => {
@@ -68,6 +79,7 @@ const useAuthAndUserSubscription = () => {
               questionnaireCompleted: userData.questionnaireCompleted || false,
               lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
               venueCoins: userData.venueCoins || {}, 
+              notifications: userData.notifications || [],
             });
           } else {
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
@@ -78,6 +90,7 @@ const useAuthAndUserSubscription = () => {
               role: defaultRoleBasedOnInitialAuthAttempt,
               venueCoins: {},
               questionnaireCompleted: false,
+              notifications: [],
             });
           }
           setLoading(false);
@@ -122,13 +135,18 @@ export default function MainAppLayout({
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
-  const [hasNewNotifications, setHasNewNotifications] = useState(false);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
 
 
   const totalFervoCoins = useMemo(() => {
     if (!appUser || !appUser.venueCoins) return 0;
     return Object.values(appUser.venueCoins).reduce((sum, count) => sum + count, 0);
+  }, [appUser]);
+
+  const unreadNotificationsCount = useMemo(() => {
+    if (!appUser || !appUser.notifications) return 0;
+    return appUser.notifications.filter(n => !n.read).length;
   }, [appUser]);
 
 
@@ -152,11 +170,8 @@ export default function MainAppLayout({
 
   useEffect(() => {
     if (loading || !appUser || !appUser.uid || !appUser.questionnaireCompleted || appUser.role !== UserRole.USER) {
-      setHasNewNotifications(false);
       return;
     }
-
-    const userLastCheck = appUser.lastNotificationCheckTimestamp?.toDate() || new Date(0);
 
     const partnersRef = collection(firestore, 'users');
     const q = query(partnersRef,
@@ -164,44 +179,65 @@ export default function MainAppLayout({
       where('questionnaireCompleted', '==', true)
     );
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      let foundNew = false;
+    const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+      const newNotifications: Notification[] = [];
+      const existingNotifications = appUser.notifications || [];
+      const userLastCheck = appUser.lastNotificationCheckTimestamp?.toDate() || new Date(0);
+
       for (const partnerDoc of querySnapshot.docs) {
         const partnerData = partnerDoc.data();
+        const partnerId = partnerDoc.id;
         const partnerProfileCompletedAt = (partnerData.questionnaireCompletedAt as FirebaseTimestamp)?.toDate();
 
         if (!partnerProfileCompletedAt) continue;
 
-        if (partnerProfileCompletedAt > userLastCheck) {
+        // Check if this partner is "new" since last check OR if it's a new partner not yet in user's notifications
+        const isTrulyNewPartner = partnerProfileCompletedAt > userLastCheck;
+        const alreadyNotified = existingNotifications.some(n => n.partnerId === partnerId);
+
+        if (isTrulyNewPartner && !alreadyNotified) {
           const typeMatch = appUser.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
           const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => appUser.preferredMusicStyles?.includes(style));
 
           if (typeMatch || styleMatch) {
-            foundNew = true;
-            break;
+            newNotifications.push({
+              id: partnerId, // Use partnerId as a unique ID for this notification
+              partnerId: partnerId,
+              venueName: partnerData.venueName,
+              message: `Novo Fervo que combina com você: ${partnerData.venueName}!`,
+              createdAt: partnerData.questionnaireCompletedAt as FirebaseTimestamp, // Use partner completion time
+              read: false,
+              venueType: partnerData.venueType as VenueType,
+              musicStyles: (partnerData.musicStyles || []) as MusicStyle[],
+            });
           }
         }
       }
-      setHasNewNotifications(foundNew);
+
+      if (newNotifications.length > 0 && appUser.uid) {
+        const userDocRef = doc(firestore, "users", appUser.uid);
+        // Add new notifications to existing ones, avoiding duplicates by partnerId
+        const updatedNotifications = [...existingNotifications];
+        newNotifications.forEach(newNotif => {
+            if (!updatedNotifications.some(exNotif => exNotif.partnerId === newNotif.partnerId)) {
+                updatedNotifications.push(newNotif);
+            }
+        });
+        
+        // Sort by createdAt descending before storing
+        updatedNotifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+
+        await updateDoc(userDocRef, {
+          notifications: updatedNotifications.slice(0, 20) // Keep only latest 20 notifications
+        });
+      }
     }, (error) => {
       console.error("Error listening for new partner notifications:", error);
-      setHasNewNotifications(false);
     });
 
     return () => unsubscribe();
   }, [appUser, loading]);
 
-
-  const handleLogout = async () => {
-    try {
-      await auth.signOut();
-      router.push('/login');
-      toast({ title: "Logout", description: "Você foi desconectado." });
-    } catch (error) {
-      console.error("Logout error:", error);
-      toast({ title: "Erro no Logout", description: "Não foi possível desconectar.", variant: "destructive" });
-    }
-  };
 
   const handleNotificationsClick = async () => {
     if (!appUser || !appUser.uid) {
@@ -223,64 +259,48 @@ export default function MainAppLayout({
        toast({ title: "Defina suas Preferências", description: "Adicione seus tipos de locais e estilos musicais favoritos no seu perfil para receber sugestões.", duration: 7000 });
        return;
     }
+    
+    setShowNotificationDropdown(prev => !prev); // Toggle dropdown visibility
 
-    setIsFetchingNotifications(true);
-
-    try {
-      const partnersRef = collection(firestore, 'users');
-      const q = query(partnersRef,
-        where('role', '==', UserRole.PARTNER),
-        where('questionnaireCompleted', '==', true),
-      );
-      const querySnapshot = await getDocs(q);
-      const allVenues: Array<{ id: string, venueName: string, venueType: VenueType, musicStyles: MusicStyle[] }> = [];
-
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if(data.venueName && data.venueType) {
-            allVenues.push({
-                id: doc.id,
-                venueName: data.venueName,
-                venueType: data.venueType as VenueType,
-                musicStyles: (data.musicStyles || []) as MusicStyle[],
-            });
-        }
-      });
-
-      if (allVenues.length === 0) {
-        toast({ title: "Nenhum Fervo Encontrado", description: "Ainda não há locais parceiros cadastrados." });
-      } else {
-          const matchingVenues = allVenues.filter(venue => {
-            const typeMatch = userPrefs.venueTypes.includes(venue.venueType);
-            const styleMatch = Array.isArray(venue.musicStyles) && venue.musicStyles.some(style => userPrefs.musicStyles.includes(style));
-            return typeMatch || styleMatch;
-          });
-
-          if (matchingVenues.length > 0) {
-            const venueNames = matchingVenues.slice(0, 2).map(v => v.venueName).join(', ');
-            const andMore = matchingVenues.length > 2 ? ` e mais ${matchingVenues.length - 2}!` : '.';
-            toast({
-              title: "Novos Fervos que Combinam com Você!",
-              description: `Encontramos: ${venueNames}${andMore} Explore no mapa!`,
-              duration: 7000,
-            });
-          } else {
-            toast({ title: "Nada de Novo por Enquanto", description: "Nenhum Fervo encontrado que corresponda às suas preferências atuais. Explore o mapa para descobrir mais!", duration: 7000 });
-          }
-      }
-
-      const userDocRef = doc(firestore, "users", appUser.uid);
-      await updateDoc(userDocRef, {
-        lastNotificationCheckTimestamp: serverTimestamp()
-      });
-
-    } catch (error) {
-      console.error("Error fetching notifications data or updating timestamp:", error);
-      toast({ title: "Erro ao Buscar Sugestões", description: "Não foi possível verificar novos Fervos.", variant: "destructive" });
-    } finally {
-      setIsFetchingNotifications(false);
+    if (unreadNotificationsCount > 0) {
+        // Mark all as read (optimistic UI update could be done here if appUser state was local)
+        const userDocRef = doc(firestore, "users", appUser.uid);
+        const currentNotifications = appUser.notifications || [];
+        const updatedNotifications = currentNotifications.map(n => ({ ...n, read: true }));
+        await updateDoc(userDocRef, {
+            notifications: updatedNotifications,
+            lastNotificationCheckTimestamp: serverTimestamp() 
+        });
+    } else if (appUser.notifications && appUser.notifications.length === 0){
+         toast({ title: "Nenhuma Notificação", description: "Você não tem novas notificações. Continue explorando!", duration: 5000 });
     }
   };
+
+ const dismissNotification = async (notificationId: string) => {
+    if (!appUser || !appUser.uid) return;
+    const userDocRef = doc(firestore, "users", appUser.uid);
+    const updatedNotifications = (appUser.notifications || []).filter(n => n.id !== notificationId);
+    try {
+        await updateDoc(userDocRef, { notifications: updatedNotifications });
+        toast({ title: "Notificação Removida", variant:"default" });
+    } catch (error) {
+        console.error("Error dismissing notification:", error);
+        toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação.", variant: "destructive" });
+    }
+  };
+
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      router.push('/login');
+      toast({ title: "Logout", description: "Você foi desconectado." });
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast({ title: "Erro no Logout", description: "Não foi possível desconectar.", variant: "destructive" });
+    }
+  };
+
 
   const handleCoinsClick = async () => {
     if (!appUser || !appUser.venueCoins) {
@@ -376,17 +396,55 @@ export default function MainAppLayout({
                     <ScanLine className="w-5 h-5" />
                     <span className="sr-only">Check-in QR Code</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', hoverBgClass)}
-                    onClick={handleNotificationsClick}
-                    disabled={isFetchingNotifications || isFetchingCoinDetails}
-                    title="Verificar novos Fervos"
-                  >
-                    {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
-                    <span className="sr-only">Notificações</span>
-                  </Button>
+                  <DropdownMenu open={showNotificationDropdown} onOpenChange={setShowNotificationDropdown}>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(activeColorClass, unreadNotificationsCount > 0 && 'animate-pulse', hoverBgClass)}
+                            onClick={handleNotificationsClick}
+                            disabled={isFetchingNotifications || isFetchingCoinDetails}
+                            title="Notificações"
+                        >
+                            {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
+                            {unreadNotificationsCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">
+                                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                                </span>
+                            )}
+                            <span className="sr-only">Notificações</span>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-80 max-h-96 overflow-y-auto" align="end">
+                        <DropdownMenuLabel>Notificações</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {(appUser.notifications && appUser.notifications.length > 0) ? (
+                            appUser.notifications.map((notification) => (
+                                <DropdownMenuItem key={notification.id} className={cn("flex justify-between items-start whitespace-normal", !notification.read && "bg-primary/10")}>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium">{notification.venueName}</p>
+                                        <p className="text-xs text-muted-foreground">{notification.message}</p>
+                                        <p className="text-xs text-muted-foreground/70 pt-1">
+                                            {new Date(notification.createdAt.seconds * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="ml-2 h-7 w-7 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); dismissNotification(notification.id);}}>
+                                        <Trash2 className="w-3.5 h-3.5"/>
+                                    </Button>
+                                </DropdownMenuItem>
+                            ))
+                        ) : (
+                            <DropdownMenuItem disabled>Nenhuma notificação nova.</DropdownMenuItem>
+                        )}
+                         {(appUser.notifications && appUser.notifications.length > 0 && unreadNotificationsCount === 0) && (
+                            <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem disabled className="text-center text-xs text-muted-foreground">Você está em dia!</DropdownMenuItem>
+                            </>
+                         )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                    <div className="relative">
                       <Button
                         variant="ghost"
@@ -488,4 +546,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-
