@@ -97,39 +97,44 @@ const UserFavoritesPage: NextPage = () => {
     const fetchDetails = async () => {
       try {
         const venuesData: FavoriteVenueDisplay[] = [];
-        const CHUNK_SIZE = 30;
+        const CHUNK_SIZE = 30; // Firestore 'in' query supports up to 30 items in array
         for (let i = 0; i < favoriteVenueIds.length; i += CHUNK_SIZE) {
             const chunk = favoriteVenueIds.slice(i, i + CHUNK_SIZE);
             if (chunk.length === 0) continue;
 
             const venuesRef = collection(firestore, "users");
+            // Query for documents where ID is in the current chunk and role is partner
             const q = query(venuesRef, where(documentId(), 'in', chunk), where('role', '==', 'partner'));
             const querySnapshot = await getDocs(q);
             
             querySnapshot.forEach((docSnap) => {
               const data = docSnap.data();
-              venuesData.push({
-                id: docSnap.id,
-                venueName: data.venueName || 'Local Desconhecido',
-                venueType: data.venueType as VenueType,
-                musicStyles: data.musicStyles as MusicStyle[],
-                address: data.address ? { 
-                    city: data.address.city, 
-                    state: data.address.state, 
-                    street: data.address.street, 
-                    number: data.address.number,
-                    cep: data.address.cep,
-                } : undefined,
-                location: data.location as Location,
-                averageVenueRating: data.averageVenueRating,
-                venueRatingCount: data.venueRatingCount,
-                // notificationsEnabled is derived from notificationSettings state
-              });
+              // Ensure that the venue is indeed a partner before adding
+              if (data.role === 'partner') {
+                  venuesData.push({
+                    id: docSnap.id,
+                    venueName: data.venueName || 'Local Desconhecido',
+                    venueType: data.venueType as VenueType,
+                    musicStyles: data.musicStyles as MusicStyle[],
+                    address: data.address ? { 
+                        city: data.address.city, 
+                        state: data.address.state, 
+                        street: data.address.street, 
+                        number: data.address.number,
+                        cep: data.address.cep,
+                    } : undefined,
+                    location: data.location as Location,
+                    averageVenueRating: data.averageVenueRating,
+                    venueRatingCount: data.venueRatingCount,
+                    // notificationsEnabled is derived from notificationSettings state
+                  });
+              }
             });
         }
+        // Preserve the order from favoriteVenueIds
         const orderedVenues = favoriteVenueIds
           .map(id => venuesData.find(v => v.id === id))
-          .filter(Boolean) as FavoriteVenueDisplay[];
+          .filter(Boolean) as FavoriteVenueDisplay[]; // filter(Boolean) removes any undefined if a venue was not found/not a partner
         setFavoriteVenues(orderedVenues);
 
       } catch (error) {
@@ -140,7 +145,7 @@ const UserFavoritesPage: NextPage = () => {
       }
     };
     fetchDetails();
-  }, [currentUser, favoriteVenueIds, toast]); // Removed notificationSettings from deps as it's used inside map now
+  }, [currentUser, favoriteVenueIds, toast]);
 
 
   const handleUnfavorite = async (venueId: string, venueName: string) => {
@@ -195,7 +200,7 @@ const UserFavoritesPage: NextPage = () => {
   };
 
 
-  if (isLoading && !currentUser) { 
+  if (isLoading) { 
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
@@ -223,11 +228,7 @@ const UserFavoritesPage: NextPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-40">
-              <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            </div>
-          ) : favoriteVenues.length === 0 ? (
+          {favoriteVenues.length === 0 ? (
             <div className="text-center py-10">
               <Heart className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
               <p className="mt-4 text-lg text-muted-foreground">Você ainda não favoritou nenhum local.</p>
@@ -240,7 +241,7 @@ const UserFavoritesPage: NextPage = () => {
             <ScrollArea className="h-[calc(100vh-22rem)] sm:h-[calc(100vh-24rem)] pr-3">
               <div className="space-y-4">
                 {favoriteVenues.map((venue) => {
-                  const isNotificationEnabled = notificationSettings[venue.id] ?? true; // Default to true
+                  const isNotificationEnabled = notificationSettings[venue.id] ?? true; // Default to true if not set
                   return (
                   <Card key={venue.id} className="bg-card/80 border-primary/50 shadow-md hover:shadow-primary/20 transition-shadow">
                     <CardHeader className="pb-3 pt-4 px-4">
