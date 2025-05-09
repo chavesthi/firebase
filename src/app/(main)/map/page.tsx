@@ -1,3 +1,4 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -878,12 +879,10 @@ const MapContentAndLogic = () => {
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]"> 
-      <div className="absolute top-4 left-4 z-30"> 
-          <Logo iconClassName="text-primary" />
-      </div>
+      {/* Logo removed from here */}
       <Card
         className={cn(
-          "absolute z-20 top-16 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50", 
+          "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50", 
           filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]' 
         )}
       >
@@ -936,7 +935,7 @@ const MapContentAndLogic = () => {
             variant="outline"
             size="icon"
             onClick={() => setFilterSidebarOpen(true)}
-            className="absolute z-20 p-2 rounded-full top-16 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg" 
+            className="absolute z-20 p-2 rounded-full top-4 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg" 
             aria-label="Abrir filtros"
           >
             <Filter className="w-5 h-5" />
@@ -1322,3 +1321,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
