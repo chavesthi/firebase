@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -482,7 +481,7 @@ const MapContentAndLogic = () => {
     return () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
-  }, [selectedVenue, toast]);
+  }, [selectedVenue]);
 
 
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
@@ -1007,7 +1006,8 @@ const MapContentAndLogic = () => {
                                           size="icon"
                                           className="text-primary hover:text-primary/80 -mr-2 -mt-1"
                                           onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
-                                          title="Ativar notificação para este evento"
+                                          title={eventHasEnded ? "Evento encerrado" : "Ativar notificação para este evento"}
+                                          disabled={eventHasEnded}
                                       >
                                           <Bell className="w-5 h-5" />
                                       </Button>
