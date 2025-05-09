@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -82,8 +81,8 @@ interface EventDocument extends EventFormInputs {
   updatedAt?: Timestamp;
   checkInToken?: string;
   pricingValue?: number | null; // Allow null for Firestore
-  averageRating?: number; // Added for potential future use or display
-  ratingCount?: number;   // Added for potential future use or display
+  averageRating?: number; 
+  ratingCount?: number;   
 }
 
 const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
@@ -120,19 +119,17 @@ const ManageEventsPage: NextPage = () => {
 
   const watchedPricingType = watch('pricingType');
 
-  // Listener for real-time event updates
   useEffect(() => {
     let unsubscribeEvents: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
-        setLoading(true); // Start loading when user is confirmed
+        setLoading(true); 
 
         const eventsCollectionRef = collection(firestore, 'users', user.uid, 'events');
-        const q = query(eventsCollectionRef, orderBy('createdAt', 'desc')); // Order by creation time
+        const q = query(eventsCollectionRef, orderBy('createdAt', 'desc')); 
 
-        // Detach previous listener if exists
         if (unsubscribeEvents) {
           unsubscribeEvents();
         }
@@ -143,31 +140,29 @@ const ManageEventsPage: NextPage = () => {
             ...doc.data(),
           } as EventDocument));
           setPartnerEvents(eventsData);
-          setLoading(false); // Stop loading after initial data load or update
+          setLoading(false); 
         }, (error) => {
           console.error("Error fetching events with onSnapshot:", error);
           toast({ title: "Erro ao buscar eventos", variant: "destructive" });
-          setLoading(false); // Stop loading on error
+          setLoading(false); 
         });
 
       } else {
         router.push('/login');
-        // Cleanup listener if user logs out
         if (unsubscribeEvents) {
           unsubscribeEvents();
         }
+        setLoading(false); 
       }
     });
 
     return () => {
       unsubscribeAuth();
-      // Cleanup listener on component unmount
       if (unsubscribeEvents) {
         unsubscribeEvents();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, toast]); // currentUser dependency removed as auth state handles it
+  }, [router, toast]); 
 
   const combineDateAndTime = (date: Date, time: string): Timestamp => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -184,7 +179,6 @@ const ManageEventsPage: NextPage = () => {
 
     const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
 
-    // Check visible event limit only when adding a new visible event
     if (!editingEventId && data.visibility) {
         const visibleEvents = partnerEvents.filter(event => event.visibility);
         if (visibleEvents.length >= 5) {
@@ -199,7 +193,7 @@ const ManageEventsPage: NextPage = () => {
     }
 
     const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
-    const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10);
+    const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10).toUpperCase();
 
     const eventPayload: Omit<EventDocument, 'id' | 'createdAt' | 'averageRating' | 'ratingCount'> & { createdAt?: Timestamp, pricingValue?: number | null, updatedAt?: Timestamp, averageRating?: number, ratingCount?: number } = {
       partnerId: currentUser.uid,
@@ -217,20 +211,22 @@ const ManageEventsPage: NextPage = () => {
     try {
       if (editingEventId) {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', editingEventId);
-        eventPayload.createdAt = existingEvent?.createdAt; // Preserve original createdAt
+        eventPayload.createdAt = existingEvent?.createdAt; 
         eventPayload.updatedAt = serverTimestamp();
+        // Preserve existing rating fields if they exist, otherwise initialize
+        eventPayload.averageRating = existingEvent?.averageRating ?? 0;
+        eventPayload.ratingCount = existingEvent?.ratingCount ?? 0;
         await updateDoc(eventDocRef, eventPayload as any);
         toast({ title: "Evento Atualizado!", description: "O evento foi atualizado com sucesso." });
       } else {
         eventPayload.createdAt = serverTimestamp();
-        eventPayload.averageRating = 0; // Initialize rating fields for new events
+        eventPayload.averageRating = 0; 
         eventPayload.ratingCount = 0;
         await addDoc(eventsCollectionRef, eventPayload as any);
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
       reset();
       setEditingEventId(null);
-      // No need to call fetchEvents manually, onSnapshot will update the list
     } catch (error) {
       console.error("Error saving event:", error);
       toast({ title: "Erro ao Salvar Evento", description: "Não foi possível salvar o evento.", variant: "destructive" });
@@ -260,7 +256,6 @@ const ManageEventsPage: NextPage = () => {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
 
-      // Delete associated ratings
       const ratingsQuery = query(collection(firestore, 'eventRatings'), where('eventId', '==', eventId), where('partnerId', '==', currentUser.uid));
       const ratingsSnapshot = await getDocs(ratingsQuery);
 
@@ -271,7 +266,6 @@ const ManageEventsPage: NextPage = () => {
       await batch.commit();
 
       toast({ title: "Evento Excluído", description: "O evento e suas avaliações foram excluídos com sucesso." });
-      // No need to call fetchEvents, onSnapshot handles update
       if (editingEventId === eventId) {
         setEditingEventId(null);
         reset();
@@ -304,22 +298,20 @@ const ManageEventsPage: NextPage = () => {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', event.id);
       await updateDoc(eventDocRef, { visibility: newVisibility, updatedAt: serverTimestamp() });
       toast({ title: `Visibilidade Alterada`, description: `Evento agora está ${newVisibility ? 'visível' : 'oculto'}.` });
-      // No need to call fetchEvents, onSnapshot handles update
     } catch (error) {
       console.error("Error toggling visibility:", error);
       toast({ title: "Erro ao Alterar Visibilidade", variant: "destructive" });
     }
   };
 
-  if (loading && !currentUser) {
+  if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-         {/* Changed loader color to primary */}
+        {/* Changed loader color to primary */}
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
       </div>
     );
   }
-
 
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
@@ -330,10 +322,10 @@ const ManageEventsPage: NextPage = () => {
             Painel
         </Button>
       </div>
-       {/* Changed card border/shadow to primary */}
+      {/* Changed card border/shadow to primary */}
       <Card className="mb-8 border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-           {/* Changed title text color to primary */}
+          {/* Changed title text color to primary */}
           <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <PlusCircle className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             {editingEventId ? 'Editar Evento' : 'Adicionar Novo Evento'}
@@ -346,14 +338,14 @@ const ManageEventsPage: NextPage = () => {
           <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               <div className="md:col-span-2">
-                 {/* Changed label text color */}
+                {/* Changed label text color */}
                 <Label htmlFor="eventName" className="text-primary/90">Nome do Evento</Label>
                 <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-red-500' : ''} />} />
                 {errors.eventName && <p className="mt-1 text-sm text-red-500">{errors.eventName.message}</p>}
               </div>
 
               <div>
-                 {/* Changed label text color */}
+                {/* Changed label text color */}
                 <Label htmlFor="startDate" className="text-primary/90">Data de Início</Label>
                 <Controller name="startDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.startDate ? 'border-red-500' : ''} />} />
                 {errors.startDate && <p className="mt-1 text-sm text-red-500">{errors.startDate.message}</p>}
@@ -466,12 +458,12 @@ const ManageEventsPage: NextPage = () => {
           </CardContent>
           <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 p-4 sm:p-6">
              {editingEventId && (
-                 {/* Changed button colors to primary */}
+                // Changed button colors to primary for outline
                 <Button type="button" variant="outline" onClick={() => { setEditingEventId(null); reset(); }} className="w-full sm:w-auto border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
                     Cancelar Edição
                 </Button>
             )}
-             {/* Changed button colors to primary */}
+            {/* Changed button colors to primary */}
             <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm" disabled={isSubmitting}>
               <Save className="w-4 h-4 mr-2" /> {isSubmitting ? 'Salvando...' : (editingEventId ? 'Salvar Alterações' : 'Criar Evento')}
             </Button>
@@ -479,10 +471,10 @@ const ManageEventsPage: NextPage = () => {
         </form>
       </Card>
 
-       {/* Changed card border/shadow to primary */}
+      {/* Changed card border/shadow to primary */}
       <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-           {/* Changed title text color to primary */}
+          {/* Changed title text color to primary */}
           <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <CalendarDays className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Meus Eventos Cadastrados
@@ -500,9 +492,9 @@ const ManageEventsPage: NextPage = () => {
                 {partnerEvents.map(event => {
                   const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
                   return (
-                  <Card key={event.id} className={`p-3 sm:p-4 border rounded-lg ${event.id === editingEventId ? 'border-primary shadow-md' : 'border-border'}`}> {/* Changed border color */}
+                  <Card key={event.id} className={`p-3 sm:p-4 border rounded-lg ${event.id === editingEventId ? 'border-primary shadow-md' : 'border-border'}`}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                      <div className="flex-1 min-w-0"> {/* Ensure text truncates */}
+                      <div className="flex-1 min-w-0"> 
                         <h3 className="text-md sm:text-lg font-semibold text-foreground truncate">{event.eventName}</h3>
                         {isHappening && (
                           <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
@@ -522,14 +514,16 @@ const ManageEventsPage: NextPage = () => {
                           {event.visibility ? <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />}
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEditEvent(event)} title="Editar evento">
-                          <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" /> {/* Kept blue for edit action */}
+                           {/* Changed icon color */}
+                          <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(event.id)} title="Excluir evento">
-                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" /> {/* Kept red for delete action */}
+                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
                         </Button>
                         {event.checkInToken && (
                           <Button variant="ghost" size="icon" onClick={() => router.push(`/partner/qr-code/${event.id}`)} title="Ver QR Code do Evento">
-                            <QrCode className="w-4 h-4 sm:w-5 sm:h-5 text-primary" /> {/* Changed QR code color */}
+                             {/* Changed icon color */}
+                            <QrCode className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                           </Button>
                         )}
                       </div>
@@ -569,4 +563,3 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
-
