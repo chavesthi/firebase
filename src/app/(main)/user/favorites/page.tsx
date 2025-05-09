@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -260,5 +258,3 @@ const UserFavoritesPage: NextPage = () => {
 };
 
 export default UserFavoritesPage;
-
-

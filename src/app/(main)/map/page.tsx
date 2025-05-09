@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -284,6 +282,7 @@ const MapContentAndLogic = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null); // Store app user data including favorites
   const [userLocation, setUserLocation] = useState<Location | null>(null);
+  const [actualUserLocation, setActualUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [activeVenueTypeFilters, setActiveVenueTypeFilters] = useState<VenueType[]>([]);
   const [activeMusicStyleFilters, setActiveMusicStyleFilters] = useState<MusicStyle[]>([]);
@@ -376,21 +375,27 @@ const MapContentAndLogic = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation({
+          const loc = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-          });
+          };
+          setUserLocation(loc);
+          setActualUserLocation(loc);
         },
         (error) => {
           console.error("Error getting user location:", error);
           // Fallback to a default location (e.g., São Paulo)
-          setUserLocation({ lat: -23.55052, lng: -46.633308 });
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
+          setUserLocation(defaultLoc);
+          setActualUserLocation(defaultLoc);
         }
       );
     } else {
       // Geolocation not supported
       console.error("Geolocation is not supported by this browser.");
-      setUserLocation({ lat: -23.55052, lng: -46.633308 });
+      const defaultLoc = { lat: -23.55052, lng: -46.633308 };
+      setUserLocation(defaultLoc);
+      setActualUserLocation(defaultLoc);
     }
   }, []);
 
@@ -469,22 +474,17 @@ const MapContentAndLogic = () => {
         if (venueToSelect) {
           setSelectedVenue(venueToSelect);
           if (venueToSelect.location) {
-            // This will trigger MapUpdater to center the map
-            // And also visually set the user's marker to the venue's location for this flow
-            setUserLocation(venueToSelect.location); 
+            setUserLocation(venueToSelect.location); // Center map on venue when selected via query
           }
         } else {
-          // Optional: toast message if venue from query param not found
-          // toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "destructive" });
+          // Venue ID in query not found, clear it to avoid confusion
+          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); // Clear selection if it matches invalid ID
+          router.replace('/map', { scroll: false }); // Remove invalid venueId from URL
+          toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
-      } else if (selectedVenue?.id === venueIdFromQuery && selectedVenue.location) {
-        // If the same venue is already selected, ensure map is centered (e.g., on page refresh with query param)
-         setUserLocation(selectedVenue.location);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, [searchParams, venues, selectedVenue]); // setUserLocation removed as it's internal to this effect logic now
-                                            // setSelectedVenue should also be fine as it's for changing the venue.
+  }, [searchParams, venues, router, selectedVenue?.id, toast]);
 
 
   // Fetch events for a selected venue
@@ -947,8 +947,8 @@ const MapContentAndLogic = () => {
                 <MapUpdater center={userLocation} />
 
                 {/* User's current location marker */}
-                {userLocation && (
-                    <AdvancedMarker position={userLocation} title="Sua Localização">
+                {actualUserLocation && ( // Display marker at actual user location regardless of map center
+                    <AdvancedMarker position={actualUserLocation} title="Sua Localização">
                         <UserCustomMapMarker />
                     </AdvancedMarker>
                 )}
@@ -986,7 +986,18 @@ const MapContentAndLogic = () => {
 
       {/* Venue Details Sheet */}
       {selectedVenue && (
-        <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { if (!isOpen) setSelectedVenue(null); }}>
+        <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { 
+            if (!isOpen) {
+                setSelectedVenue(null);
+                 if (actualUserLocation) {
+                    setUserLocation(actualUserLocation); // Reset map center to actual user location
+                } else {
+                    // Fallback if actualUserLocation is somehow null
+                    setUserLocation({ lat: -23.55052, lng: -46.633308 });
+                }
+                router.replace('/map', { scroll: false }); // Clear venueId from URL
+            }
+        }}>
           <SheetContent
             side="right"
             className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto" // Allows scrolling within the sheet
@@ -1328,5 +1339,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
-
