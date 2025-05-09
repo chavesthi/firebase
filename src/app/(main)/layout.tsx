@@ -15,7 +15,7 @@ import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, Ticket
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
-import { useEffect, useState, useMemo } from 'react'; 
+import { useEffect, useState, useMemo, useCallback } from 'react'; 
 import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -30,14 +30,20 @@ interface UserVenueCoins {
 }
 
 interface Notification {
-  id: string; // Using partnerId as notification ID for simplicity
-  partnerId: string;
-  venueName: string;
+  id: string; 
+  partnerId?: string; // Optional: if it's a venue-specific notification
+  eventId?: string; // Optional: if it's an event-specific notification
+  venueName?: string;
+  eventName?: string;
   message: string;
   createdAt: FirebaseTimestamp;
   read: boolean;
   venueType?: VenueType;
   musicStyles?: MusicStyle[];
+}
+
+interface FavoriteVenueNotificationSettings {
+  [venueId: string]: boolean; // true if notifications are enabled, false or undefined if disabled
 }
 
 interface AppUser {
@@ -51,8 +57,12 @@ interface AppUser {
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
   venueCoins?: UserVenueCoins; 
   notifications?: Notification[];
-  favoriteVenueIds?: string[]; // Added for favorite venues
+  favoriteVenueIds?: string[];
+  favoriteVenueNotificationSettings?: FavoriteVenueNotificationSettings; // Added for favorite venue notifications
 }
+
+// Keep track of active listeners to avoid duplicates and for cleanup
+const activeEventNotificationListeners: Record<string, () => void> = {};
 
 const useAuthAndUserSubscription = () => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -82,7 +92,8 @@ const useAuthAndUserSubscription = () => {
               lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
               venueCoins: userData.venueCoins || {}, 
               notifications: userData.notifications || [],
-              favoriteVenueIds: userData.favoriteVenueIds || [], // Populate favoriteVenueIds
+              favoriteVenueIds: userData.favoriteVenueIds || [],
+              favoriteVenueNotificationSettings: userData.favoriteVenueNotificationSettings || {}, // Initialize
             });
           } else {
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
@@ -94,7 +105,8 @@ const useAuthAndUserSubscription = () => {
               venueCoins: {},
               questionnaireCompleted: false,
               notifications: [],
-              favoriteVenueIds: [], // Initialize favoriteVenueIds
+              favoriteVenueIds: [],
+              favoriteVenueNotificationSettings: {}, // Initialize
             });
           }
           setLoading(false);
@@ -119,6 +131,11 @@ const useAuthAndUserSubscription = () => {
       if (unsubscribeUserDoc) {
         unsubscribeUserDoc();
       }
+       // Clean up all event listeners when the hook unmounts (e.g., user logs out)
+       Object.values(activeEventNotificationListeners).forEach(unsub => unsub());
+       for (const key in activeEventNotificationListeners) {
+           delete activeEventNotificationListeners[key];
+       }
     };
   }, [pathname, toast]); 
 
@@ -138,7 +155,7 @@ export default function MainAppLayout({
   const pathname = usePathname();
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
-  const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
+  // const [isFetchingNotifications, setIsFetchingNotifications] = useState(false); // Removed, as direct fetching on click is no longer the primary notification source
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
 
@@ -162,7 +179,7 @@ export default function MainAppLayout({
       if (!appUser && !isAuthPage && !isSharedEventPage) {
         router.push('/login');
       } else if (appUser && !appUser.questionnaireCompleted) {
-        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && pathname !== '/user/favorites') { // Allow favorites page
+        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && pathname !== '/user/favorites') { 
           router.push('/questionnaire');
         } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage) {
           router.push('/partner-questionnaire');
@@ -172,6 +189,7 @@ export default function MainAppLayout({
   }, [appUser, loading, router, pathname]);
 
 
+  // Effect for new partner notifications
   useEffect(() => {
     if (loading || !appUser || !appUser.uid || !appUser.questionnaireCompleted || appUser.role !== UserRole.USER) {
       return;
@@ -195,21 +213,21 @@ export default function MainAppLayout({
 
         if (!partnerProfileCompletedAt) continue;
 
-        // Check if this partner is "new" since last check OR if it's a new partner not yet in user's notifications
         const isTrulyNewPartner = partnerProfileCompletedAt > userLastCheck;
-        const alreadyNotified = existingNotifications.some(n => n.partnerId === partnerId);
+        // Ensure we only notify for a new partner, not for event-specific notifications (which have eventId)
+        const alreadyNotifiedForPartner = existingNotifications.some(n => n.partnerId === partnerId && !n.eventId); 
 
-        if (isTrulyNewPartner && !alreadyNotified) {
+        if (isTrulyNewPartner && !alreadyNotifiedForPartner) {
           const typeMatch = appUser.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
           const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => appUser.preferredMusicStyles?.includes(style));
 
           if (typeMatch || styleMatch) {
             newNotifications.push({
-              id: partnerId, // Use partnerId as a unique ID for this notification
+              id: `partner_${partnerId}`, // Unique ID for partner notification
               partnerId: partnerId,
               venueName: partnerData.venueName,
               message: `Novo Fervo que combina com você: ${partnerData.venueName}!`,
-              createdAt: partnerData.questionnaireCompletedAt as FirebaseTimestamp, // Use partner completion time
+              createdAt: partnerData.questionnaireCompletedAt as FirebaseTimestamp,
               read: false,
               venueType: partnerData.venueType as VenueType,
               musicStyles: (partnerData.musicStyles || []) as MusicStyle[],
@@ -220,19 +238,16 @@ export default function MainAppLayout({
 
       if (newNotifications.length > 0 && appUser.uid) {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        // Add new notifications to existing ones, avoiding duplicates by partnerId
         const updatedNotifications = [...existingNotifications];
         newNotifications.forEach(newNotif => {
-            if (!updatedNotifications.some(exNotif => exNotif.partnerId === newNotif.partnerId)) {
+            if (!updatedNotifications.some(exNotif => exNotif.id === newNotif.id)) {
                 updatedNotifications.push(newNotif);
             }
         });
         
-        // Sort by createdAt descending before storing
         updatedNotifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-
         await updateDoc(userDocRef, {
-          notifications: updatedNotifications.slice(0, 20) // Keep only latest 20 notifications
+          notifications: updatedNotifications.slice(0, 20) 
         });
       }
     }, (error) => {
@@ -241,6 +256,92 @@ export default function MainAppLayout({
 
     return () => unsubscribe();
   }, [appUser, loading]);
+
+  // Effect for new event notifications from favorited venues
+  useEffect(() => {
+    if (loading || !appUser || !appUser.uid || !appUser.favoriteVenueIds || appUser.favoriteVenueIds.length === 0 || appUser.role !== UserRole.USER) {
+      // Clean up any existing listeners if conditions are not met
+      Object.keys(activeEventNotificationListeners).forEach(venueId => {
+        if (activeEventNotificationListeners[venueId]) {
+          activeEventNotificationListeners[venueId]();
+          delete activeEventNotificationListeners[venueId];
+        }
+      });
+      return;
+    }
+  
+    const currentFavorites = appUser.favoriteVenueIds || [];
+    const currentSettings = appUser.favoriteVenueNotificationSettings || {};
+  
+    // Setup listeners for new favorites or venues with changed notification settings
+    currentFavorites.forEach(async (venueId) => {
+      const notificationsEnabledForVenue = currentSettings[venueId] ?? true; // Default to true
+  
+      if (notificationsEnabledForVenue && !activeEventNotificationListeners[venueId]) {
+        // Setup new listener
+        const venueDocRef = doc(firestore, "users", venueId);
+        const venueDocSnap = await getDoc(venueDocRef);
+        const venueName = venueDocSnap.exists() ? venueDocSnap.data().venueName : "Local Desconhecido";
+  
+        const eventsRef = collection(firestore, `users/${venueId}/events`);
+        // Query for events created after the user last checked notifications OR very recently
+        // This prevents old events from re-triggering notifications if the listener restarts.
+        const lastCheckTimestamp = appUser.lastNotificationCheckTimestamp || Timestamp.fromDate(new Date(Date.now() - 5 * 60 * 1000)); // 5 mins ago as fallback
+
+        const qEvents = query(eventsRef, where('visibility', '==', true), where('createdAt', '>', lastCheckTimestamp));
+  
+        const unsubscribe = onSnapshot(qEvents, (snapshot) => {
+          snapshot.docChanges().forEach(async (change) => {
+            if (change.type === "added") {
+              const eventData = change.doc.data();
+              const eventId = change.doc.id;
+  
+              const existingUserNotifications = (await getDoc(doc(firestore, "users", appUser.uid!))).data()?.notifications || [];
+              const alreadyNotified = existingUserNotifications.some((n: Notification) => n.eventId === eventId && n.partnerId === venueId);
+  
+              if (!alreadyNotified) {
+                const newEventNotification: Notification = {
+                  id: `event_${venueId}_${eventId}`,
+                  partnerId: venueId,
+                  eventId: eventId,
+                  venueName: venueName,
+                  eventName: eventData.eventName,
+                  message: `Novo evento em ${venueName}: ${eventData.eventName}!`,
+                  createdAt: eventData.createdAt as FirebaseTimestamp || serverTimestamp(),
+                  read: false,
+                };
+  
+                const userDocRefToUpdate = doc(firestore, "users", appUser.uid!);
+                const updatedNotifications = [...existingUserNotifications, newEventNotification]
+                  .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+                  .slice(0, 20);
+  
+                await updateDoc(userDocRefToUpdate, { notifications: updatedNotifications });
+              }
+            }
+          });
+        }, (error) => {
+          console.error(`Error listening for new events in venue ${venueId}:`, error);
+        });
+        activeEventNotificationListeners[venueId] = unsubscribe;
+      } else if (!notificationsEnabledForVenue && activeEventNotificationListeners[venueId]) {
+        // Teardown listener if notifications got disabled
+        activeEventNotificationListeners[venueId]();
+        delete activeEventNotificationListeners[venueId];
+      }
+    });
+  
+    // Teardown listeners for venues no longer favorited
+    Object.keys(activeEventNotificationListeners).forEach(venueId => {
+      if (!currentFavorites.includes(venueId)) {
+        activeEventNotificationListeners[venueId]();
+        delete activeEventNotificationListeners[venueId];
+      }
+    });
+  
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUser?.uid, appUser?.favoriteVenueIds, appUser?.favoriteVenueNotificationSettings, loading]);
+
 
 
   const handleNotificationsClick = async () => {
@@ -264,10 +365,9 @@ export default function MainAppLayout({
        return;
     }
     
-    setShowNotificationDropdown(prev => !prev); // Toggle dropdown visibility
+    setShowNotificationDropdown(prev => !prev); 
 
     if (unreadNotificationsCount > 0) {
-        // Mark all as read (optimistic UI update could be done here if appUser state was local)
         const userDocRef = doc(firestore, "users", appUser.uid);
         const currentNotifications = appUser.notifications || [];
         const updatedNotifications = currentNotifications.map(n => ({ ...n, read: true }));
@@ -347,7 +447,7 @@ export default function MainAppLayout({
         title: "Suas FervoCoins!",
         description: description,
         variant: "default",
-        duration: 10000, // Increased duration to allow reading
+        duration: 10000, 
       });
 
     } catch (error) {
@@ -367,7 +467,7 @@ export default function MainAppLayout({
     );
   }
 
-  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event', '/user/favorites']; // Added /user/favorites
+  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event', '/user/favorites']; 
   const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
 
   const activeColorClass = 'text-primary';
@@ -395,7 +495,7 @@ export default function MainAppLayout({
                     className={cn(activeColorClass, hoverBgClass)}
                     onClick={() => setIsQrScannerOpen(true)}
                     title="Check-in com QR Code"
-                    disabled={isFetchingNotifications || isFetchingCoinDetails}
+                    disabled={isFetchingCoinDetails} // Removed isFetchingNotifications
                   >
                     <ScanLine className="w-5 h-5" />
                     <span className="sr-only">Check-in QR Code</span>
@@ -407,10 +507,11 @@ export default function MainAppLayout({
                             size="icon"
                             className={cn(activeColorClass, unreadNotificationsCount > 0 && 'animate-pulse', hoverBgClass)}
                             onClick={handleNotificationsClick}
-                            disabled={isFetchingNotifications || isFetchingCoinDetails}
+                            disabled={isFetchingCoinDetails} // Removed isFetchingNotifications
                             title="Notificações"
                         >
-                            {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
+                            {/* Removed isFetchingNotifications check for loader */}
+                            <Bell className="w-5 h-5" />
                             {unreadNotificationsCount > 0 && (
                                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">
                                 {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
@@ -426,7 +527,7 @@ export default function MainAppLayout({
                             appUser.notifications.map((notification) => (
                                 <DropdownMenuItem key={notification.id} className={cn("flex justify-between items-start whitespace-normal", !notification.read && "bg-primary/10")}>
                                     <div className="flex-1">
-                                        <p className="text-sm font-medium">{notification.venueName}</p>
+                                        <p className="text-sm font-medium">{notification.venueName || notification.eventName}</p>
                                         <p className="text-xs text-muted-foreground">{notification.message}</p>
                                         <p className="text-xs text-muted-foreground/70 pt-1">
                                             {new Date(notification.createdAt.seconds * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -456,7 +557,7 @@ export default function MainAppLayout({
                         className={cn(activeColorClass, hoverBgClass)}
                         onClick={handleCoinsClick}
                         title="Minhas FervoCoins"
-                        disabled={isFetchingCoinDetails || isFetchingNotifications}
+                        disabled={isFetchingCoinDetails} // Removed isFetchingNotifications
                       >
                          {isFetchingCoinDetails ? <Loader2 className="w-5 h-5 animate-spin" /> : <Coins className="w-5 h-5" />}
                         <span className="sr-only">Moedas</span>
@@ -468,7 +569,7 @@ export default function MainAppLayout({
                       )}
                   </div>
                   <Link href="/user/coupons" passHref>
-                    <Button variant="ghost" size="icon" className={cn(activeColorClass, hoverBgClass)} title="Meus Cupons"  disabled={isFetchingNotifications || isFetchingCoinDetails}>
+                    <Button variant="ghost" size="icon" className={cn(activeColorClass, hoverBgClass)} title="Meus Cupons"  disabled={isFetchingCoinDetails}> {/* Removed isFetchingNotifications */}
                         <TicketPercent className="w-5 h-5" />
                         <span className="sr-only">Cupons de Desconto</span>
                     </Button>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -6,19 +7,21 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, updateDoc, runTransaction, collection, query, where, getDocs, documentId, Timestamp as FirebaseTimestamp, onSnapshot } from 'firebase/firestore';
-import Link from 'next/link';
+// Link component is not used, can be removed if not needed elsewhere
+// import Link from 'next/link'; 
 import { auth, firestore } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Heart, Loader2, MapPin as MapPinIcon, ExternalLink, Star, Info } from 'lucide-react';
+import { ArrowLeft, Heart, Loader2, MapPin as MapPinIcon, ExternalLink, Star, Bell, BellOff } from 'lucide-react'; // Removed Info, it was unused
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import type { VenueType, MusicStyle, Location } from '@/lib/constants';
 import { VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { StarRating } from '@/components/ui/star-rating';
-
+import { Switch } from '@/components/ui/switch'; 
+import { Label } from '@/components/ui/label'; 
 
 interface FavoriteVenueDisplay {
   id: string;
@@ -29,6 +32,7 @@ interface FavoriteVenueDisplay {
   location?: Location; 
   averageVenueRating?: number;
   venueRatingCount?: number;
+  // notificationsEnabled is now implicitly handled by notificationSettings state
 }
 
 const venueTypeLabels: Record<VenueType, string> = VENUE_TYPE_OPTIONS.reduce((acc, curr) => {
@@ -48,6 +52,8 @@ const UserFavoritesPage: NextPage = () => {
   const [favoriteVenueIds, setFavoriteVenueIds] = useState<string[]>([]);
   const [favoriteVenues, setFavoriteVenues] = useState<FavoriteVenueDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [notificationSettings, setNotificationSettings] = useState<Record<string, boolean>>({});
+
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -63,17 +69,21 @@ const UserFavoritesPage: NextPage = () => {
   useEffect(() => {
     if (!currentUser) return;
     const userDocRef = doc(firestore, "users", currentUser.uid);
-    const unsubscribeFavorites = onSnapshot(userDocRef, (docSnap) => {
+    const unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
-        setFavoriteVenueIds(docSnap.data().favoriteVenueIds || []);
+        const userData = docSnap.data();
+        setFavoriteVenueIds(userData.favoriteVenueIds || []);
+        // Ensure notificationSettings is an object, default to empty if not present
+        setNotificationSettings(userData.favoriteVenueNotificationSettings || {}); 
       } else {
         setFavoriteVenueIds([]);
+        setNotificationSettings({});
       }
     }, (error) => {
-      console.error("Error listening to favorite venue IDs:", error);
-      toast({ title: "Erro ao Sincronizar Favoritos", variant: "destructive"});
+      console.error("Error listening to user document:", error);
+      toast({ title: "Erro ao Sincronizar Dados", variant: "destructive"});
     });
-    return () => unsubscribeFavorites();
+    return () => unsubscribeUserDoc();
   }, [currentUser, toast]);
 
   useEffect(() => {
@@ -87,7 +97,6 @@ const UserFavoritesPage: NextPage = () => {
     const fetchDetails = async () => {
       try {
         const venuesData: FavoriteVenueDisplay[] = [];
-        // Firestore 'in' query has a limit of 30 elements. Chunk if necessary.
         const CHUNK_SIZE = 30;
         for (let i = 0; i < favoriteVenueIds.length; i += CHUNK_SIZE) {
             const chunk = favoriteVenueIds.slice(i, i + CHUNK_SIZE);
@@ -114,13 +123,13 @@ const UserFavoritesPage: NextPage = () => {
                 location: data.location as Location,
                 averageVenueRating: data.averageVenueRating,
                 venueRatingCount: data.venueRatingCount,
+                // notificationsEnabled is derived from notificationSettings state
               });
             });
         }
-        // Ensure order is maintained based on favoriteVenueIds if desired, or sort by name, etc.
-        // For now, it will be in the order Firestore returns (which might vary across chunks).
-        // To preserve order of `favoriteVenueIds`:
-        const orderedVenues = favoriteVenueIds.map(id => venuesData.find(v => v.id === id)).filter(Boolean) as FavoriteVenueDisplay[];
+        const orderedVenues = favoriteVenueIds
+          .map(id => venuesData.find(v => v.id === id))
+          .filter(Boolean) as FavoriteVenueDisplay[];
         setFavoriteVenues(orderedVenues);
 
       } catch (error) {
@@ -131,7 +140,7 @@ const UserFavoritesPage: NextPage = () => {
       }
     };
     fetchDetails();
-  }, [currentUser, favoriteVenueIds, toast]);
+  }, [currentUser, favoriteVenueIds, toast]); // Removed notificationSettings from deps as it's used inside map now
 
 
   const handleUnfavorite = async (venueId: string, venueName: string) => {
@@ -141,9 +150,17 @@ const UserFavoritesPage: NextPage = () => {
       await runTransaction(firestore, async (transaction) => {
         const userSnap = await transaction.get(userDocRef);
         if (!userSnap.exists()) throw new Error("Usuário não encontrado.");
-        const currentFavorites: string[] = userSnap.data().favoriteVenueIds || [];
+        const userData = userSnap.data();
+        const currentFavorites: string[] = userData.favoriteVenueIds || [];
         const updatedFavorites = currentFavorites.filter(id => id !== venueId);
-        transaction.update(userDocRef, { favoriteVenueIds: updatedFavorites });
+        
+        const currentSettings = userData.favoriteVenueNotificationSettings || {};
+        delete currentSettings[venueId]; // Remove setting for the unfavorited venue
+
+        transaction.update(userDocRef, { 
+          favoriteVenueIds: updatedFavorites,
+          favoriteVenueNotificationSettings: currentSettings 
+        });
       });
       toast({ title: "Removido dos Favoritos!", description: `${venueName} não é mais um dos seus fervos favoritos.` });
     } catch (error: any) {
@@ -152,7 +169,33 @@ const UserFavoritesPage: NextPage = () => {
     }
   };
 
-  if (isLoading && !currentUser) { // Show loader only if auth is still pending
+  const handleToggleFavoriteNotification = async (venueId: string, venueName: string, newEnabledState: boolean) => {
+    if (!currentUser) return;
+    const userDocRef = doc(firestore, "users", currentUser.uid);
+    try {
+        // Create a new settings object to ensure Firestore updates correctly
+        const updatedSettings = { 
+          ...notificationSettings, // Get current state of all settings
+          [venueId]: newEnabledState // Update the specific venue
+        };
+
+        await updateDoc(userDocRef, {
+            favoriteVenueNotificationSettings: updatedSettings
+        });
+        // No need to call setNotificationSettings here, onSnapshot will update it.
+        toast({
+            title: `Notificações ${newEnabledState ? "Ativadas" : "Desativadas"}`,
+            description: `Novos eventos de ${venueName} ${newEnabledState ? "serão" : "não serão mais"} notificados.`,
+            variant: "default"
+        });
+    } catch (error) {
+        console.error("Error toggling favorite notification setting:", error);
+        toast({ title: "Erro ao Atualizar Preferência", description: "Não foi possível salvar a alteração.", variant: "destructive" });
+    }
+  };
+
+
+  if (isLoading && !currentUser) { 
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
@@ -176,7 +219,7 @@ const UserFavoritesPage: NextPage = () => {
             Meus Fervos Favoritos
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Seus locais preferidos, sempre à mão!
+            Seus locais preferidos, sempre à mão! Gerencie também as notificações de novos eventos.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
@@ -196,7 +239,9 @@ const UserFavoritesPage: NextPage = () => {
           ) : (
             <ScrollArea className="h-[calc(100vh-22rem)] sm:h-[calc(100vh-24rem)] pr-3">
               <div className="space-y-4">
-                {favoriteVenues.map((venue) => (
+                {favoriteVenues.map((venue) => {
+                  const isNotificationEnabled = notificationSettings[venue.id] ?? true; // Default to true
+                  return (
                   <Card key={venue.id} className="bg-card/80 border-primary/50 shadow-md hover:shadow-primary/20 transition-shadow">
                     <CardHeader className="pb-3 pt-4 px-4">
                       <div className="flex justify-between items-start">
@@ -235,6 +280,20 @@ const UserFavoritesPage: NextPage = () => {
                             <span className="text-xs text-muted-foreground">({venue.averageVenueRating.toFixed(1)} de {venue.venueRatingCount} {venue.venueRatingCount === 1 ? 'avaliação' : 'avaliações'})</span>
                         </div>
                        )}
+                        {/* Notification Toggle */}
+                        <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/50">
+                            <Label htmlFor={`notif-switch-${venue.id}`} className="text-sm text-muted-foreground flex items-center cursor-pointer">
+                                {isNotificationEnabled ? <Bell className="w-4 h-4 mr-2 text-primary" /> : <BellOff className="w-4 h-4 mr-2 text-muted-foreground" />}
+                                Notificar novos eventos
+                            </Label>
+                            <Switch
+                                id={`notif-switch-${venue.id}`}
+                                checked={isNotificationEnabled}
+                                onCheckedChange={(checked) => handleToggleFavoriteNotification(venue.id, venue.venueName, checked)}
+                                className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-input"
+                                aria-label={`Ativar ou desativar notificações para ${venue.venueName}`}
+                            />
+                        </div>
                     </CardContent>
                     <CardFooter className="px-4 pb-3 pt-0">
                         <Button
@@ -247,7 +306,7 @@ const UserFavoritesPage: NextPage = () => {
                         </Button>
                     </CardFooter>
                   </Card>
-                ))}
+                )}}
               </div>
             </ScrollArea>
           )}
@@ -258,3 +317,4 @@ const UserFavoritesPage: NextPage = () => {
 };
 
 export default UserFavoritesPage;
+
