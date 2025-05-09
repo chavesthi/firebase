@@ -2,7 +2,7 @@
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react'; // Import use from react
 import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { firestore, auth } from '@/lib/firebase';
@@ -24,10 +24,14 @@ interface EventDetails {
 }
 
 const EventQrCodePage: NextPage = () => {
-  const params = useParams();
+  const rawParams = useParams();
+  // Unwrap params using React.use as suggested by Next.js error.
+  // Cast to `any` if TypeScript complains, as `useParams` might not return a type directly compatible with `React.use`'s typical Usables (Promise/Context).
+  // This is to follow Next.js's specific guidance for handling `params` in dynamic segments.
+  const routeParams = use(rawParams as any);
   const router = useRouter();
   const { toast } = useToast();
-  const eventIdParam = params.eventId; // Can be string or string[]
+  const eventIdParam = routeParams.eventId; 
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -42,16 +46,16 @@ const EventQrCodePage: NextPage = () => {
     const handleResize = () => {
         const width = window.innerWidth;
         if (width < 400) {
-            setQrSize(192); // Smaller QR for very small screens
+            setQrSize(192); 
         } else if (width < 640) {
-             setQrSize(224); // Medium size for small screens
+             setQrSize(224); 
         } else {
-            setQrSize(256); // Default size for larger screens
+            setQrSize(256); 
         }
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Initial call
+    handleResize(); 
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -62,7 +66,7 @@ const EventQrCodePage: NextPage = () => {
         setCurrentUser(user);
       } else {
         setError("Usuário não autenticado. Faça login para continuar.");
-        router.push('/login'); // Redirect if not authenticated
+        router.push('/login'); 
       }
       setAuthLoading(false);
     });
@@ -71,13 +75,13 @@ const EventQrCodePage: NextPage = () => {
 
   useEffect(() => {
     if (authLoading || !currentUser || !eventId) {
-      if (!authLoading && !currentUser && !error) { // if auth is done, no user, and no prior error
+      if (!authLoading && !currentUser && !error) { 
         setError("Usuário não autenticado. Faça login para continuar.");
       }
       if (!authLoading && !eventId && !error) {
         setError("ID do evento inválido.");
       }
-      if (!authLoading) setEventLoading(false); // Stop event loading if prerequisites fail
+      if (!authLoading) setEventLoading(false); 
       return;
     }
 
@@ -148,7 +152,6 @@ const EventQrCodePage: NextPage = () => {
   if (authLoading || eventLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background text-foreground">
-         {/* Changed loader color to primary */}
         <Loader2 className="w-12 h-12 mb-4 text-primary animate-spin" />
         Carregando QR Code do Evento...
       </div>
@@ -165,7 +168,6 @@ const EventQrCodePage: NextPage = () => {
   return (
     <main className="flex flex-col items-center min-h-screen p-4 bg-background">
        <div className="absolute top-4 left-4 sm:top-8 sm:left-8 print:hidden">
-          {/* Changed button colors to primary */}
          <Button variant="outline" onClick={() => router.push('/partner/events')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
             <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
             Eventos
@@ -173,44 +175,41 @@ const EventQrCodePage: NextPage = () => {
       </div>
 
       <div className="flex flex-col items-center justify-center w-full max-w-md mt-20 sm:mt-24 space-y-6 sm:space-y-8">
-         {/* Changed card border to primary */}
         <Card className="w-full shadow-2xl bg-card/95 backdrop-blur-sm border-primary/30 print:shadow-none print:border-none">
           <CardHeader className="text-center px-4 sm:px-6">
-             {/* Changed title gradient from destructive/accent to primary/accent */}
             <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent print:text-black">
               QR Code de Check-in
             </CardTitle>
              {eventDetails && (
                 <CardDescription className="text-muted-foreground text-sm sm:text-base print:text-gray-600">
-                    Evento: {eventDetails.eventName} <br className="sm:hidden"/> {/* Break line only on small screens */}
+                    Evento: {eventDetails.eventName} <br className="sm:hidden"/> 
                     Data: {format(eventDetails.startDateTime.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                 </CardDescription>
             )}
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-4 sm:space-y-6 px-4 sm:px-6 pb-4 sm:pb-6">
-            {error && !eventDetails && ( // Only show general error if no event details could be loaded
+            {error && !eventDetails && ( 
               <div className="p-4 text-center text-destructive-foreground bg-destructive/80 rounded-md print:hidden">
                 <p>{error}</p>
               </div>
             )}
 
             {!error && eventDetails && eventDetails.checkInToken && (
-              <div className="p-4 sm:p-6 bg-white rounded-lg shadow-inner"> {/* White background for QR code */}
+              <div className="p-4 sm:p-6 bg-white rounded-lg shadow-inner"> 
                 <QRCodeCanvas
                     id="qr-code-canvas"
                     value={qrCodeValue}
                     size={qrSize}
                     level={"H"}
                     imageSettings={{
-                        src: "/fervo_icon.png", // Path to your logo in public folder
-                        height: Math.floor(qrSize * 0.15), // Adjust logo size relative to QR size
+                        src: "/fervo_icon.png", 
+                        height: Math.floor(qrSize * 0.15), 
                         width: Math.floor(qrSize * 0.15),
                         excavate: true,
                     }}
                  />
               </div>
             )}
-            {/* Specific error for missing token if event was loaded but token is missing */}
             {!error && eventDetails && !eventDetails.checkInToken && (
                  <p className="text-destructive text-center">Token de check-in não encontrado para este evento.</p>
             )}
@@ -221,11 +220,9 @@ const EventQrCodePage: NextPage = () => {
 
             {!error && eventDetails && eventDetails.checkInToken && (
                 <div className="flex flex-col w-full gap-3 pt-4 sm:flex-row sm:justify-center print:hidden">
-                     {/* Changed print button colors to primary */}
                     <Button onClick={handlePrint} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm">
                         <Printer className="w-4 h-4 mr-2" /> Imprimir
                     </Button>
-                    {/* Changed download button colors to primary */}
                     <Button onClick={handleDownload} variant="outline" className="w-full sm:w-auto border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
                         <Download className="w-4 h-4 mr-2" /> Baixar PNG
                     </Button>
@@ -243,7 +240,6 @@ const EventQrCodePage: NextPage = () => {
       </div>
        <style jsx global>{`
         .shadow-2xl {
-           /* Changed shadow colors from destructive/accent to primary/accent */
           box-shadow: 0 0 15px 6px hsl(var(--primary)), 0 0 30px 10px hsla(var(--primary), 0.25), 0 0 15px 6px hsl(var(--accent)), 0 0 30px 10px hsla(var(--accent), 0.25);
         }
         @media print {
@@ -258,15 +254,15 @@ const EventQrCodePage: NextPage = () => {
             left: 0;
             top: 0;
             width: 100%;
-            padding: 1rem; /* Ensure some padding for printing */
+            padding: 1rem; 
           }
           .print\\:hidden { display: none !important; }
           .print\\:shadow-none { box-shadow: none !important; }
           .print\\:border-none { border: none !important; }
           .print\\:text-black { color: black !important; }
-          .print\\:text-gray-600 { color: #4B5563 !important; } /* Tailwind gray-600 */
+          .print\\:text-gray-600 { color: #4B5563 !important; } 
           #qr-code-canvas {
-             max-width: 80vw; /* Ensure QR code fits reasonably */
+             max-width: 80vw; 
              height: auto;
           }
         }
@@ -276,4 +272,3 @@ const EventQrCodePage: NextPage = () => {
 };
 
 export default EventQrCodePage;
-

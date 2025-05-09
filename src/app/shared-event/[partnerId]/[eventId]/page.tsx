@@ -2,7 +2,7 @@
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react'; // Import use from react
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -28,10 +28,15 @@ interface PartnerDetails {
 }
 
 const SharedEventPage: NextPage = () => {
-  const params = useParams();
+  const rawParams = useParams();
+  // Unwrap params using React.use as suggested by Next.js error.
+  const routeParams = use(rawParams as any);
   const router = useRouter();
   const { toast } = useToast();
-  const { partnerId, eventId } = params;
+  const { partnerId: partnerIdParam, eventId: eventIdParam } = routeParams;
+
+  const partnerId = typeof partnerIdParam === 'string' ? partnerIdParam : null;
+  const eventId = typeof eventIdParam === 'string' ? eventIdParam : null;
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [partnerDetails, setPartnerDetails] = useState<PartnerDetails | null>(null);
@@ -39,7 +44,7 @@ const SharedEventPage: NextPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!partnerId || !eventId || typeof partnerId !== 'string' || typeof eventId !== 'string') {
+    if (!partnerId || !eventId) {
       setError('Link inválido ou informações ausentes.');
       setLoading(false);
       return;
@@ -47,7 +52,6 @@ const SharedEventPage: NextPage = () => {
 
     const fetchDetails = async () => {
       try {
-        // Fetch partner details (venue name)
         const partnerDocRef = doc(firestore, 'users', partnerId);
         const partnerDocSnap = await getDoc(partnerDocRef);
 
@@ -57,14 +61,13 @@ const SharedEventPage: NextPage = () => {
         const partnerData = partnerDocSnap.data();
         setPartnerDetails({ venueName: partnerData.venueName || 'Local Desconhecido' });
 
-        // Fetch event details
         const eventDocRef = doc(firestore, 'users', partnerId, 'events', eventId);
         const eventDocSnap = await getDoc(eventDocRef);
 
         if (!eventDocSnap.exists()) {
           throw new Error('Evento não encontrado.');
         }
-        const eventData = eventDocSnap.data() as Omit<EventDetails, 'id'>; // Assuming structure matches
+        const eventData = eventDocSnap.data() as Omit<EventDetails, 'id'>;
         setEventDetails({
           eventName: eventData.eventName,
           startDateTime: eventData.startDateTime,
@@ -152,7 +155,6 @@ const SharedEventPage: NextPage = () => {
                 size="lg" 
                 className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
                 onClick={() => {
-                    // Replace with actual app store links or PWA install prompt
                     toast({ title: "Em Breve!", description: "Links para download do app serão disponibilizados aqui.", duration: 3000});
                 }}
               >
