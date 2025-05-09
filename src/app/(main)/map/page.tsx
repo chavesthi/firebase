@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -40,7 +39,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { Logo } from '@/components/shared/logo';
+// Logo component removed from here
 
 interface VenueEvent {
   id: string;
@@ -1321,4 +1320,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
