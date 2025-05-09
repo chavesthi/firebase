@@ -15,7 +15,7 @@ import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, Ticket
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
-import { useEffect, useState, useMemo } from 'react'; // Added useMemo
+import { useEffect, useState, useMemo } from 'react'; 
 import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -38,7 +38,7 @@ interface AppUser {
   preferredMusicStyles?: MusicStyle[];
   questionnaireCompleted?: boolean;
   lastNotificationCheckTimestamp?: FirebaseTimestamp;
-  venueCoins?: UserVenueCoins; // Replaced fervoCoins with venueCoins map
+  venueCoins?: UserVenueCoins; 
 }
 
 const useAuthAndUserSubscription = () => {
@@ -67,10 +67,9 @@ const useAuthAndUserSubscription = () => {
               preferredMusicStyles: userData.preferredMusicStyles || [],
               questionnaireCompleted: userData.questionnaireCompleted || false,
               lastNotificationCheckTimestamp: userData.lastNotificationCheckTimestamp as FirebaseTimestamp || undefined,
-              venueCoins: userData.venueCoins || {}, // Initialize as empty map if not present
+              venueCoins: userData.venueCoins || {}, 
             });
           } else {
-            // Handle case where user exists in Auth but not Firestore (e.g., first Google Sign-In)
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
               uid: user.uid,
@@ -91,7 +90,6 @@ const useAuthAndUserSubscription = () => {
       } else {
         setAppUser(null);
         setLoading(false);
-        // Ensure Firestore listener is cleaned up if user logs out
         if (unsubscribeUserDoc) {
           unsubscribeUserDoc();
           unsubscribeUserDoc = undefined;
@@ -99,14 +97,13 @@ const useAuthAndUserSubscription = () => {
       }
     });
 
-    // Cleanup function
     return () => {
       unsubscribeAuth();
       if (unsubscribeUserDoc) {
         unsubscribeUserDoc();
       }
     };
-  }, [pathname, toast]); // Dependencies for the effect
+  }, [pathname, toast]); 
 
   return { firebaseUser, appUser, loading };
 };
@@ -126,8 +123,9 @@ export default function MainAppLayout({
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [isFetchingNotifications, setIsFetchingNotifications] = useState(false);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
+  const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
 
-   // Calculate total coins
+
   const totalFervoCoins = useMemo(() => {
     if (!appUser || !appUser.venueCoins) return 0;
     return Object.values(appUser.venueCoins).reduce((sum, count) => sum + count, 0);
@@ -284,6 +282,59 @@ export default function MainAppLayout({
     }
   };
 
+  const handleCoinsClick = async () => {
+    if (!appUser || !appUser.venueCoins) {
+      toast({ title: "Minhas FervoCoins", description: "Você ainda não tem FervoCoins. Compartilhe eventos para ganhar!", variant: "default", duration: 5000 });
+      return;
+    }
+
+    const venueCoinsEntries = Object.entries(appUser.venueCoins).filter(([, count]) => count > 0);
+
+    if (venueCoinsEntries.length === 0) {
+      toast({ title: "Minhas FervoCoins", description: "Você ainda não tem FervoCoins em nenhum local. Compartilhe eventos para ganhar!", variant: "default", duration: 5000 });
+      return;
+    }
+    
+    setIsFetchingCoinDetails(true);
+    toast({ title: "Minhas FervoCoins", description: "Carregando detalhes...", variant: "default", duration: 2000 });
+
+    try {
+      const coinDetailsPromises = venueCoinsEntries.map(async ([partnerId, coinCount]) => {
+        const partnerDocRef = doc(firestore, "users", partnerId);
+        const partnerDocSnap = await getDoc(partnerDocRef);
+        if (partnerDocSnap.exists()) {
+          return { venueName: partnerDocSnap.data().venueName || 'Local Desconhecido', coinCount };
+        }
+        return { venueName: 'Local Desconhecido', coinCount };
+      });
+
+      const resolvedCoinDetails = await Promise.all(coinDetailsPromises);
+      
+      let description = `Você tem um total de ${totalFervoCoins} FervoCoins!\n\nDetalhes por local:\n`;
+      if (resolvedCoinDetails.length > 0) {
+        description += resolvedCoinDetails.map(detail => `- ${detail.venueName}: ${detail.coinCount} moeda(s)`).join('\n');
+      } else {
+        description = "Você ainda não acumulou FervoCoins em locais específicos. Compartilhe eventos para começar!";
+      }
+      description += "\n\nGanhe mais compartilhando eventos e troque por cupons!";
+
+
+      toast({
+        title: "Suas FervoCoins!",
+        description: description,
+        variant: "default",
+        duration: 10000, // Increased duration to allow reading
+      });
+
+    } catch (error) {
+      console.error("Error fetching coin details:", error);
+      toast({ title: "Erro ao Carregar Moedas", description: "Não foi possível buscar os detalhes das suas FervoCoins.", variant: "destructive" });
+    } finally {
+      setIsFetchingCoinDetails(false);
+    }
+  };
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
@@ -295,7 +346,6 @@ export default function MainAppLayout({
   const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event'];
   const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
 
-  // Use primary color consistently for both roles in the layout
   const activeColorClass = 'text-primary';
   const activeBorderColorClass = 'border-primary';
   const hoverBgClass = 'hover:bg-primary/10';
@@ -307,7 +357,7 @@ export default function MainAppLayout({
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
             <Logo iconClassName={activeColorClass} />
-            <nav className="flex items-center gap-1 ml-auto sm:gap-2 md:gap-4"> {/* Reduced gap slightly */}
+            <nav className="flex items-center gap-1 ml-auto sm:gap-2 md:gap-4"> 
               {appUser?.role === UserRole.USER && (
                 <>
                   <Link href="/map" passHref>
@@ -321,7 +371,7 @@ export default function MainAppLayout({
                     className={cn(activeColorClass, hoverBgClass)}
                     onClick={() => setIsQrScannerOpen(true)}
                     title="Check-in com QR Code"
-                    disabled={isFetchingNotifications}
+                    disabled={isFetchingNotifications || isFetchingCoinDetails}
                   >
                     <ScanLine className="w-5 h-5" />
                     <span className="sr-only">Check-in QR Code</span>
@@ -331,22 +381,22 @@ export default function MainAppLayout({
                     size="icon"
                     className={cn(activeColorClass, hasNewNotifications && 'animate-pulse', hoverBgClass)}
                     onClick={handleNotificationsClick}
-                    disabled={isFetchingNotifications}
+                    disabled={isFetchingNotifications || isFetchingCoinDetails}
                     title="Verificar novos Fervos"
                   >
                     {isFetchingNotifications ? <Loader2 className="w-5 h-5 animate-spin" /> : <Bell className="w-5 h-5" />}
                     <span className="sr-only">Notificações</span>
                   </Button>
-                   {/* Coins Button */}
                    <div className="relative">
                       <Button
                         variant="ghost"
                         size="icon"
                         className={cn(activeColorClass, hoverBgClass)}
-                        onClick={() => toast({ title: "Suas FervoCoins!", description: `Você tem ${totalFervoCoins} moedas no total. Ganhe mais compartilhando eventos e troque por cupons em locais específicos!`, variant: "default", duration: 5000})}
+                        onClick={handleCoinsClick}
                         title="Minhas FervoCoins"
+                        disabled={isFetchingCoinDetails || isFetchingNotifications}
                       >
-                        <Coins className="w-5 h-5" />
+                         {isFetchingCoinDetails ? <Loader2 className="w-5 h-5 animate-spin" /> : <Coins className="w-5 h-5" />}
                         <span className="sr-only">Moedas</span>
                       </Button>
                       {totalFervoCoins > 0 && (
@@ -356,7 +406,7 @@ export default function MainAppLayout({
                       )}
                   </div>
                   <Link href="/user/coupons" passHref>
-                    <Button variant="ghost" size="icon" className={cn(activeColorClass, hoverBgClass)} title="Meus Cupons">
+                    <Button variant="ghost" size="icon" className={cn(activeColorClass, hoverBgClass)} title="Meus Cupons"  disabled={isFetchingNotifications || isFetchingCoinDetails}>
                         <TicketPercent className="w-5 h-5" />
                         <span className="sr-only">Cupons de Desconto</span>
                     </Button>
@@ -365,7 +415,6 @@ export default function MainAppLayout({
               )}
               {appUser?.role === UserRole.PARTNER && (
                 <Link href="/partner/dashboard" passHref>
-                  {/* Apply primary color styling for partner dashboard button */}
                   <Button variant={pathname === '/partner/dashboard' ? 'secondary' : 'ghost'} className={cn(pathname === '/partner/dashboard' ? activeColorClass : '', hoverBgClass)}>
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Meu Painel
                   </Button>
@@ -373,15 +422,12 @@ export default function MainAppLayout({
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  {/* Apply primary border color for partner avatar */}
                   <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
                     {appUser?.name ? (
-                      // Apply primary text color for partner initial
                       <span className={`text-lg font-semibold ${activeColorClass}`}>
                         {appUser.name.charAt(0).toUpperCase()}
                       </span>
                     ) : (
-                      // Apply primary color for partner default icon
                       <UserCircle className={`w-6 h-6 ${activeColorClass}`} />
                     )}
                   </Button>
