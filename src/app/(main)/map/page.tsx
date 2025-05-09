@@ -1,3 +1,4 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -613,10 +614,15 @@ const MapContentAndLogic = () => {
     }
 };
 
- const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string) => {
+ const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp) => {
     if (!currentUser) {
       toast({ title: "Login Necessário", description: "Faça login para compartilhar e ganhar moedas.", variant: "destructive" });
       return;
+    }
+
+    if (eventEndDateTime.toDate() < new Date()) {
+        toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
+        return;
     }
 
     const shareUrl = `${window.location.origin}/shared-event/${partnerId}/${eventId}`;
@@ -968,6 +974,7 @@ const MapContentAndLogic = () => {
                       <div className="space-y-3">
                         {selectedVenue.events.map(event => {
                           const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
+                          const eventHasEnded = event.endDateTime.toDate() < new Date();
                           const userCheckedInData = userCheckIns[event.id];
                           const userHasCheckedIn = !!userCheckedInData;
                           const userHasRated = userHasCheckedIn && !!userCheckedInData.hasRated;
@@ -989,9 +996,9 @@ const MapContentAndLogic = () => {
                                           variant="ghost"
                                           size="icon"
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
-                                          onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name)}
-                                          title="Compartilhar evento e ganhar moedas!"
-                                          disabled={!currentUser}
+                                          onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime)}
+                                          title={eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!"}
+                                          disabled={!currentUser || eventHasEnded}
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
