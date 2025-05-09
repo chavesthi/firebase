@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
-import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore'; // Added collection, getDocs
+import { doc, onSnapshot, collection, getDocs, query, where } from 'firebase/firestore'; // Added query, where
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users } from 'lucide-react'; // Added Users icon
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart } from 'lucide-react'; // Added Heart
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle } from '@/lib/constants';
 import { StarRating } from '@/components/ui/star-rating';
@@ -44,6 +45,8 @@ export default function PartnerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [totalCheckIns, setTotalCheckIns] = useState<number | null>(null);
   const [loadingCheckIns, setLoadingCheckIns] = useState(true);
+  const [totalFavorites, setTotalFavorites] = useState<number | null>(null); // New state for favorites count
+  const [loadingFavorites, setLoadingFavorites] = useState(true); // New loading state for favorites
 
   useEffect(() => {
     let unsubscribeSnapshot: (() => void) | null = null;
@@ -110,6 +113,7 @@ export default function PartnerDashboardPage() {
   useEffect(() => {
     if (!currentUser || !venueData?.questionnaireCompleted) {
       setLoadingCheckIns(false);
+      setLoadingFavorites(false); // Ensure favorites loading is also stopped
       return;
     }
 
@@ -123,7 +127,6 @@ export default function PartnerDashboardPage() {
         const eventsSnapshot = await getDocs(eventsCollectionRef);
 
         for (const eventDoc of eventsSnapshot.docs) {
-          // Check if the event has a checkIns subcollection path defined, even if empty
           const checkInsCollectionRef = collection(firestore, `users/${currentUser.uid}/events/${eventDoc.id}/checkIns`);
           const checkInsSnapshot = await getDocs(checkInsCollectionRef);
           count += checkInsSnapshot.size;
@@ -144,7 +147,32 @@ export default function PartnerDashboardPage() {
       }
     };
 
+    const fetchTotalFavorites = async () => {
+      if (!currentUser?.uid) return;
+      setLoadingFavorites(true);
+      try {
+        const usersRef = collection(firestore, 'users');
+        const q = query(usersRef, where('favoriteVenueIds', 'array-contains', currentUser.uid));
+        const querySnapshot = await getDocs(q);
+        if (isMounted) {
+          setTotalFavorites(querySnapshot.size);
+        }
+      } catch (error) {
+        console.error("Error fetching total favorites:", error);
+        if (isMounted) {
+          setTotalFavorites(0);
+          toast({ title: "Erro ao buscar total de favoritos", variant: "destructive", duration: 3000 });
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingFavorites(false);
+        }
+      }
+    };
+
+
     fetchTotalCheckIns();
+    fetchTotalFavorites(); // Fetch favorites count
 
     return () => {
       isMounted = false;
@@ -227,6 +255,17 @@ export default function PartnerDashboardPage() {
                     <p className="text-lg font-semibold text-primary flex items-center">
                         <Users className="w-5 h-5 mr-2"/>
                         {totalCheckIns ?? 0}
+                    </p>
+                 )}
+            </div>
+            <div className="space-y-1">
+                 <p className="text-sm font-medium text-muted-foreground">Total de Favoritos:</p>
+                 {loadingFavorites ? (
+                     <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                 ) : (
+                    <p className="text-lg font-semibold text-primary flex items-center">
+                        <Heart className="w-5 h-5 mr-2 text-destructive fill-destructive"/>
+                        {totalFavorites ?? 0}
                     </p>
                  )}
             </div>
