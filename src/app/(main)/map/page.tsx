@@ -5,9 +5,9 @@
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart } from 'lucide-react';
-import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc } from 'firebase/firestore'; // Added increment, writeBatch, addDoc
+import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -123,7 +123,7 @@ const venueTypeColors: Record<VenueType, string> = {
   [VenueType.LGBT]: '#F97316', // Orange for LGBT
 };
 
-const MapUpdater = ({ center }: { center: Location }) => {
+const MapUpdater = ({ center }: { center: Location | null }) => { // center can be null
   const map = useMap();
   useEffect(() => {
     if (map && center) {
@@ -293,6 +293,8 @@ const MapContentAndLogic = () => {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams(); // For reading query params
+
 
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
   const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({}); // Store user's own ratings: { eventId: UserRatingData }
@@ -457,6 +459,33 @@ const MapContentAndLogic = () => {
 
     return () => unsubscribeVenues(); // Cleanup listener on component unmount
   }, [toast]);
+
+   // Effect to handle selecting venue from query parameter
+   useEffect(() => {
+    const venueIdFromQuery = searchParams.get('venueId');
+    if (venueIdFromQuery && venues.length > 0) {
+      if (selectedVenue?.id !== venueIdFromQuery) {
+        const venueToSelect = venues.find(v => v.id === venueIdFromQuery);
+        if (venueToSelect) {
+          setSelectedVenue(venueToSelect);
+          if (venueToSelect.location) {
+            // This will trigger MapUpdater to center the map
+            // And also visually set the user's marker to the venue's location for this flow
+            setUserLocation(venueToSelect.location); 
+          }
+        } else {
+          // Optional: toast message if venue from query param not found
+          // toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "destructive" });
+        }
+      } else if (selectedVenue?.id === venueIdFromQuery && selectedVenue.location) {
+        // If the same venue is already selected, ensure map is centered (e.g., on page refresh with query param)
+         setUserLocation(selectedVenue.location);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps 
+  }, [searchParams, venues, selectedVenue]); // setUserLocation removed as it's internal to this effect logic now
+                                            // setSelectedVenue should also be fine as it's for changing the venue.
+
 
   // Fetch events for a selected venue
   const fetchVenueEvents = async (venueId: string) => {

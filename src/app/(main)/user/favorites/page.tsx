@@ -243,7 +243,7 @@ const UserFavoritesPage: NextPage = () => {
                             size="sm"
                             variant="outline"
                             className="w-full border-primary text-primary hover:bg-primary/10"
-                            onClick={() => router.push(`/map?venueId=${venue.id}`)} // Simple redirect for now
+                            onClick={() => router.push(`/map?venueId=${venue.id}`)}
                         >
                            <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Ver no Mapa e Eventos
                         </Button>
