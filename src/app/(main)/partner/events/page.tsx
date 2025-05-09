@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -8,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy, type FieldValue } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -78,7 +79,7 @@ interface EventDocument extends EventFormInputs {
   startDateTime: Timestamp;
   endDateTime: Timestamp;
   createdAt: Timestamp;
-  updatedAt?: Timestamp;
+  updatedAt?: Timestamp; // Firestore Timestamp for updates
   checkInToken?: string;
   pricingValue?: number | null; // Allow null for Firestore
   averageRating?: number; 
@@ -178,6 +179,7 @@ const ManageEventsPage: NextPage = () => {
     }
 
     const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
+    const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
 
     if (!editingEventId && data.visibility) {
         const visibleEvents = partnerEvents.filter(event => event.visibility);
@@ -192,10 +194,7 @@ const ManageEventsPage: NextPage = () => {
         }
     }
 
-    const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
-    const checkInToken = existingEvent?.checkInToken || doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10).toUpperCase();
-
-    const eventPayload: Omit<EventDocument, 'id' | 'createdAt' | 'averageRating' | 'ratingCount'> & { createdAt?: Timestamp, pricingValue?: number | null, updatedAt?: Timestamp, averageRating?: number, ratingCount?: number } = {
+    const eventDataForFirestore: any = {
       partnerId: currentUser.uid,
       eventName: data.eventName,
       startDateTime: combineDateAndTime(data.startDate, data.startTime),
@@ -205,24 +204,22 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: data.pricingType === PricingType.FREE ? null : (data.pricingValue ?? null),
       description: data.description || '',
       visibility: data.visibility,
-      checkInToken: checkInToken,
+      checkInToken: editingEventId ? existingEvent?.checkInToken : (doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10).toUpperCase()),
+      averageRating: editingEventId ? (existingEvent?.averageRating ?? 0) : 0,
+      ratingCount: editingEventId ? (existingEvent?.ratingCount ?? 0) : 0,
     };
+
 
     try {
       if (editingEventId) {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', editingEventId);
-        eventPayload.createdAt = existingEvent?.createdAt; 
-        eventPayload.updatedAt = serverTimestamp();
-        // Preserve existing rating fields if they exist, otherwise initialize
-        eventPayload.averageRating = existingEvent?.averageRating ?? 0;
-        eventPayload.ratingCount = existingEvent?.ratingCount ?? 0;
-        await updateDoc(eventDocRef, eventPayload as any);
+        eventDataForFirestore.updatedAt = serverTimestamp(); // Set updatedAt for edits
+        await updateDoc(eventDocRef, eventDataForFirestore);
         toast({ title: "Evento Atualizado!", description: "O evento foi atualizado com sucesso." });
       } else {
-        eventPayload.createdAt = serverTimestamp();
-        eventPayload.averageRating = 0; 
-        eventPayload.ratingCount = 0;
-        await addDoc(eventsCollectionRef, eventPayload as any);
+        eventDataForFirestore.createdAt = serverTimestamp();
+        eventDataForFirestore.updatedAt = serverTimestamp(); // Also set updatedAt for new events for consistency
+        await addDoc(eventsCollectionRef, eventDataForFirestore);
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
       reset();
@@ -252,14 +249,22 @@ const ManageEventsPage: NextPage = () => {
 
   const handleDeleteEvent = async (eventId: string) => {
     if (!currentUser) return;
+    
+    const confirmDelete = window.confirm("Tem certeza que deseja excluir este evento? As avaliações e comentários associados a ele serão mantidos para estatísticas gerais do local, mas o evento em si será removido.");
+    if (!confirmDelete) return;
+
     try {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
 
-      // Ratings in 'eventRatings' collection are no longer deleted here.
-      // They will persist and contribute to overall statistics.
+      // Ratings are no longer deleted here to preserve for overall venue stats
+      // const ratingsQuery = query(collectionGroup(firestore, 'eventRatings'), where('eventId', '==', eventId), where('partnerId', '==', currentUser.uid));
+      // const ratingsSnapshot = await getDocs(ratingsQuery);
+      // const batch = writeBatch(firestore);
+      // ratingsSnapshot.forEach(doc => batch.delete(doc.ref));
+      // await batch.commit();
 
-      toast({ title: "Evento Excluído", description: "O evento foi excluído. Suas avaliações e comentários foram preservados para estatísticas." });
+      toast({ title: "Evento Excluído", description: "O evento foi excluído. Suas avaliações foram preservadas para estatísticas do local." });
       if (editingEventId === eventId) {
         setEditingEventId(null);
         reset();
@@ -537,3 +542,4 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
+
