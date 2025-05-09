@@ -1,4 +1,5 @@
 
+// Component for displaying and managing user's favorite venues
 'use client';
 
 import type { NextPage } from 'next';
@@ -6,22 +7,21 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, updateDoc, runTransaction, collection, query, where, getDocs, documentId, Timestamp as FirebaseTimestamp, onSnapshot } from 'firebase/firestore';
-// Link component is not used, can be removed if not needed elsewhere
-// import Link from 'next/link'; 
+// Ensure all necessary Firestore functions are imported
+import { doc, getDoc, updateDoc, runTransaction, collection, query, where, getDocs, documentId, type Timestamp as FirebaseTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, firestore } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Heart, Loader2, MapPin as MapPinIcon, ExternalLink, Star, Bell, BellOff } from 'lucide-react'; // Removed Info, it was unused
+import { ArrowLeft, Heart, Loader2, MapPin as MapPinIcon, ExternalLink, Star, Bell, BellOff } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import type { VenueType, MusicStyle, Location } from '@/lib/constants';
 import { VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { StarRating } from '@/components/ui/star-rating';
-import { Switch } from '@/components/ui/switch'; 
-import { Label } from '@/components/ui/label'; 
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface FavoriteVenueDisplay {
   id: string;
@@ -29,10 +29,9 @@ interface FavoriteVenueDisplay {
   venueType?: VenueType;
   musicStyles?: MusicStyle[];
   address?: { city: string; state: string; street?: string; number?: string; cep?: string };
-  location?: Location; 
+  location?: Location;
   averageVenueRating?: number;
   venueRatingCount?: number;
-  // notificationsEnabled is now implicitly handled by notificationSettings state
 }
 
 const venueTypeLabels: Record<VenueType, string> = VENUE_TYPE_OPTIONS.reduce((acc, curr) => {
@@ -54,7 +53,6 @@ const UserFavoritesPage: NextPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [notificationSettings, setNotificationSettings] = useState<Record<string, boolean>>({});
 
-
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -66,26 +64,31 @@ const UserFavoritesPage: NextPage = () => {
     return () => unsubscribeAuth();
   }, [router]);
 
+  // This useEffect listens to user document changes for favoriteVenueIds and notificationSettings
   useEffect(() => {
     if (!currentUser) return;
+
     const userDocRef = doc(firestore, "users", currentUser.uid);
     const unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const userData = docSnap.data();
         setFavoriteVenueIds(userData.favoriteVenueIds || []);
-        // Ensure notificationSettings is an object, default to empty if not present
-        setNotificationSettings(userData.favoriteVenueNotificationSettings || {}); 
+        setNotificationSettings(userData.favoriteVenueNotificationSettings || {});
       } else {
+        // User doc doesn't exist, reset local state
         setFavoriteVenueIds([]);
         setNotificationSettings({});
       }
     }, (error) => {
-      console.error("Error listening to user document:", error);
-      toast({ title: "Erro ao Sincronizar Dados", variant: "destructive"});
+      console.error("Error listening to user document for favorites/notifications:", error);
+      toast({ title: "Erro ao Sincronizar Dados", description: "Não foi possível carregar suas preferências de favoritos.", variant: "destructive"});
     });
+
     return () => unsubscribeUserDoc();
   }, [currentUser, toast]);
 
+
+  // This useEffect fetches details of favorite venues when favoriteVenueIds changes
   useEffect(() => {
     if (!currentUser || favoriteVenueIds.length === 0) {
       setFavoriteVenues([]);
@@ -97,44 +100,44 @@ const UserFavoritesPage: NextPage = () => {
     const fetchDetails = async () => {
       try {
         const venuesData: FavoriteVenueDisplay[] = [];
-        const CHUNK_SIZE = 30; // Firestore 'in' query supports up to 30 items in array
+        // Firestore 'in' query limit is 30
+        const CHUNK_SIZE = 30; 
         for (let i = 0; i < favoriteVenueIds.length; i += CHUNK_SIZE) {
             const chunk = favoriteVenueIds.slice(i, i + CHUNK_SIZE);
             if (chunk.length === 0) continue;
 
             const venuesRef = collection(firestore, "users");
-            // Query for documents where ID is in the current chunk and role is partner
+            // Query for partner documents whose ID is in the current chunk of favoriteVenueIds
             const q = query(venuesRef, where(documentId(), 'in', chunk), where('role', '==', 'partner'));
             const querySnapshot = await getDocs(q);
             
             querySnapshot.forEach((docSnap) => {
               const data = docSnap.data();
-              // Ensure that the venue is indeed a partner before adding
-              if (data.role === 'partner') {
+              // Ensure it's indeed a partner and has necessary data
+              if (data.role === 'partner') { 
                   venuesData.push({
                     id: docSnap.id,
                     venueName: data.venueName || 'Local Desconhecido',
                     venueType: data.venueType as VenueType,
                     musicStyles: data.musicStyles as MusicStyle[],
-                    address: data.address ? { 
-                        city: data.address.city, 
-                        state: data.address.state, 
-                        street: data.address.street, 
+                    address: data.address ? {
+                        city: data.address.city,
+                        state: data.address.state,
+                        street: data.address.street,
                         number: data.address.number,
                         cep: data.address.cep,
                     } : undefined,
                     location: data.location as Location,
                     averageVenueRating: data.averageVenueRating,
                     venueRatingCount: data.venueRatingCount,
-                    // notificationsEnabled is derived from notificationSettings state
                   });
               }
             });
         }
-        // Preserve the order from favoriteVenueIds
+        // Order venuesData based on the original favoriteVenueIds order
         const orderedVenues = favoriteVenueIds
           .map(id => venuesData.find(v => v.id === id))
-          .filter(Boolean) as FavoriteVenueDisplay[]; // filter(Boolean) removes any undefined if a venue was not found/not a partner
+          .filter(Boolean) as FavoriteVenueDisplay[]; // Filter out any undefined if a venue was not found
         setFavoriteVenues(orderedVenues);
 
       } catch (error) {
@@ -144,9 +147,9 @@ const UserFavoritesPage: NextPage = () => {
         setIsLoading(false);
       }
     };
+
     fetchDetails();
   }, [currentUser, favoriteVenueIds, toast]);
-
 
   const handleUnfavorite = async (venueId: string, venueName: string) => {
     if (!currentUser) return;
@@ -159,15 +162,17 @@ const UserFavoritesPage: NextPage = () => {
         const currentFavorites: string[] = userData.favoriteVenueIds || [];
         const updatedFavorites = currentFavorites.filter(id => id !== venueId);
         
+        // Also remove notification setting for this venue
         const currentSettings = userData.favoriteVenueNotificationSettings || {};
-        delete currentSettings[venueId]; // Remove setting for the unfavorited venue
+        delete currentSettings[venueId]; // Remove the key for the unfavorited venue
 
-        transaction.update(userDocRef, { 
+        transaction.update(userDocRef, {
           favoriteVenueIds: updatedFavorites,
-          favoriteVenueNotificationSettings: currentSettings 
+          favoriteVenueNotificationSettings: currentSettings // Update settings in transaction
         });
       });
       toast({ title: "Removido dos Favoritos!", description: `${venueName} não é mais um dos seus fervos favoritos.` });
+      // Local state favoriteVenueIds and notificationSettings will update via onSnapshot listener
     } catch (error: any) {
       console.error("Error unfavoriting:", error);
       toast({ title: "Erro ao Desfavoritar", description: error.message || "Tente novamente.", variant: "destructive" });
@@ -178,16 +183,12 @@ const UserFavoritesPage: NextPage = () => {
     if (!currentUser) return;
     const userDocRef = doc(firestore, "users", currentUser.uid);
     try {
-        // Create a new settings object to ensure Firestore updates correctly
-        const updatedSettings = { 
-          ...notificationSettings, // Get current state of all settings
-          [venueId]: newEnabledState // Update the specific venue
-        };
-
+        // Construct the field path to update directly in the map
+        const fieldPath = `favoriteVenueNotificationSettings.${venueId}`;
         await updateDoc(userDocRef, {
-            favoriteVenueNotificationSettings: updatedSettings
+            [fieldPath]: newEnabledState
         });
-        // No need to call setNotificationSettings here, onSnapshot will update it.
+        // No need to update local state `notificationSettings` directly, onSnapshot will handle it.
         toast({
             title: `Notificações ${newEnabledState ? "Ativadas" : "Desativadas"}`,
             description: `Novos eventos de ${venueName} ${newEnabledState ? "serão" : "não serão mais"} notificados.`,
@@ -199,8 +200,7 @@ const UserFavoritesPage: NextPage = () => {
     }
   };
 
-
-  if (isLoading) { 
+  if (isLoading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
@@ -281,7 +281,6 @@ const UserFavoritesPage: NextPage = () => {
                             <span className="text-xs text-muted-foreground">({venue.averageVenueRating.toFixed(1)} de {venue.venueRatingCount} {venue.venueRatingCount === 1 ? 'avaliação' : 'avaliações'})</span>
                         </div>
                        )}
-                        {/* Notification Toggle */}
                         <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/50">
                             <Label htmlFor={`notif-switch-${venue.id}`} className="text-sm text-muted-foreground flex items-center cursor-pointer">
                                 {isNotificationEnabled ? <Bell className="w-4 h-4 mr-2 text-primary" /> : <BellOff className="w-4 h-4 mr-2 text-muted-foreground" />}
@@ -307,7 +306,8 @@ const UserFavoritesPage: NextPage = () => {
                         </Button>
                     </CardFooter>
                   </Card>
-                )}}
+                );
+                })}
               </div>
             </ScrollArea>
           )}
@@ -318,4 +318,3 @@ const UserFavoritesPage: NextPage = () => {
 };
 
 export default UserFavoritesPage;
-
