@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -17,7 +16,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState, useMemo, useCallback } from 'react'; 
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
@@ -307,7 +306,7 @@ export default function MainAppLayout({
                   venueName: venueName,
                   eventName: eventData.eventName,
                   message: `Novo evento em ${venueName}: ${eventData.eventName}!`,
-                  createdAt: eventData.createdAt as FirebaseTimestamp || serverTimestamp(),
+                  createdAt: eventData.createdAt as FirebaseTimestamp || serverTimestamp() as FirebaseTimestamp,
                   read: false,
                 };
   
@@ -525,15 +524,34 @@ export default function MainAppLayout({
                         <DropdownMenuSeparator />
                         {(appUser.notifications && appUser.notifications.length > 0) ? (
                             appUser.notifications.map((notification) => (
-                                <DropdownMenuItem key={notification.id} className={cn("flex justify-between items-start whitespace-normal", !notification.read && "bg-primary/10")}>
+                                <DropdownMenuItem 
+                                  key={notification.id} 
+                                  className={cn(
+                                    "flex justify-between items-start whitespace-normal",
+                                    !notification.read && "bg-primary/10",
+                                    (notification.partnerId || notification.eventId) && "cursor-pointer hover:bg-accent/10" // Add pointer if it's a clickable notification
+                                  )}
+                                  onClick={() => {
+                                    if (notification.partnerId) { // Navigate if partnerId is present (for new venue or event)
+                                      router.push(`/map?venueId=${notification.partnerId}`);
+                                      setShowNotificationDropdown(false);
+                                    }
+                                  }}
+                                >
                                     <div className="flex-1">
-                                        <p className="text-sm font-medium">{notification.venueName || notification.eventName}</p>
+                                        <p className="text-sm font-medium">{notification.venueName || notification.eventName || "Nova Notificação"}</p>
                                         <p className="text-xs text-muted-foreground">{notification.message}</p>
                                         <p className="text-xs text-muted-foreground/70 pt-1">
                                             {new Date(notification.createdAt.seconds * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                         </p>
                                     </div>
-                                    <Button variant="ghost" size="icon" className="ml-2 h-7 w-7 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); dismissNotification(notification.id);}}>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="ml-2 h-7 w-7 text-muted-foreground hover:text-destructive flex-shrink-0" // Added flex-shrink-0
+                                      onClick={(e) => { e.stopPropagation(); dismissNotification(notification.id);}}
+                                      title="Remover notificação"
+                                    >
                                         <Trash2 className="w-3.5 h-3.5"/>
                                     </Button>
                                 </DropdownMenuItem>
@@ -657,4 +675,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-
