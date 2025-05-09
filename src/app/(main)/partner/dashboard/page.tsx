@@ -1,18 +1,20 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
-import { doc, onSnapshot, collection, getDocs, query, where } from 'firebase/firestore'; // Added query, where
+import { doc, onSnapshot, collection, getDocs, query, where, collectionGroup } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb } from 'lucide-react'; // Added Heart, Lightbulb
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb, Brain } from 'lucide-react'; // Added Brain for AI
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle } from '@/lib/constants';
 import { StarRating } from '@/components/ui/star-rating';
+import { analyzeVenueFeedback, type AnalyzeVenueFeedbackInput, type AnalyzeVenueFeedbackOutput, type FeedbackItem } from '@/ai/flows/analyze-venue-feedback-flow';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from '@/components/ui/badge';
 
 interface VenueData {
   venueName: string;
@@ -36,6 +38,12 @@ interface VenueData {
   venueRatingCount?: number;
 }
 
+interface EventRatingData {
+  rating: number;
+  comment?: string;
+  eventName?: string; // Added to pass to AI
+}
+
 
 export default function PartnerDashboardPage() {
   const { toast } = useToast();
@@ -45,8 +53,12 @@ export default function PartnerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [totalCheckIns, setTotalCheckIns] = useState<number | null>(null);
   const [loadingCheckIns, setLoadingCheckIns] = useState(true);
-  const [totalFavorites, setTotalFavorites] = useState<number | null>(null); // New state for favorites count
-  const [loadingFavorites, setLoadingFavorites] = useState(true); // New loading state for favorites
+  const [totalFavorites, setTotalFavorites] = useState<number | null>(null);
+  const [loadingFavorites, setLoadingFavorites] = useState(true);
+
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<AnalyzeVenueFeedbackOutput | null>(null);
+  const [isAnalyzingFeedback, setIsAnalyzingFeedback] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   useEffect(() => {
     let unsubscribeSnapshot: (() => void) | null = null;
@@ -113,7 +125,7 @@ export default function PartnerDashboardPage() {
   useEffect(() => {
     if (!currentUser || !venueData?.questionnaireCompleted) {
       setLoadingCheckIns(false);
-      setLoadingFavorites(false); // Ensure favorites loading is also stopped
+      setLoadingFavorites(false);
       return;
     }
 
@@ -138,7 +150,7 @@ export default function PartnerDashboardPage() {
         console.error("Error fetching total check-ins:", error);
         if (isMounted) {
           setTotalCheckIns(0);
-          toast({ title: "Erro ao buscar total de check-ins", variant: "destructive", duration: 3000 });
+          // toast({ title: "Erro ao buscar total de check-ins", variant: "destructive", duration: 3000 });
         }
       } finally {
         if (isMounted) {
@@ -161,7 +173,7 @@ export default function PartnerDashboardPage() {
         console.error("Error fetching total favorites:", error);
         if (isMounted) {
           setTotalFavorites(0);
-          toast({ title: "Erro ao buscar total de favoritos", variant: "destructive", duration: 3000 });
+         // toast({ title: "Erro ao buscar total de favoritos", variant: "destructive", duration: 3000 });
         }
       } finally {
         if (isMounted) {
@@ -170,14 +182,86 @@ export default function PartnerDashboardPage() {
       }
     };
 
-
     fetchTotalCheckIns();
-    fetchTotalFavorites(); // Fetch favorites count
+    fetchTotalFavorites();
 
     return () => {
       isMounted = false;
     };
   }, [currentUser, venueData?.questionnaireCompleted, toast]);
+
+  const handleGenerateFeedbackAnalysis = async () => {
+    if (!currentUser || !venueData) {
+      toast({ title: "Erro", description: "Dados do parceiro não disponíveis.", variant: "destructive" });
+      return;
+    }
+    setIsAnalyzingFeedback(true);
+    setAnalysisError(null);
+    setAiAnalysisResult(null);
+
+    try {
+      // Fetch all ratings for this partner
+      const ratingsQuery = query(
+        collectionGroup(firestore, 'eventRatings'),
+        where('partnerId', '==', currentUser.uid)
+      );
+      const ratingsSnapshot = await getDocs(ratingsQuery);
+      
+      const feedbackItems: FeedbackItem[] = [];
+      if (ratingsSnapshot.empty) {
+        setAnalysisError("Nenhum feedback de evento encontrado para análise.");
+        setIsAnalyzingFeedback(false);
+        toast({ title: "Sem Feedback", description: "Ainda não há avaliações ou comentários para seus eventos.", variant: "default"});
+        return;
+      }
+
+      // Fetch event names to provide more context to the AI
+      const eventDetailsPromises = ratingsSnapshot.docs.map(async (ratingDoc) => {
+        const ratingData = ratingDoc.data() as EventRatingData;
+        let eventName = "Evento Desconhecido";
+        try {
+          const eventDocRef = doc(firestore, `users/${currentUser.uid}/events/${ratingDoc.data().eventId}`);
+          const eventDocSnap = await getDoc(eventDocRef);
+          if(eventDocSnap.exists()) {
+            eventName = eventDocSnap.data().eventName || eventName;
+          }
+        } catch (e) {
+          console.warn(`Could not fetch event name for eventId ${ratingDoc.data().eventId}`, e);
+        }
+        return {
+          rating: ratingData.rating,
+          comment: ratingData.comment,
+          eventName: eventName,
+        };
+      });
+      
+      const resolvedFeedbackItems = await Promise.all(eventDetailsPromises);
+      feedbackItems.push(...resolvedFeedbackItems);
+
+      if (feedbackItems.length === 0) {
+        setAnalysisError("Nenhum feedback de evento encontrado para análise após processamento.");
+        setIsAnalyzingFeedback(false);
+        toast({ title: "Sem Feedback", description: "Não foi possível processar o feedback dos seus eventos.", variant: "default"});
+        return;
+      }
+
+      const analysisInput: AnalyzeVenueFeedbackInput = {
+        venueName: venueData.venueName,
+        feedbackItems: feedbackItems,
+      };
+
+      const result = await analyzeVenueFeedback(analysisInput);
+      setAiAnalysisResult(result);
+      toast({ title: "Análise Concluída!", description: "Seu relatório de feedback está pronto.", variant: "default" });
+
+    } catch (error: any) {
+      console.error("Error generating AI feedback analysis:", error);
+      setAnalysisError(error.message || "Ocorreu um erro ao gerar a análise.");
+      toast({ title: "Erro na Análise", description: error.message || "Não foi possível gerar o relatório de feedback.", variant: "destructive" });
+    } finally {
+      setIsAnalyzingFeedback(false);
+    }
+  };
 
 
   if (loading || !currentUser || !venueData) {
@@ -327,24 +411,72 @@ export default function PartnerDashboardPage() {
             </CardContent>
         </Card>
         
-        <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
+        <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow md:col-span-2 lg:col-span-1">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
-              <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-              Fervo App Recomendações
+              <Brain className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" /> {/* Changed icon */}
+              Análise de Feedback (IA)
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
-              Receba dicas e insights para melhorar seu Fervo e atrair mais clientes.
+              Receba insights com IA baseados nos comentários e notas dos seus eventos.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center gap-3 p-4 sm:p-6 pt-0 sm:pt-0">
-            <Button
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
-              onClick={() => toast({ title: "Em Breve!", description: "Recomendações personalizadas com IA estarão disponíveis aqui para otimizar seus eventos e engajamento."})}
-            >
-              <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Ver Recomendações (Em Breve)
-            </Button>
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+            {isAnalyzingFeedback && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-8 h-8 text-primary animate-spin mr-2" />
+                <p className="text-primary">Analisando feedback...</p>
+              </div>
+            )}
+            {analysisError && !isAnalyzingFeedback && (
+              <p className="text-destructive text-sm py-4">{analysisError}</p>
+            )}
+            {aiAnalysisResult && !isAnalyzingFeedback && (
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="summary">
+                  <AccordionTrigger className="text-primary/90 hover:text-primary">Resumo Geral ({aiAnalysisResult.overallSentiment})</AccordionTrigger>
+                  <AccordionContent className="text-sm text-foreground/80">
+                    <p className="mb-2"><strong>Média de Notas:</strong> {aiAnalysisResult.averageRatingCalculated?.toFixed(1) || 'N/A'} de 5 estrelas ({aiAnalysisResult.totalFeedbackItems} feedbacks)</p>
+                    {aiAnalysisResult.summary}
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="positive">
+                  <AccordionTrigger className="text-green-500 hover:text-green-600">Aspectos Positivos</AccordionTrigger>
+                  <AccordionContent>
+                    <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
+                      {aiAnalysisResult.positiveAspects.map((item, index) => <li key={`pos-${index}`}>{item}</li>)}
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="negative">
+                  <AccordionTrigger className="text-red-500 hover:text-red-600">Aspectos a Melhorar</AccordionTrigger>
+                  <AccordionContent>
+                     <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
+                      {aiAnalysisResult.negativeAspects.map((item, index) => <li key={`neg-${index}`}>{item}</li>)}
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="suggestions">
+                  <AccordionTrigger className="text-blue-500 hover:text-blue-600">Sugestões da IA</AccordionTrigger>
+                  <AccordionContent>
+                     <ul className="list-disc pl-5 space-y-1 text-sm text-foreground/80">
+                      {aiAnalysisResult.improvementSuggestions.map((item, index) => <li key={`sug-${index}`}>{item}</li>)}
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            )}
           </CardContent>
+          <CardFooter className="p-4 sm:p-6 pt-0 sm:pt-0">
+             <Button
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
+              onClick={handleGenerateFeedbackAnalysis}
+              disabled={isAnalyzingFeedback}
+            >
+              {isAnalyzingFeedback ? <Loader2 className="w-5 h-5 mr-2 animate-spin"/> : <Brain className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />} 
+              {aiAnalysisResult ? 'Analisar Novamente' : 'Analisar Feedback com IA'}
+            </Button>
+          </CardFooter>
         </Card>
 
 
