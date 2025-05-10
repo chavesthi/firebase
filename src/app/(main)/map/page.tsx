@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle as UICardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle as UICardTitle } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -39,7 +39,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
-// Logo component removed from here
+
 
 interface VenueEvent {
   id: string;
@@ -878,7 +878,6 @@ const MapContentAndLogic = () => {
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]"> 
-      {/* Logo removed from here */}
       <Card
         className={cn(
           "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50", 
@@ -1010,10 +1009,10 @@ const MapContentAndLogic = () => {
                     {selectedVenue.name}
                     </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
-                        <div className="flex items-center gap-1 mt-1">
+                        <div className="flex items-center gap-2 mt-1"> {/* Increased gap for better spacing */}
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly />
-                            <span className="text-xs text-muted-foreground">
-                                (Avaliação Geral: {selectedVenue.averageVenueRating.toFixed(1)} de {selectedVenue.venueRatingCount} {selectedVenue.venueRatingCount === 1 ? 'avaliação de evento' : 'avaliações de eventos'})
+                            <span className="text-sm text-foreground font-semibold"> {/* Display numerical rating */}
+                                {selectedVenue.averageVenueRating.toFixed(1)}
                             </span>
                         </div>
                     ): (
