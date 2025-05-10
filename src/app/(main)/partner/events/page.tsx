@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -45,6 +44,7 @@ const eventFormSchema = z.object({
   pricingValue: z.coerce.number().positive({ message: 'Valor deve ser positivo.' }).optional(),
   description: z.string().max(500, { message: 'Descrição muito longa (máx. 500 caracteres).' }).optional(),
   visibility: z.boolean().default(true),
+  shareRewardsEnabled: z.boolean().default(true), // Added for FervoCoin sharing rewards
   // checkInToken is not part of form input, generated on save
 }).refine(data => {
     if (data.pricingType !== PricingType.FREE && (data.pricingValue === undefined || data.pricingValue <= 0)) {
@@ -83,7 +83,8 @@ interface EventDocument extends EventFormInputs {
   checkInToken?: string;
   pricingValue?: number | null; // Allow null for Firestore
   averageRating?: number; 
-  ratingCount?: number;   
+  ratingCount?: number;
+  shareRewardsEnabled: boolean; // Added for FervoCoin sharing rewards
 }
 
 const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
@@ -115,6 +116,7 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: undefined,
       description: '',
       visibility: true,
+      shareRewardsEnabled: true, // Default to true for new events
     },
   });
 
@@ -204,6 +206,7 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: data.pricingType === PricingType.FREE ? null : (data.pricingValue ?? null),
       description: data.description || '',
       visibility: data.visibility,
+      shareRewardsEnabled: data.shareRewardsEnabled, // Save share rewards setting
       checkInToken: editingEventId ? existingEvent?.checkInToken : (doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10).toUpperCase()),
       averageRating: editingEventId ? (existingEvent?.averageRating ?? 0) : 0,
       ratingCount: editingEventId ? (existingEvent?.ratingCount ?? 0) : 0,
@@ -243,6 +246,7 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: event.pricingValue ?? undefined,
       description: event.description,
       visibility: event.visibility,
+      shareRewardsEnabled: event.shareRewardsEnabled ?? true, // Load value, default to true if missing
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -256,13 +260,6 @@ const ManageEventsPage: NextPage = () => {
     try {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
-
-      // Ratings are no longer deleted here to preserve for overall venue stats
-      // const ratingsQuery = query(collectionGroup(firestore, 'eventRatings'), where('eventId', '==', eventId), where('partnerId', '==', currentUser.uid));
-      // const ratingsSnapshot = await getDocs(ratingsQuery);
-      // const batch = writeBatch(firestore);
-      // ratingsSnapshot.forEach(doc => batch.delete(doc.ref));
-      // await batch.commit();
 
       toast({ title: "Evento Excluído", description: "O evento foi excluído. Suas avaliações foram preservadas para estatísticas do local." });
       if (editingEventId === eventId) {
@@ -434,6 +431,18 @@ const ManageEventsPage: NextPage = () => {
                 {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description.message}</p>}
               </div>
 
+              <div className="md:col-span-2 flex items-center space-x-2 pt-2">
+                <Controller name="shareRewardsEnabled" control={control} render={({ field }) => <Switch id="shareRewardsEnabled" checked={field.value} onCheckedChange={field.onChange} />} />
+                <Label htmlFor="shareRewardsEnabled" className="text-primary/90">Ativar Recompensa por Compartilhamento (FervoCoins)</Label>
+              </div>
+              <div className="md:col-span-2 -mt-3">
+                <p className="text-xs text-muted-foreground pl-8">
+                  Positivo: Usuários ganham FervoCoins ao compartilhar este evento, aumentando o alcance!
+                  <br/>Se desativado, o compartilhamento não gera recompensa. (Padrão: Ativado)
+                </p>
+                {errors.shareRewardsEnabled && <p className="mt-1 text-sm text-red-500">{errors.shareRewardsEnabled.message}</p>}
+              </div>
+
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Controller name="visibility" control={control} render={({ field }) => <Switch id="visibility" checked={field.value} onCheckedChange={field.onChange} />} />
                 <Label htmlFor="visibility" className="text-primary/90">Visível para usuários?</Label>
@@ -542,4 +551,3 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
-

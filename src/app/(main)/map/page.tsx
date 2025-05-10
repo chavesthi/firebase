@@ -53,6 +53,7 @@ interface VenueEvent {
   visibility: boolean;
   averageRating?: number;
   ratingCount?: number;
+  shareRewardsEnabled?: boolean; // Added for FervoCoin sharing rewards
 }
 
 interface Venue {
@@ -723,6 +724,33 @@ const MapContentAndLogic = () => {
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
         return;
     }
+    
+    // --- Fetch the specific event to check its shareRewardsEnabled status ---
+    let eventDataForShare: VenueEvent | undefined;
+    if (selectedVenue && selectedVenue.id === partnerId) {
+        eventDataForShare = selectedVenue.events?.find(e => e.id === eventId);
+    } else {
+        try {
+            const eventDocRef = doc(firestore, `users/${partnerId}/events/${eventId}`);
+            const eventDocSnap = await getDoc(eventDocRef);
+            if (eventDocSnap.exists()) {
+                eventDataForShare = { id: eventDocSnap.id, ...eventDocSnap.data() } as VenueEvent;
+            } else {
+                toast({ title: "Erro ao Compartilhar", description: "Detalhes do evento não encontrados.", variant: "destructive" });
+                return;
+            }
+        } catch (fetchError) {
+            console.error("Error fetching event details for sharing:", fetchError);
+            toast({ title: "Erro ao Compartilhar", description: "Não foi possível carregar detalhes do evento.", variant: "destructive" });
+            return;
+        }
+    }
+
+    if (!eventDataForShare) {
+        toast({ title: "Evento não Encontrado", description: "Não foi possível encontrar os detalhes deste evento.", variant: "destructive" });
+        return;
+    }
+    // --- End event fetch ---
 
     const shareUrl = `${window.location.origin}/shared-event/${partnerId}/${eventId}`;
     let sharedSuccessfully = false;
@@ -730,7 +758,7 @@ const MapContentAndLogic = () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Confira este Fervo: ${partnerName} - ${selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento'}`,
+          title: `Confira este Fervo: ${partnerName} - ${eventDataForShare.eventName || 'Evento'}`,
           text: `Olha esse evento que encontrei no Fervo App!`,
           url: shareUrl,
         });
@@ -763,7 +791,7 @@ const MapContentAndLogic = () => {
       }
     }
 
-    if (sharedSuccessfully && currentUser) {
+    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true)) { // Default to true if field is missing
       const userDocRef = doc(firestore, "users", currentUser.uid);
       const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
@@ -819,6 +847,9 @@ const MapContentAndLogic = () => {
           duration: 5000
         });
       }
+    } else if (sharedSuccessfully && currentUser && !(eventDataForShare.shareRewardsEnabled ?? true)) {
+        console.log(`Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
+        // No specific toast message if rewards are disabled, as per user request.
     }
   };
 
