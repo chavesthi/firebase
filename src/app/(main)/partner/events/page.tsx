@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -9,7 +10,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy, type FieldValue } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy, type FieldValue, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -45,8 +46,7 @@ const eventFormSchema = z.object({
   pricingValue: z.coerce.number().positive({ message: 'Valor deve ser positivo.' }).optional(),
   description: z.string().max(500, { message: 'Descrição muito longa (máx. 500 caracteres).' }).optional(),
   visibility: z.boolean().default(true),
-  shareRewardsEnabled: z.boolean().default(true), // Added for FervoCoin sharing rewards
-  // checkInToken is not part of form input, generated on save
+  shareRewardsEnabled: z.boolean().default(true),
 }).refine(data => {
     if (data.pricingType !== PricingType.FREE && (data.pricingValue === undefined || data.pricingValue <= 0)) {
         return false;
@@ -80,12 +80,12 @@ interface EventDocument extends EventFormInputs {
   startDateTime: Timestamp;
   endDateTime: Timestamp;
   createdAt: Timestamp;
-  updatedAt?: Timestamp; // Firestore Timestamp for updates
+  updatedAt?: Timestamp; 
   checkInToken?: string;
-  pricingValue?: number | null; // Allow null for Firestore
+  pricingValue?: number | null; 
   averageRating?: number; 
   ratingCount?: number;
-  shareRewardsEnabled: boolean; // Added for FervoCoin sharing rewards
+  shareRewardsEnabled: boolean;
 }
 
 const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
@@ -94,6 +94,11 @@ const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): 
   const endTime = endDateTime.toDate();
   return now >= startTime && now <= endTime;
 };
+
+const isEventPast = (endDateTime: Timestamp): boolean => {
+    const now = new Date();
+    return endDateTime.toDate() < now;
+}
 
 
 const ManageEventsPage: NextPage = () => {
@@ -117,7 +122,7 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: undefined,
       description: '',
       visibility: true,
-      shareRewardsEnabled: true, // Default to true for new events
+      shareRewardsEnabled: true,
     },
   });
 
@@ -207,22 +212,22 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: data.pricingType === PricingType.FREE ? null : (data.pricingValue ?? null),
       description: data.description || '',
       visibility: data.visibility,
-      shareRewardsEnabled: data.shareRewardsEnabled, // Save share rewards setting
-      checkInToken: editingEventId ? existingEvent?.checkInToken : (doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10).toUpperCase()),
-      averageRating: editingEventId ? (existingEvent?.averageRating ?? 0) : 0,
-      ratingCount: editingEventId ? (existingEvent?.ratingCount ?? 0) : 0,
+      shareRewardsEnabled: data.shareRewardsEnabled,
+      checkInToken: existingEvent?.checkInToken || (doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10).toUpperCase()),
+      averageRating: existingEvent?.averageRating ?? 0,
+      ratingCount: existingEvent?.ratingCount ?? 0,
     };
 
 
     try {
       if (editingEventId) {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', editingEventId);
-        eventDataForFirestore.updatedAt = serverTimestamp(); // Set updatedAt for edits
+        eventDataForFirestore.updatedAt = serverTimestamp(); 
         await updateDoc(eventDocRef, eventDataForFirestore);
         toast({ title: "Evento Atualizado!", description: "O evento foi atualizado com sucesso." });
       } else {
         eventDataForFirestore.createdAt = serverTimestamp();
-        eventDataForFirestore.updatedAt = serverTimestamp(); // Also set updatedAt for new events for consistency
+        eventDataForFirestore.updatedAt = serverTimestamp(); 
         await addDoc(eventsCollectionRef, eventDataForFirestore);
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
@@ -247,7 +252,7 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: event.pricingValue ?? undefined,
       description: event.description,
       visibility: event.visibility,
-      shareRewardsEnabled: event.shareRewardsEnabled ?? true, // Load value, default to true if missing
+      shareRewardsEnabled: event.shareRewardsEnabled ?? true, 
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -261,10 +266,6 @@ const ManageEventsPage: NextPage = () => {
     try {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
-
-      // Note: Ratings are in a separate collection group 'eventRatings' and are not deleted here
-      // to preserve them for overall venue statistics. If event-specific ratings needed deletion,
-      // that would require querying and batch deleting from 'eventRatings' collection group.
 
       toast({ title: "Evento Excluído", description: "O evento foi excluído. Suas avaliações foram preservadas para estatísticas do local." });
       if (editingEventId === eventId) {
@@ -486,6 +487,7 @@ const ManageEventsPage: NextPage = () => {
               <div className="space-y-4">
                 {partnerEvents.map(event => {
                   const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
+                  const eventIsPast = isEventPast(event.endDateTime);
                   return (
                   <Card key={event.id} className={`p-3 sm:p-4 border rounded-lg ${event.id === editingEventId ? 'border-primary shadow-md' : 'border-border'}`}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
@@ -495,6 +497,9 @@ const ManageEventsPage: NextPage = () => {
                           <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                              <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
                           </Badge>
+                        )}
+                        {eventIsPast && !isHappening && (
+                            <Badge variant="outline" className="mt-1 text-xs border-destructive text-destructive">Encerrado</Badge>
                         )}
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                           {format(event.startDateTime.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })} - {format(event.endDateTime.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })}
@@ -508,15 +513,21 @@ const ManageEventsPage: NextPage = () => {
                         <Button variant="ghost" size="icon" onClick={() => toggleEventVisibility(event)} title={event.visibility ? "Ocultar evento" : "Tornar evento visível"}>
                           {event.visibility ? <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />}
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditEvent(event)} title="Editar evento">
-                          <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                        <Button variant="ghost" size="icon" onClick={() => handleEditEvent(event)} title="Editar evento" disabled={eventIsPast}>
+                          <Edit className={`w-4 h-4 sm:w-5 sm:h-5 ${eventIsPast ? 'text-muted-foreground' : 'text-primary'}`} />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(event.id)} title="Excluir evento">
                           <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
                         </Button>
                         {event.checkInToken && (
-                          <Button variant="ghost" size="icon" onClick={() => router.push(`/partner/qr-code/${event.id}`)} title="Ver QR Code do Evento">
-                            <QrCode className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => router.push(`/partner/qr-code/${event.id}`)} 
+                            title={eventIsPast ? "Evento encerrado, QR Code indisponível" : "Ver QR Code do Evento"}
+                            disabled={eventIsPast}
+                          >
+                            <QrCode className={`w-4 h-4 sm:w-5 sm:h-5 ${eventIsPast ? 'text-muted-foreground' : 'text-primary'}`} />
                           </Button>
                         )}
                       </div>
@@ -556,3 +567,4 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
+
