@@ -174,13 +174,14 @@ export default function MainAppLayout({
     if (!loading) {
       const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
       const isSharedEventPage = pathname.startsWith('/shared-event');
+      const isUserPage = pathname.startsWith('/user/'); // Allow access to all /user/* subpages
 
-      if (!appUser && !isAuthPage && !isSharedEventPage) {
+      if (!appUser && !isAuthPage && !isSharedEventPage && !isUserPage) {
         router.push('/login');
       } else if (appUser && !appUser.questionnaireCompleted) {
-        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && pathname !== '/user/favorites') { 
+        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && !isUserPage) { 
           router.push('/questionnaire');
-        } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage) {
+        } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage && !isUserPage) {
           router.push('/partner-questionnaire');
         }
       }
@@ -221,7 +222,7 @@ export default function MainAppLayout({
 
           if (typeMatch || styleMatch) {
             newNotifications.push({
-              id: `partner_${partnerId}`, 
+              id: `partner_${partnerId}_${partnerProfileCompletedAt.getTime()}`, 
               partnerId: partnerId,
               venueName: partnerData.venueName,
               message: `Novo Fervo que combina com você: ${partnerData.venueName}!`,
@@ -279,8 +280,6 @@ export default function MainAppLayout({
         const venueName = venueDocSnap.exists() ? venueDocSnap.data().venueName : "Local Desconhecido";
   
         const eventsRef = collection(firestore, `users/${venueId}/events`);
-        // Query for all visible events, order by creation/update for processing.
-        // Filtering by timestamp here is removed to catch updates correctly.
         const qEvents = query(eventsRef, where('visibility', '==', true), orderBy('updatedAt', 'desc'));
   
         const unsubscribe = onSnapshot(qEvents, async (snapshot) => {
@@ -294,7 +293,7 @@ export default function MainAppLayout({
             const eventData = change.doc.data();
             const eventId = change.doc.id;
             const eventCreatedAt = eventData.createdAt as FirebaseTimestamp;
-            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp; // Timestamp of the last update
+            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp; 
             const lastUserCheck = appUser.lastNotificationCheckTimestamp?.toMillis() || 0;
 
             if (change.type === "added") {
@@ -319,7 +318,7 @@ export default function MainAppLayout({
                 n.eventId === eventId && 
                 n.partnerId === venueId && 
                 n.message.includes("atualizado") &&
-                n.createdAt.toMillis() >= eventUpdatedAt.toMillis() // Already notified for this or a newer update
+                n.createdAt.toMillis() >= eventUpdatedAt.toMillis() 
               );
 
               if (!alreadyNotifiedForThisUpdate && eventUpdatedAt && eventUpdatedAt.toMillis() > lastUserCheck) {
@@ -330,7 +329,7 @@ export default function MainAppLayout({
                   venueName: venueName,
                   eventName: eventData.eventName,
                   message: `Evento atualizado em ${venueName}: ${eventData.eventName}. Confira as novidades!`,
-                  createdAt: eventUpdatedAt, // Use event's updatedAt for this notification
+                  createdAt: eventUpdatedAt, 
                   read: false,
                 });
                 newNotificationsFound = true;
@@ -341,7 +340,7 @@ export default function MainAppLayout({
           if (newNotificationsFound) {
             const allNotifications = [...existingUserNotifications, ...notificationsToAdd]
               .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-              .slice(0, 20); // Keep a limit
+              .slice(0, 20); 
             updateDoc(userDocRefToUpdate, { notifications: allNotifications });
           }
         }, (error) => {
@@ -431,51 +430,7 @@ export default function MainAppLayout({
       toast({ title: "Minhas FervoCoins", description: "Você ainda não tem FervoCoins. Compartilhe eventos para ganhar!", variant: "default", duration: 5000 });
       return;
     }
-
-    const venueCoinsEntries = Object.entries(appUser.venueCoins).filter(([, count]) => count > 0);
-
-    if (venueCoinsEntries.length === 0) {
-      toast({ title: "Minhas FervoCoins", description: "Você ainda não tem FervoCoins em nenhum local. Compartilhe eventos para ganhar!", variant: "default", duration: 5000 });
-      return;
-    }
-    
-    setIsFetchingCoinDetails(true);
-    toast({ title: "Minhas FervoCoins", description: "Carregando detalhes...", variant: "default", duration: 2000 });
-
-    try {
-      const coinDetailsPromises = venueCoinsEntries.map(async ([partnerId, coinCount]) => {
-        const partnerDocRef = doc(firestore, "users", partnerId);
-        const partnerDocSnap = await getDoc(partnerDocRef);
-        if (partnerDocSnap.exists()) {
-          return { venueName: partnerDocSnap.data().venueName || 'Local Desconhecido', coinCount };
-        }
-        return { venueName: 'Local Desconhecido', coinCount };
-      });
-
-      const resolvedCoinDetails = await Promise.all(coinDetailsPromises);
-      
-      let description = `Você tem um total de ${totalFervoCoins} FervoCoins!\n\nDetalhes por local:\n`;
-      if (resolvedCoinDetails.length > 0) {
-        description += resolvedCoinDetails.map(detail => `- ${detail.venueName}: ${detail.coinCount} moeda(s)`).join('\n');
-      } else {
-        description = "Você ainda não acumulou FervoCoins em locais específicos. Compartilhe eventos para começar!";
-      }
-      description += "\n\nGanhe mais compartilhando eventos e troque por cupons!";
-
-
-      toast({
-        title: "Suas FervoCoins!",
-        description: description,
-        variant: "default",
-        duration: 10000, 
-      });
-
-    } catch (error) {
-      console.error("Error fetching coin details:", error);
-      toast({ title: "Erro ao Carregar Moedas", description: "Não foi possível buscar os detalhes das suas FervoCoins.", variant: "destructive" });
-    } finally {
-      setIsFetchingCoinDetails(false);
-    }
+     router.push('/user/coins');
   };
 
 
@@ -487,8 +442,8 @@ export default function MainAppLayout({
     );
   }
 
-  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event', '/user/favorites']; 
-  const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p));
+  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event', '/user/favorites', '/user/coupons', '/user/profile', '/user/coins']; 
+  const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p) || pathname === p);
 
   const activeColorClass = 'text-primary';
   const activeBorderColorClass = 'border-primary';
@@ -648,6 +603,10 @@ export default function MainAppLayout({
                     <DropdownMenuItem onClick={() => router.push('/user/profile')}>
                       <UserCircle className="w-4 h-4 mr-2" />
                       Meu Perfil
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/user/coins')}>
+                        <Coins className="w-4 h-4 mr-2" />
+                        Minhas FervoCoins
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/user/favorites')}>
                       <Heart className="w-4 h-4 mr-2" /> 
