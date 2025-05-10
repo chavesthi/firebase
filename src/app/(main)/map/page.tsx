@@ -1,16 +1,17 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle as UICardTitle } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -916,7 +917,7 @@ const MapContentAndLogic = () => {
         )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
+          <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
@@ -974,7 +975,7 @@ const MapContentAndLogic = () => {
             <GoogleMap
                 defaultCenter={userLocation} 
                 defaultZoom={15}
-                mapId="ec411dbe9f75cb23" 
+                mapId="2cc43a385ccd3370d4c3b889"
                 gestureHandling="greedy"
                 disableDefaultUI={true}
                 className="w-full h-full" 
@@ -1169,7 +1170,7 @@ const MapContentAndLogic = () => {
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
                                   <div className="flex-1">
-                                    <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
+                                    <CardTitle className="text-md text-secondary mb-1">{event.eventName}</CardTitle>
                                     {isHappening && (
                                       <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                                         <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
@@ -1350,3 +1351,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
