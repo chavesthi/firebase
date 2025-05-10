@@ -52,10 +52,10 @@ export async function POST(req: NextRequest) {
              return new NextResponse("User data or email not found", { status: 404 });
         }
 
-
+        // Use the shared stripe instance from @/lib/stripe
         const stripeSession = await stripe.checkout.sessions.create({
             success_url: `${APP_URL}/partner/settings?session_id={CHECKOUT_SESSION_ID}`, // Stripe will replace {CHECKOUT_SESSION_ID}
-            cancel_url: `${APP_URL}/partner/settings`,
+            cancel_url: `${APP_URL}/partner/settings?canceled=true`, // Added cancel parameter
             payment_method_types: ["card"],
             mode: "subscription",
             billing_address_collection: 'auto',
@@ -86,9 +86,10 @@ export async function POST(req: NextRequest) {
             return new NextResponse("User data or email not found", { status: 404 });
         }
 
+        // Use the shared stripe instance from @/lib/stripe
         const stripeSession = await stripe.checkout.sessions.create({
             success_url: `${APP_URL}/partner/settings?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${APP_URL}/partner/settings`,
+            cancel_url: `${APP_URL}/partner/settings?canceled=true`, // Added cancel parameter
             payment_method_types: ["card"],
             mode: "subscription",
             billing_address_collection: 'auto',

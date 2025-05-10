@@ -6,6 +6,6 @@ if (!STRIPE_SECRET_KEY) {
 }
 
 export const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2024-04-10', // Use the latest API version
+  apiVersion: '2024-04-10', // Use the latest API version as per Stripe's recommendation
   typescript: true,
 });
