@@ -1,3 +1,4 @@
+
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server';
 import { auth, firestore } from '@/lib/firebase';
@@ -18,14 +19,10 @@ export async function POST(req: NextRequest) {
                                        // You might need to send the UID from client and verify it here,
                                        // or use Firebase Admin SDK with a session cookie.
 
+    let userId: string;
+    let userEmail: string | null;
+
     if (!firebaseUser) {
-        // A more robust solution would be to check a session cookie or an Authorization header
-        // For now, we'll rely on the client ensuring the user is logged in before calling this.
-        // If you have the UID from the client, you can use that directly.
-        // This part needs careful review based on your actual auth flow in API routes.
-        // For this example, let's assume the client ensures auth.
-        // If this were a real production app, you'd need to secure this properly.
-        
         // Try to get UID from request body if passed (less secure, for example only)
         let userIdFromBody;
         try {
@@ -38,10 +35,8 @@ export async function POST(req: NextRequest) {
         if (!userIdFromBody) {
              return new NextResponse("Unauthorized: User not authenticated or UID not provided.", { status: 401 });
         }
-        // Here you would ideally verify this userId or use a secure session.
-        // For this example, we'll proceed assuming this userId is valid.
-        // This is NOT production-ready auth for an API route.
-        const userDocRef = doc(firestore, "users", userIdFromBody);
+        userId = userIdFromBody;
+        const userDocRef = doc(firestore, "users", userId);
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
@@ -51,61 +46,46 @@ export async function POST(req: NextRequest) {
         if (!userData || !userData.email) {
              return new NextResponse("User data or email not found", { status: 404 });
         }
-
-        // Use the shared stripe instance from @/lib/stripe
-        const stripeSession = await stripe.checkout.sessions.create({
-            success_url: `${APP_URL}/partner/settings?session_id={CHECKOUT_SESSION_ID}`, // Stripe will replace {CHECKOUT_SESSION_ID}
-            cancel_url: `${APP_URL}/partner/settings?canceled=true`, // Added cancel parameter
-            payment_method_types: ["card"],
-            mode: "subscription",
-            billing_address_collection: 'auto',
-            customer_email: userData.email, 
-            line_items: [
-                {
-                    // Replace with your actual Price ID from Stripe Dashboard
-                    price: "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID", 
-                    quantity: 1,
-                },
-            ],
-            metadata: {
-                userId: userIdFromBody, // Store Firebase UID
-            },
-        });
-        return NextResponse.json({ url: stripeSession.url });
+        userEmail = userData.email;
 
     } else {
-        // User is available via auth.currentUser (e.g., client-side rendering calling API route, or during dev with hot-reloading session)
-        const userDocRef = doc(firestore, "users", firebaseUser.uid);
+        userId = firebaseUser.uid;
+        userEmail = firebaseUser.email;
+        const userDocRef = doc(firestore, "users", userId);
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
             return new NextResponse("User not found", { status: 404 });
         }
-        const userData = userDoc.data();
-         if (!userData || !firebaseUser.email) { // Use firebaseUser.email as fallback
-            return new NextResponse("User data or email not found", { status: 404 });
+        // Email from auth object is preferred if available and user is directly authenticated
+        userEmail = firebaseUser.email || userDoc.data()?.email; 
+         if (!userEmail) { 
+            return new NextResponse("User email not found", { status: 404 });
         }
-
-        // Use the shared stripe instance from @/lib/stripe
-        const stripeSession = await stripe.checkout.sessions.create({
-            success_url: `${APP_URL}/partner/settings?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${APP_URL}/partner/settings?canceled=true`, // Added cancel parameter
-            payment_method_types: ["card"],
-            mode: "subscription",
-            billing_address_collection: 'auto',
-            customer_email: firebaseUser.email,
-            line_items: [
-                {
-                    price: "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID", 
-                    quantity: 1,
-                },
-            ],
-            metadata: {
-                userId: firebaseUser.uid,
-            },
-        });
-        return NextResponse.json({ url: stripeSession.url });
     }
+
+    // Use the shared stripe instance from @/lib/stripe
+    const stripeSession = await stripe.checkout.sessions.create({
+        success_url: `${APP_URL}/partner/settings?session_id={CHECKOUT_SESSION_ID}`, // Stripe will replace {CHECKOUT_SESSION_ID}
+        cancel_url: `${APP_URL}/partner/settings?canceled=true`,
+        payment_method_types: ["card"],
+        mode: "subscription",
+        billing_address_collection: 'auto',
+        customer_email: userEmail, 
+        line_items: [
+            {
+                // IMPORTANT: Replace this Price ID with the one from your Stripe Dashboard
+                // that corresponds to your 2 BRL Fervo Partner Plan.
+                // The amount (e.g., 200 for 2 BRL in cents) is configured in Stripe when you create the Price.
+                price: "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID", 
+                quantity: 1,
+            },
+        ],
+        metadata: {
+            userId: userId, // Store Firebase UID
+        },
+    });
+    return NextResponse.json({ url: stripeSession.url });
 
   } catch (error: any) {
     console.error("[STRIPE_CHECKOUT_ERROR]", error);
@@ -114,5 +94,5 @@ export async function POST(req: NextRequest) {
 }
 
 // IMPORTANT: You need to replace "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID"
-// with an actual Price ID from your Stripe Dashboard.
-// Create a Product in Stripe, then create a recurring Price for it.
+// with an actual Price ID from your Stripe Dashboard that is set to 2 BRL (or its equivalent in cents).
+// Create a Product in Stripe, then create a recurring Price for it (e.g., 2.00 BRL).
