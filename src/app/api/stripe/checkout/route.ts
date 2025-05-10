@@ -1,4 +1,3 @@
-
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server';
 import { auth, firestore } from '@/lib/firebase';
@@ -9,60 +8,45 @@ import { APP_URL } from '@/lib/constants';
 export async function POST(req: NextRequest) {
   try {
     // It's important to authenticate the user on the server-side.
-    // How you get the current user depends on your auth setup with Next.js and Firebase.
-    // This example assumes you have a way to get the Firebase user from the request,
-    // e.g., by verifying an ID token passed in headers.
-    // For simplicity, this example directly uses firebase auth.currentUser which might not work reliably in API routes without custom session management.
-    // Consider using Firebase Admin SDK or passing user ID securely from client if auth.currentUser is null here.
-    
-    const firebaseUser = auth.currentUser; // This might be null in API routes.
-                                       // You might need to send the UID from client and verify it here,
-                                       // or use Firebase Admin SDK with a session cookie.
+    // This example attempts to get user details from the request body if not directly available from Firebase Auth session.
+    // For production, ensure robust authentication and authorization.
 
     let userId: string;
-    let userEmail: string | null;
+    let userEmail: string | null = null; // Initialize userEmail to null
 
-    if (!firebaseUser) {
-        // Try to get UID from request body if passed (less secure, for example only)
-        let userIdFromBody;
-        try {
-            const body = await req.json();
-            userIdFromBody = body.userId;
-        } catch (e) {
-            // no body or invalid json
-        }
+    const body = await req.json().catch(() => ({})); // Attempt to parse body, default to empty object on failure
+    const userIdFromBody = body.userId;
 
-        if (!userIdFromBody) {
-             return new NextResponse("Unauthorized: User not authenticated or UID not provided.", { status: 401 });
-        }
-        userId = userIdFromBody;
-        const userDocRef = doc(firestore, "users", userId);
-        const userDoc = await getDoc(userDocRef);
+    // Attempt to get Firebase Auth session (might be null in some API route contexts)
+    // This direct usage of auth.currentUser is often unreliable in API routes without session management.
+    // Consider passing an ID token from the client and verifying it here using Firebase Admin SDK for production.
+    const firebaseUser = auth.currentUser; 
 
-        if (!userDoc.exists()) {
-            return new NextResponse("User not found", { status: 404 });
-        }
-        const userData = userDoc.data();
-        if (!userData || !userData.email) {
-             return new NextResponse("User data or email not found", { status: 404 });
-        }
-        userEmail = userData.email;
-
-    } else {
+    if (firebaseUser) {
         userId = firebaseUser.uid;
         userEmail = firebaseUser.email;
+    } else if (userIdFromBody) {
+        userId = userIdFromBody;
+        // Fetch email from Firestore if userId is from body
         const userDocRef = doc(firestore, "users", userId);
         const userDoc = await getDoc(userDocRef);
-
-        if (!userDoc.exists()) {
-            return new NextResponse("User not found", { status: 404 });
+        if (userDoc.exists() && userDoc.data().email) {
+            userEmail = userDoc.data().email;
         }
-        // Email from auth object is preferred if available and user is directly authenticated
-        userEmail = firebaseUser.email || userDoc.data()?.email; 
-         if (!userEmail) { 
-            return new NextResponse("User email not found", { status: 404 });
+    } else {
+        return NextResponse.json({ message: "Unauthorized: User not authenticated or UID not provided." }, { status: 401 });
+    }
+    
+    if (!userEmail) { // Check if userEmail was successfully retrieved
+        const userDocRef = doc(firestore, "users", userId);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists() && userDocSnap.data().email) {
+            userEmail = userDocSnap.data().email;
+        } else {
+             return NextResponse.json({ message: "User email not found in Firestore or auth session." }, { status: 404 });
         }
     }
+
 
     // Use the shared stripe instance from @/lib/stripe
     const stripeSession = await stripe.checkout.sessions.create({
@@ -77,7 +61,7 @@ export async function POST(req: NextRequest) {
                 // IMPORTANT: Replace this Price ID with the one from your Stripe Dashboard
                 // that corresponds to your 2 BRL Fervo Partner Plan.
                 // The amount (e.g., 200 for 2 BRL in cents) is configured in Stripe when you create the Price.
-                price: "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID", 
+                price: "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID", // <<< ENSURE THIS IS REPLACED
                 quantity: 1,
             },
         ],
@@ -89,7 +73,11 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("[STRIPE_CHECKOUT_ERROR]", error);
-    return new NextResponse("Internal Server Error: " + error.message, { status: 500 });
+    // Return a JSON response for errors to be properly parsed by the client
+    return NextResponse.json({ 
+        message: "Internal Server Error creating checkout session.", 
+        error: error.message // Include Stripe's error message if available
+    }, { status: 500 });
   }
 }
 
