@@ -1,3 +1,4 @@
+
 import type { NextRequest} from 'next/server';
 import { NextResponse } from 'next/server';
 import { auth, firestore } from '@/lib/firebase';
@@ -61,7 +62,8 @@ export async function POST(req: NextRequest) {
                 // IMPORTANT: Replace this Price ID with the one from your Stripe Dashboard
                 // that corresponds to your 2 BRL Fervo Partner Plan.
                 // The amount (e.g., 200 for 2 BRL in cents) is configured in Stripe when you create the Price.
-                price: "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID", // <<< ENSURE THIS IS REPLACED
+                // This price should be associated with Product ID: prod_SHojYpc0gOmFYM
+                price: "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID", // <<< ENSURE THIS IS REPLACED with a Price ID linked to prod_SHojYpc0gOmFYM
                 quantity: 1,
             },
         ],
@@ -82,5 +84,8 @@ export async function POST(req: NextRequest) {
 }
 
 // IMPORTANT: You need to replace "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID"
-// with an actual Price ID from your Stripe Dashboard that is set to 2 BRL (or its equivalent in cents).
-// Create a Product in Stripe, then create a recurring Price for it (e.g., 2.00 BRL).
+// with an actual Price ID from your Stripe Dashboard that is set to 2 BRL (or its equivalent in cents)
+// and is associated with Product ID prod_SHojYpc0gOmFYM.
+// Create a Product in Stripe (if prod_SHojYpc0gOmFYM doesn't exist or is not what you intend), 
+// then create a recurring Price for it (e.g., 2.00 BRL).
+
