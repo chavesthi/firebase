@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,7 +7,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch } from 'firebase/firestore'; // Added collection, getDocs, writeBatch
 import { loadStripe } from "@stripe/stripe-js";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -290,6 +289,42 @@ export default function PartnerSettingsPage() {
       const credential = EmailAuthProvider.credential(currentUser.email, deletePasswordInput);
       await reauthenticateWithCredential(currentUser, credential);
 
+      // --- FervoCoin Redistribution Logic ---
+      // WARNING: This operation can be very slow and costly on large user bases.
+      // It reads ALL user documents. Consider a server-side Cloud Function for production.
+      const partnerIdToDelete = currentUser.uid;
+      const usersCollectionRef = collection(firestore, "users");
+      const usersSnapshot = await getDocs(usersCollectionRef);
+      const batch = writeBatch(firestore);
+
+      usersSnapshot.forEach(userDocSnap => {
+        const userData = userDocSnap.data();
+        const userSpecificVenueCoins = userData.venueCoins;
+
+        if (userSpecificVenueCoins && typeof userSpecificVenueCoins[partnerIdToDelete] === 'number' && userSpecificVenueCoins[partnerIdToDelete] > 0) {
+          const coinsToRedistribute = userSpecificVenueCoins[partnerIdToDelete];
+          const updatedVenueCoins = { ...userSpecificVenueCoins };
+          delete updatedVenueCoins[partnerIdToDelete]; // Remove coins from deleted partner
+
+          const remainingVenueIds = Object.keys(updatedVenueCoins).filter(id => typeof updatedVenueCoins[id] === 'number' && updatedVenueCoins[id] >= 0 && updatedVenueCoins[id] > 0);
+
+          if (remainingVenueIds.length > 0) {
+            // Simple redistribution: add all to the first remaining venue with existing coins.
+            // A more complex strategy (e.g., proportional) could be implemented here.
+            const primaryRecipientId = remainingVenueIds[0]; // Could be improved (e.g. largest existing coin balance)
+            updatedVenueCoins[primaryRecipientId] = (updatedVenueCoins[primaryRecipientId] || 0) + coinsToRedistribute;
+            console.log(`Redistributed ${coinsToRedistribute} coins from ${partnerIdToDelete} to ${primaryRecipientId} for user ${userDocSnap.id}`);
+          } else {
+            // No other venues for this user to redistribute to. Coins are "lost" or could be moved to a general pool.
+            console.log(`User ${userDocSnap.id} had ${coinsToRedistribute} coins for ${partnerIdToDelete} but no other venues to redistribute to.`);
+          }
+          batch.update(doc(firestore, "users", userDocSnap.id), { venueCoins: updatedVenueCoins });
+        }
+      });
+      await batch.commit();
+      toast({ title: "Redistribuição de Moedas", description: "Moedas de usuários foram reatribuídas a outros locais.", duration: 4000 });
+      // --- End FervoCoin Redistribution Logic ---
+
       const partnerDocRef = doc(firestore, "users", currentUser.uid);
       await deleteFirestoreDoc(partnerDocRef);
 
@@ -513,6 +548,7 @@ export default function PartnerSettingsPage() {
                 <h3 className="text-lg font-medium text-destructive">Excluir Conta</h3>
                 <p className="text-sm text-muted-foreground">
                     Esta ação é permanente e não pode ser desfeita. Todos os seus dados de parceiro, incluindo eventos e configurações, serão removidos.
+                    As FervoCoins que usuários possuem no seu local serão redistribuídas para outros locais.
                 </p>
                 <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                     <AlertDialogTrigger asChild>
@@ -525,6 +561,7 @@ export default function PartnerSettingsPage() {
                         <AlertDialogTitle className="text-destructive">Excluir Conta de Parceiro Permanentemente?</AlertDialogTitle>
                         <AlertDialogDescription>
                             Esta ação é irreversível. Todos os seus dados como parceiro serão removidos.
+                            As FervoCoins associadas ao seu local serão redistribuídas para os usuários.
                             Para continuar, por favor, insira sua senha.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
@@ -579,3 +616,4 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
