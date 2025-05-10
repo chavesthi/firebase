@@ -8,18 +8,20 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail } from 'firebase/auth'; // Import updateEmail
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore'; // Added setDoc
+import { loadStripe } from "@stripe/stripe-js";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard } from 'lucide-react'; // Added Eye, EyeOff and CreditCard
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard } from 'lucide-react'; 
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator'; // Import Separator
+import { Separator } from '@/components/ui/separator'; 
+import { STRIPE_PUBLIC_KEY } from "@/lib/constants";
 
 // Schema for partner settings form
 const partnerSettingsSchema = z.object({
@@ -53,6 +55,8 @@ export default function PartnerSettingsPage() {
   const [initialEmail, setInitialEmail] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false); // Placeholder for subscription status
 
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<PartnerSettingsFormInputs>({
@@ -62,8 +66,8 @@ export default function PartnerSettingsPage() {
       companyName: '',
       email: '',
       notificationsEnabled: true,
-      couponReportClearPassword: '', // Initialize as empty
-      confirmCouponReportClearPassword: '', // Initialize as empty
+      couponReportClearPassword: '', 
+      confirmCouponReportClearPassword: '', 
     },
   });
 
@@ -74,21 +78,22 @@ export default function PartnerSettingsPage() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
-        setInitialEmail(user.email); // Store initial email from auth object
+        setInitialEmail(user.email); 
         const userDocRef = doc(firestore, "users", user.uid);
         try {
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
             reset({
-              contactName: userData.name || user.displayName || '', // Use 'name' field from Firestore
-              companyName: userData.venueName || '', // Use venueName for company name
-              email: user.email || '', // Primarily use auth email
+              contactName: userData.name || user.displayName || '', 
+              companyName: userData.venueName || '', 
+              email: user.email || '', 
               notificationsEnabled: userData.notificationsEnabled ?? true,
-              // Do not load the password itself for security
               couponReportClearPassword: '',
               confirmCouponReportClearPassword: '',
             });
+            // Fetch and set subscription status
+            setHasActiveSubscription(userData.stripeSubscriptionActive || false); 
           } else {
             reset({
               contactName: user.displayName || '',
@@ -122,7 +127,6 @@ export default function PartnerSettingsPage() {
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
 
-       // Prepare data for Firestore update
       const dataToUpdate: { [key: string]: any } = {
         name: data.contactName,
         venueName: data.companyName,
@@ -184,6 +188,85 @@ export default function PartnerSettingsPage() {
       });
     }
   };
+
+  const handleCheckout = async () => {
+    if (!currentUser) {
+      toast({ title: "Autenticação Necessária", description: "Faça login para gerenciar sua assinatura.", variant: "destructive" });
+      return;
+    }
+    setIsSubmittingCheckout(true);
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: currentUser.uid }), // Pass user ID for server-side verification
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Falha ao criar sessão de checkout.' }));
+        throw new Error(errorData.message || 'Falha ao criar sessão de checkout');
+      }
+
+      const session = await response.json();
+      
+      if (!STRIPE_PUBLIC_KEY) {
+        throw new Error("Chave pública do Stripe não configurada.");
+      }
+
+      const stripe = await loadStripe(STRIPE_PUBLIC_KEY);
+      if (!stripe) {
+        throw new Error("Stripe não pôde ser carregado.");
+      }
+      
+      const result = await stripe.redirectToCheckout({ sessionId: session.url.split('/').pop() }); // Extract session ID from URL
+      
+      if (result.error) {
+        throw new Error(result.error.message || "Erro ao redirecionar para o checkout.");
+      }
+
+    } catch (error: any) {
+      console.error("Checkout error:", error);
+      toast({
+        title: "Erro no Checkout",
+        description: error.message || "Não foi possível iniciar o checkout. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingCheckout(false);
+    }
+  };
+
+
+  useEffect(() => {
+    // Check for Stripe session completion (success or cancel)
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("session_id")) {
+      // Call an API route to verify the session and update user's subscription status in Firestore.
+      // This is crucial for updating your database after a successful payment.
+      // Example: fetch('/api/stripe/verify-session?session_id=' + query.get("session_id"))
+      // Then update `hasActiveSubscription` state.
+      toast({
+        title: "Pagamento Processado",
+        description: "Seu pagamento está sendo processado. O status da sua assinatura será atualizado em breve.",
+        variant: "default",
+        duration: 7000,
+      });
+       // Optionally update local state or fetch new subscription status
+      // For now, just remove the query params to prevent re-triggering
+      router.replace('/partner/settings', { scroll: false });
+    }
+     if (query.get("canceled")) {
+      toast({
+        title: "Pagamento Cancelado",
+        description: "O processo de assinatura foi cancelado. Você pode tentar novamente quando desejar.",
+        variant: "default",
+      });
+      router.replace('/partner/settings', { scroll: false });
+    }
+  }, [router, toast]);
+
 
   if (loading) {
     return (
@@ -352,16 +435,32 @@ export default function PartnerSettingsPage() {
                 <h3 className="text-lg font-medium text-primary flex items-center">
                     <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
                 </h3>
-                <CardDescription className="text-xs sm:text-sm">
-                    Aqui você poderá gerenciar sua assinatura e acessar as funcionalidades premium do Fervo App.
-                    Detalhes sobre os planos e opções de pagamento serão disponibilizados em breve.
-                </CardDescription>
-                <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary/10" disabled>
-                    Gerenciar Assinatura (Em Breve)
-                </Button>
+                {hasActiveSubscription ? (
+                    <div className="p-4 bg-green-100 dark:bg-green-900/30 border border-green-500 rounded-md">
+                        <p className="font-semibold text-green-700 dark:text-green-400">Você tem uma assinatura ativa!</p>
+                        <p className="text-sm text-muted-foreground">Detalhes da sua assinatura e opções de gerenciamento em breve.</p>
+                        {/* Add link to Stripe Customer Portal if configured */}
+                    </div>
+                ) : (
+                    <>
+                        <CardDescription className="text-xs sm:text-sm">
+                            Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
+                            Detalhes sobre os planos e opções de pagamento serão disponibilizados em breve.
+                            <br/><strong>Substitua "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID" no código da API com seu Price ID real do Stripe.</strong>
+                        </CardDescription>
+                        <Button 
+                            onClick={handleCheckout} 
+                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" 
+                            disabled={isSubmittingCheckout}
+                        >
+                            {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                            Assinar Plano Fervo (Teste)
+                        </Button>
+                    </>
+                )}
             </div>
 
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base mt-6" disabled={isSubmitting}>
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base mt-6" disabled={isSubmitting || isSubmittingCheckout}>
                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
             </Button>
           </CardContent>
@@ -370,4 +469,16 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
+// IMPORTANT FOR STRIPE INTEGRATION:
+// 1. Replace "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID" in `src/app/api/stripe/checkout/route.ts`
+//    with an actual Price ID from your Stripe Dashboard.
+// 2. Set up a Stripe Webhook endpoint to handle events like `checkout.session.completed`
+//    and `invoice.payment_succeeded`. This webhook should update the user's subscription
+//    status in Firestore (e.g., set `stripeSubscriptionActive: true`, `stripeCustomerId`, `stripeSubscriptionId`).
+// 3. The `hasActiveSubscription` state in this component should be populated based on the
+//    data stored in Firestore by your webhook.
+// 4. Ensure NEXT_PUBLIC_APP_URL in .env is correctly set to your application's base URL.
+// 5. Secure your API route `/api/stripe/checkout` properly for production. Direct use of `auth.currentUser`
+//    in API routes is not always reliable without session management. Consider passing UID securely.
 

@@ -69,3 +69,10 @@ export const FERVO_COINS_FOR_COUPON = 20; // Coins needed *per venue*
 // Dynamic description created in handleShareEvent, this is the base reward
 export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 350ml";
 export const COUPON_CODE_PREFIX = "FERVO";
+
+// Stripe API Keys
+export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "";
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
+
+// App URL
+export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
