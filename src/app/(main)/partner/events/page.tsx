@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -131,7 +132,7 @@ const ManageEventsPage: NextPage = () => {
         setLoading(true); 
 
         const eventsCollectionRef = collection(firestore, 'users', user.uid, 'events');
-        const q = query(eventsCollectionRef, orderBy('createdAt', 'desc')); 
+        const q = query(eventsCollectionRef, orderBy('updatedAt', 'desc')); 
 
         if (unsubscribeEvents) {
           unsubscribeEvents();
@@ -261,6 +262,10 @@ const ManageEventsPage: NextPage = () => {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
 
+      // Note: Ratings are in a separate collection group 'eventRatings' and are not deleted here
+      // to preserve them for overall venue statistics. If event-specific ratings needed deletion,
+      // that would require querying and batch deleting from 'eventRatings' collection group.
+
       toast({ title: "Evento Excluído", description: "O evento foi excluído. Suas avaliações foram preservadas para estatísticas do local." });
       if (editingEventId === eventId) {
         setEditingEventId(null);
@@ -331,30 +336,30 @@ const ManageEventsPage: NextPage = () => {
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label htmlFor="eventName" className="text-primary/90">Nome do Evento</Label>
-                <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-red-500' : ''} />} />
-                {errors.eventName && <p className="mt-1 text-sm text-red-500">{errors.eventName.message}</p>}
+                <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-destructive' : ''} />} />
+                {errors.eventName && <p className="mt-1 text-sm text-destructive">{errors.eventName.message}</p>}
               </div>
 
               <div>
                 <Label htmlFor="startDate" className="text-primary/90">Data de Início</Label>
-                <Controller name="startDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.startDate ? 'border-red-500' : ''} />} />
-                {errors.startDate && <p className="mt-1 text-sm text-red-500">{errors.startDate.message}</p>}
+                <Controller name="startDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.startDate ? 'border-destructive' : ''} />} />
+                {errors.startDate && <p className="mt-1 text-sm text-destructive">{errors.startDate.message}</p>}
               </div>
               <div>
                 <Label htmlFor="startTime" className="text-primary/90">Hora de Início</Label>
-                <Controller name="startTime" control={control} render={({ field }) => <Input id="startTime" type="time" {...field} className={errors.startTime ? 'border-red-500' : ''} />} />
-                {errors.startTime && <p className="mt-1 text-sm text-red-500">{errors.startTime.message}</p>}
+                <Controller name="startTime" control={control} render={({ field }) => <Input id="startTime" type="time" {...field} className={errors.startTime ? 'border-destructive' : ''} />} />
+                {errors.startTime && <p className="mt-1 text-sm text-destructive">{errors.startTime.message}</p>}
               </div>
 
               <div>
                 <Label htmlFor="endDate" className="text-primary/90">Data de Fim</Label>
-                <Controller name="endDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.endDate ? 'border-red-500' : ''} />} />
-                {errors.endDate && <p className="mt-1 text-sm text-red-500">{errors.endDate.message}</p>}
+                <Controller name="endDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.endDate ? 'border-destructive' : ''} />} />
+                {errors.endDate && <p className="mt-1 text-sm text-destructive">{errors.endDate.message}</p>}
               </div>
               <div>
                 <Label htmlFor="endTime" className="text-primary/90">Hora de Fim</Label>
-                <Controller name="endTime" control={control} render={({ field }) => <Input id="endTime" type="time" {...field} className={errors.endTime ? 'border-red-500' : ''} />} />
-                {errors.endTime && <p className="mt-1 text-sm text-red-500">{errors.endTime.message}</p>}
+                <Controller name="endTime" control={control} render={({ field }) => <Input id="endTime" type="time" {...field} className={errors.endTime ? 'border-destructive' : ''} />} />
+                {errors.endTime && <p className="mt-1 text-sm text-destructive">{errors.endTime.message}</p>}
               </div>
 
               <div className="md:col-span-2">
@@ -393,7 +398,7 @@ const ManageEventsPage: NextPage = () => {
                     ))}
                   </div>
                 </ScrollArea>
-                {errors.musicStyles && <p className="mt-1 text-sm text-red-500">{errors.musicStyles.message}</p>}
+                {errors.musicStyles && <p className="mt-1 text-sm text-destructive">{errors.musicStyles.message}</p>}
               </div>
 
               <div>
@@ -403,7 +408,7 @@ const ManageEventsPage: NextPage = () => {
                   control={control}
                   render={({ field }) => (
                     <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger id="pricingType" className={errors.pricingType ? 'border-red-500' : ''}>
+                      <SelectTrigger id="pricingType" className={errors.pricingType ? 'border-destructive' : ''}>
                         <SelectValue placeholder="Selecione o tipo de preço" />
                       </SelectTrigger>
                       <SelectContent>
@@ -414,39 +419,39 @@ const ManageEventsPage: NextPage = () => {
                     </Select>
                   )}
                 />
-                {errors.pricingType && <p className="mt-1 text-sm text-red-500">{errors.pricingType.message}</p>}
+                {errors.pricingType && <p className="mt-1 text-sm text-destructive">{errors.pricingType.message}</p>}
               </div>
 
               {watchedPricingType !== PricingType.FREE && (
                 <div>
                   <Label htmlFor="pricingValue" className="text-primary/90">Valor (R$)</Label>
-                  <Controller name="pricingValue" control={control} render={({ field }) => <Input id="pricingValue" type="number" step="0.01" placeholder="Ex: 25.50" {...field} value={field.value ?? ''} className={errors.pricingValue ? 'border-red-500' : ''} />} />
-                  {errors.pricingValue && <p className="mt-1 text-sm text-red-500">{errors.pricingValue.message}</p>}
+                  <Controller name="pricingValue" control={control} render={({ field }) => <Input id="pricingValue" type="number" step="0.01" placeholder="Ex: 25.50" {...field} value={field.value ?? ''} className={errors.pricingValue ? 'border-destructive' : ''} />} />
+                  {errors.pricingValue && <p className="mt-1 text-sm text-destructive">{errors.pricingValue.message}</p>}
                 </div>
               )}
 
               <div className="md:col-span-2">
                 <Label htmlFor="description" className="text-primary/90">Descrição do Evento (Opcional)</Label>
-                <Controller name="description" control={control} render={({ field }) => <Textarea id="description" placeholder="Detalhes sobre o evento, atrações, etc." {...field} className={errors.description ? 'border-red-500' : ''} />} />
-                {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description.message}</p>}
+                <Controller name="description" control={control} render={({ field }) => <Textarea id="description" placeholder="Detalhes sobre o evento, atrações, etc." {...field} className={errors.description ? 'border-destructive' : ''} />} />
+                {errors.description && <p className="mt-1 text-sm text-destructive">{errors.description.message}</p>}
               </div>
 
               <div className="md:col-span-2 flex items-center space-x-2 pt-2">
                 <Controller name="shareRewardsEnabled" control={control} render={({ field }) => <Switch id="shareRewardsEnabled" checked={field.value} onCheckedChange={field.onChange} />} />
-                <Label htmlFor="shareRewardsEnabled" className="text-primary/90">Ativar Recompensa por Compartilhamento (FervoCoins)</Label>
+                <Label htmlFor="shareRewardsEnabled" className="text-primary/90">Ativar Recompensa por Compartilhamento (FervoCoins). Quando o Usuário Compartilha o seu Evento para 10 pessoas ele ganha 20 moedas, 2 moedas por compartilhamento que valem um cupom de Cerveja ou Refrigerante 350ml. Esse Cupom pode ser Autenticado no seu painel Resgatar Cupons. Isso é um incentivo ao Usuário</Label>
               </div>
               <div className="md:col-span-2 -mt-3">
                 <p className="text-xs text-muted-foreground pl-8">
                   Positivo: Usuários ganham FervoCoins ao compartilhar este evento, aumentando o alcance!
                   <br/>Se desativado, o compartilhamento não gera recompensa. (Padrão: Ativado)
                 </p>
-                {errors.shareRewardsEnabled && <p className="mt-1 text-sm text-red-500">{errors.shareRewardsEnabled.message}</p>}
+                {errors.shareRewardsEnabled && <p className="mt-1 text-sm text-destructive">{errors.shareRewardsEnabled.message}</p>}
               </div>
 
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Controller name="visibility" control={control} render={({ field }) => <Switch id="visibility" checked={field.value} onCheckedChange={field.onChange} />} />
                 <Label htmlFor="visibility" className="text-primary/90">Visível para usuários?</Label>
-                {errors.visibility && <p className="mt-1 text-sm text-red-500">{errors.visibility.message}</p>}
+                {errors.visibility && <p className="mt-1 text-sm text-destructive">{errors.visibility.message}</p>}
               </div>
             </div>
           </CardContent>
@@ -507,7 +512,7 @@ const ManageEventsPage: NextPage = () => {
                           <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(event.id)} title="Excluir evento">
-                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
+                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
                         </Button>
                         {event.checkInToken && (
                           <Button variant="ghost" size="icon" onClick={() => router.push(`/partner/qr-code/${event.id}`)} title="Ver QR Code do Evento">
