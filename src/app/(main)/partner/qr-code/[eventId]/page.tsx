@@ -2,8 +2,8 @@
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState, use } from 'react'; // Import use from react
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react'; // Removed 'use' import
+import { useRouter } from 'next/navigation'; // Removed 'useParams'
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { firestore, auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
@@ -23,15 +23,14 @@ interface EventDetails {
   checkInToken?: string;
 }
 
-const EventQrCodePage: NextPage = () => {
-  const rawParams = useParams();
-  // Unwrap params using React.use as suggested by Next.js error.
-  // Cast to `any` if TypeScript complains, as `useParams` might not return a type directly compatible with `React.use`'s typical Usables (Promise/Context).
-  // This is to follow Next.js's specific guidance for handling `params` in dynamic segments.
-  const routeParams = use(rawParams as any);
+interface EventQrCodePageProps {
+  params: { eventId: string };
+}
+
+const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
   const router = useRouter();
   const { toast } = useToast();
-  const eventIdParam = routeParams.eventId; 
+  const eventIdParam = params.eventId;
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -104,6 +103,12 @@ const EventQrCodePage: NextPage = () => {
         if (!data.checkInToken) {
           throw new Error('Este evento não possui um token de check-in configurado.');
         }
+        
+        const eventEndDateTime = data.endDateTime as Timestamp;
+        if (eventEndDateTime.toDate() < new Date()) {
+            throw new Error('Este evento já terminou e o QR code não está mais disponível.');
+        }
+
 
         setEventDetails({
           id: eventDocSnap.id,
@@ -272,3 +277,4 @@ const EventQrCodePage: NextPage = () => {
 };
 
 export default EventQrCodePage;
+
