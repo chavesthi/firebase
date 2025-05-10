@@ -7,21 +7,32 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChanged, updateEmail } from 'firebase/auth'; // Import updateEmail
-import { doc, getDoc, updateDoc, serverTimestamp, setDoc } from 'firebase/firestore'; // Added setDoc
+import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc } from 'firebase/firestore';
 import { loadStripe } from "@stripe/stripe-js";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard } from 'lucide-react'; 
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator'; 
-import { STRIPE_PUBLIC_KEY } from "@/lib/constants";
+import { Separator } from '@/components/ui/separator';
+import { STRIPE_PUBLIC_KEY, APP_URL } from "@/lib/constants";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Schema for partner settings form
 const partnerSettingsSchema = z.object({
@@ -56,7 +67,12 @@ export default function PartnerSettingsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
-  const [hasActiveSubscription, setHasActiveSubscription] = useState(false); // Placeholder for subscription status
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletePasswordInput, setDeletePasswordInput] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeletePasswordInput, setShowDeletePasswordInput] = useState(false);
 
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<PartnerSettingsFormInputs>({
@@ -66,8 +82,8 @@ export default function PartnerSettingsPage() {
       companyName: '',
       email: '',
       notificationsEnabled: true,
-      couponReportClearPassword: '', 
-      confirmCouponReportClearPassword: '', 
+      couponReportClearPassword: '',
+      confirmCouponReportClearPassword: '',
     },
   });
 
@@ -78,22 +94,21 @@ export default function PartnerSettingsPage() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
-        setInitialEmail(user.email); 
+        setInitialEmail(user.email);
         const userDocRef = doc(firestore, "users", user.uid);
         try {
           const userDocSnap = await getDoc(userDocRef);
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
             reset({
-              contactName: userData.name || user.displayName || '', 
-              companyName: userData.venueName || '', 
-              email: user.email || '', 
+              contactName: userData.name || user.displayName || '',
+              companyName: userData.venueName || '',
+              email: user.email || '',
               notificationsEnabled: userData.notificationsEnabled ?? true,
               couponReportClearPassword: '',
               confirmCouponReportClearPassword: '',
             });
-            // Fetch and set subscription status
-            setHasActiveSubscription(userData.stripeSubscriptionActive || false); 
+            setHasActiveSubscription(userData.stripeSubscriptionActive || false);
           } else {
             reset({
               contactName: user.displayName || '',
@@ -129,17 +144,17 @@ export default function PartnerSettingsPage() {
 
       const dataToUpdate: { [key: string]: any } = {
         name: data.contactName,
-        venueName: data.companyName,
+        venueName: data.companyName, // Assuming company name is venueName for partners
         notificationsEnabled: data.notificationsEnabled,
         settingsUpdatedAt: serverTimestamp(),
       };
 
       if (data.couponReportClearPassword && data.couponReportClearPassword === data.confirmCouponReportClearPassword) {
-          dataToUpdate.couponReportClearPassword = data.couponReportClearPassword; 
+          dataToUpdate.couponReportClearPassword = data.couponReportClearPassword;
           toast({ title: "Senha do Relatório Definida", description: "Senha para limpar relatório de cupons foi definida/atualizada.", variant: "default" });
       } else if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
          toast({ title: "Erro na Senha", description: "As senhas do relatório não coincidem ou estão incompletas.", variant: "destructive" });
-         return; 
+         return;
       }
 
 
@@ -150,7 +165,7 @@ export default function PartnerSettingsPage() {
         if (window.confirm(`Deseja realmente alterar seu e-mail de login de ${initialEmail} para ${data.email}? Esta ação pode exigir reverificação.`)) {
           try {
             await updateEmail(currentUser, data.email);
-            setInitialEmail(data.email); 
+            setInitialEmail(data.email);
             emailUpdateMessage = "Seu e-mail de login foi alterado com sucesso.";
           } catch (authError: any) {
             console.error("Error updating auth email:", authError);
@@ -161,11 +176,11 @@ export default function PartnerSettingsPage() {
               authErrorMessage = "Este e-mail já está em uso por outra conta.";
             }
             toast({ title: "Erro ao Atualizar E-mail", description: authErrorMessage, variant: "destructive", duration: 7000 });
-            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); 
+            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
              return;
           }
         } else {
-           reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); 
+           reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
            emailUpdateMessage = "Alteração de e-mail cancelada.";
         }
       }
@@ -173,7 +188,7 @@ export default function PartnerSettingsPage() {
       toast({
         title: "Configurações Salvas!",
         description: `Suas informações foram atualizadas. ${emailUpdateMessage}`,
-        variant: "default", 
+        variant: "default",
       });
 
       reset({ ...data, email: data.email, couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
@@ -201,7 +216,7 @@ export default function PartnerSettingsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId: currentUser.uid }), // Pass user ID for server-side verification
+        body: JSON.stringify({ userId: currentUser.uid }),
       });
 
       if (!response.ok) {
@@ -210,7 +225,7 @@ export default function PartnerSettingsPage() {
       }
 
       const session = await response.json();
-      
+
       if (!STRIPE_PUBLIC_KEY) {
         throw new Error("Chave pública do Stripe não configurada.");
       }
@@ -219,9 +234,9 @@ export default function PartnerSettingsPage() {
       if (!stripe) {
         throw new Error("Stripe não pôde ser carregado.");
       }
-      
-      const result = await stripe.redirectToCheckout({ sessionId: session.url.split('/').pop() }); // Extract session ID from URL
-      
+
+      const result = await stripe.redirectToCheckout({ sessionId: session.url.split('/').pop() });
+
       if (result.error) {
         throw new Error(result.error.message || "Erro ao redirecionar para o checkout.");
       }
@@ -240,21 +255,14 @@ export default function PartnerSettingsPage() {
 
 
   useEffect(() => {
-    // Check for Stripe session completion (success or cancel)
     const query = new URLSearchParams(window.location.search);
     if (query.get("session_id")) {
-      // Call an API route to verify the session and update user's subscription status in Firestore.
-      // This is crucial for updating your database after a successful payment.
-      // Example: fetch('/api/stripe/verify-session?session_id=' + query.get("session_id"))
-      // Then update `hasActiveSubscription` state.
       toast({
         title: "Pagamento Processado",
         description: "Seu pagamento está sendo processado. O status da sua assinatura será atualizado em breve.",
         variant: "default",
         duration: 7000,
       });
-       // Optionally update local state or fetch new subscription status
-      // For now, just remove the query params to prevent re-triggering
       router.replace('/partner/settings', { scroll: false });
     }
      if (query.get("canceled")) {
@@ -266,6 +274,44 @@ export default function PartnerSettingsPage() {
       router.replace('/partner/settings', { scroll: false });
     }
   }, [router, toast]);
+
+  const handleDeleteAccount = async () => {
+    if (!currentUser || !currentUser.email) {
+      toast({ title: "Erro", description: "Parceiro não autenticado corretamente.", variant: "destructive" });
+      return;
+    }
+    if (!deletePasswordInput) {
+      toast({ title: "Senha Necessária", description: "Por favor, insira sua senha para excluir a conta.", variant: "destructive" });
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      const credential = EmailAuthProvider.credential(currentUser.email, deletePasswordInput);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      const partnerDocRef = doc(firestore, "users", currentUser.uid);
+      await deleteFirestoreDoc(partnerDocRef);
+
+      await deleteFirebaseAuthUser(currentUser);
+
+      toast({ title: "Conta Excluída", description: "Sua conta de parceiro e dados foram excluídos.", variant: "default", duration: 7000 });
+      router.push('/login');
+      setShowDeleteDialog(false);
+    } catch (error: any) {
+      console.error("Error deleting partner account:", error);
+      let message = "Erro ao excluir conta.";
+      if (error.code === 'auth/wrong-password') {
+        message = "Senha incorreta. Por favor, tente novamente.";
+      } else if (error.code === 'auth/requires-recent-login') {
+        message = "Esta operação é sensível e requer autenticação recente. Por favor, faça login novamente e tente excluir sua conta.";
+      }
+      toast({ title: "Falha ao Excluir Conta", description: message, variant: "destructive" });
+    } finally {
+      setIsDeletingAccount(false);
+      setDeletePasswordInput('');
+    }
+  };
 
 
   if (loading) {
@@ -448,9 +494,9 @@ export default function PartnerSettingsPage() {
                             Detalhes sobre os planos e opções de pagamento serão disponibilizados em breve.
                             <br/><strong>Substitua "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID" no código da API com seu Price ID real do Stripe.</strong>
                         </CardDescription>
-                        <Button 
-                            onClick={handleCheckout} 
-                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" 
+                        <Button
+                            onClick={handleCheckout}
+                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
                             disabled={isSubmittingCheckout}
                         >
                             {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -460,7 +506,71 @@ export default function PartnerSettingsPage() {
                 )}
             </div>
 
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base mt-6" disabled={isSubmitting || isSubmittingCheckout}>
+            <Separator className="my-6 border-primary/20" />
+
+            {/* Account Deletion Section */}
+            <div className="space-y-2">
+                <h3 className="text-lg font-medium text-destructive">Excluir Conta</h3>
+                <p className="text-sm text-muted-foreground">
+                    Esta ação é permanente e não pode ser desfeita. Todos os seus dados de parceiro, incluindo eventos e configurações, serão removidos.
+                </p>
+                <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" className="w-full sm:w-auto">
+                            <Trash2 className="w-4 h-4 mr-2" /> Excluir Minha Conta de Parceiro
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle className="text-destructive">Excluir Conta de Parceiro Permanentemente?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação é irreversível. Todos os seus dados como parceiro serão removidos.
+                            Para continuar, por favor, insira sua senha.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="space-y-2 py-2">
+                            <Label htmlFor="deletePartnerPassword">Senha</Label>
+                            <div className="relative">
+                                <Input
+                                    id="deletePartnerPassword"
+                                    type={showDeletePasswordInput ? "text" : "password"}
+                                    value={deletePasswordInput}
+                                    onChange={(e) => setDeletePasswordInput(e.target.value)}
+                                    placeholder="Sua senha atual"
+                                    className={cn(deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && 'border-yellow-500')}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setShowDeletePasswordInput(!showDeletePasswordInput)}
+                                    aria-label={showDeletePasswordInput ? "Esconder senha" : "Mostrar senha"}
+                                >
+                                    {showDeletePasswordInput ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </Button>
+                            </div>
+                            {deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && (
+                                <p className="text-xs text-yellow-600">A senha deve ter pelo menos 6 caracteres.</p>
+                            )}
+                        </div>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => { setDeletePasswordInput(''); setShowDeletePasswordInput(false);}}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteAccount}
+                            disabled={isDeletingAccount || deletePasswordInput.length < 6}
+                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                        >
+                            {isDeletingAccount ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                            Confirmar Exclusão da Conta
+                        </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </div>
+
+
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base mt-6" disabled={isSubmitting || isSubmittingCheckout || isDeletingAccount}>
                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
             </Button>
           </CardContent>
@@ -469,16 +579,3 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
-
-// IMPORTANT FOR STRIPE INTEGRATION:
-// 1. Replace "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID" in `src/app/api/stripe/checkout/route.ts`
-//    with an actual Price ID from your Stripe Dashboard.
-// 2. Set up a Stripe Webhook endpoint to handle events like `checkout.session.completed`
-//    and `invoice.payment_succeeded`. This webhook should update the user's subscription
-//    status in Firestore (e.g., set `stripeSubscriptionActive: true`, `stripeCustomerId`, `stripeSubscriptionId`).
-// 3. The `hasActiveSubscription` state in this component should be populated based on the
-//    data stored in Firestore by your webhook.
-// 4. Ensure NEXT_PUBLIC_APP_URL in .env is correctly set to your application's base URL.
-// 5. Secure your API route `/api/stripe/checkout` properly for production. Direct use of `auth.currentUser`
-//    in API routes is not always reliable without session management. Consider passing UID securely.
-
