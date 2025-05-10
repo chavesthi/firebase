@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -20,7 +21,7 @@ const nextConfig: NextConfig = {
     ],
   },
   env: {
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "AIzaSyAKzhRT8wg77bnVou_LfWo_zdoHaTSJmdc",
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0",
   }
 };
 
