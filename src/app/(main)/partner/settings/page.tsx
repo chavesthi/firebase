@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -133,8 +134,8 @@ export default function PartnerSettingsPage() {
     return () => unsubscribeAuth();
   }, [router, reset, toast]);
 
-  // Handle form submission
-  const onSubmit: SubmitHandler<PartnerSettingsFormInputs> = async (data) => {
+  // Handle form submission for settings
+  const onSettingsSubmit: SubmitHandler<PartnerSettingsFormInputs> = async (data) => {
     if (!currentUser) {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
@@ -217,7 +218,7 @@ export default function PartnerSettingsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId: currentUser.uid }), // Send userId if needed by backend for customer lookup
+        body: JSON.stringify({ userId: currentUser.uid }), 
       });
 
       if (!response.ok) {
@@ -232,7 +233,7 @@ export default function PartnerSettingsPage() {
         throw new Error("Stripe.js não carregou.");
       }
 
-      const { error } = await stripe.redirectToCheckout({ sessionId: session.url }); // session.url contains the checkout URL
+      const { error } = await stripe.redirectToCheckout({ sessionId: session.url }); 
 
       if (error) {
         console.error("Stripe redirect error:", error);
@@ -383,7 +384,9 @@ export default function PartnerSettingsPage() {
           <CardTitle className="text-2xl sm:text-3xl text-primary">Configurações da Conta e Pagamentos</CardTitle>
           <CardDescription className="text-sm sm:text-base">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        
+        {/* Settings Form */}
+        <form onSubmit={handleSubmit(onSettingsSubmit)}>
           <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
             <div className="flex flex-col items-center space-y-2">
               <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted">
@@ -452,9 +455,7 @@ export default function PartnerSettingsPage() {
                 </div>
                  {errors.notificationsEnabled && <p className="mt-1 text-sm text-destructive">{errors.notificationsEnabled.message}</p>}
             </div>
-
-            <Separator className="my-6 border-primary/20" />
-
+            
             {/* Coupon Report Password Section */}
             <div className="space-y-4">
                 <h3 className="text-lg font-medium text-primary">Senha para Limpar Relatório de Cupons</h3>
@@ -520,8 +521,17 @@ export default function PartnerSettingsPage() {
                     {errors.confirmCouponReportClearPassword && <p className="mt-1 text-sm text-destructive">{errors.confirmCouponReportClearPassword.message}</p>}
                  </div>
             </div>
+          </CardContent>
+          <CardFooter className="p-4 sm:p-6">
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isSubmitting || isSubmittingCheckout || isDeletingAccount}>
+               {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
+            </Button>
+          </CardFooter>
+        </form>
 
-            <Separator className="my-6 border-primary/20" />
+        {/* Subscription and Deletion Sections (Outside the main form) */}
+        <CardContent className="space-y-6 p-4 sm:p-6">
+            <Separator className="border-primary/20" />
 
             {/* Subscription Plans Section */}
              <div className="space-y-4">
@@ -559,8 +569,7 @@ export default function PartnerSettingsPage() {
                 )}
             </div>
 
-
-            <Separator className="my-6 border-primary/20" />
+            <Separator className="border-primary/20" />
 
             {/* Account Deletion Section */}
             <div className="space-y-2">
@@ -625,13 +634,7 @@ export default function PartnerSettingsPage() {
                     </AlertDialogContent>
                 </AlertDialog>
             </div>
-
-
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base mt-6" disabled={isSubmitting || isSubmittingCheckout || isDeletingAccount}>
-               {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
-            </Button>
-          </CardContent>
-        </form>
+        </CardContent>
       </Card>
     </div>
   );
