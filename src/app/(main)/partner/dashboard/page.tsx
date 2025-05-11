@@ -68,7 +68,7 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
     console.warn("Could not parse YouTube URL for embed: ", url, e);
     return null;
   }
-  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=0&mute=0` : null; // Autoplay off by default for preview
+  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0` : null; 
 };
 
 const venueTypeIcons: Record<VenueType, React.ElementType> = {
@@ -313,8 +313,8 @@ export default function PartnerDashboardPage() {
   if (loading || !currentUser || !venueData) {
     return (
       <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-        <p className="text-lg text-primary">Carregando dados do parceiro...</p>
+        <Loader2 className="w-12 h-12 text-foreground animate-spin mb-4" />
+        <p className="text-lg text-foreground">Carregando dados do parceiro...</p>
       </div>
     );
   }
@@ -327,7 +327,7 @@ export default function PartnerDashboardPage() {
       <div className="mb-6 sm:mb-8">
         <Card className="border-secondary/50 shadow-lg shadow-secondary/15">
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-xl text-secondary flex items-center">
+            <CardTitle className="text-xl text-foreground flex items-center">
               <Eye className="w-6 h-6 mr-3" />
               Preview do Local
             </CardTitle>
@@ -346,7 +346,7 @@ export default function PartnerDashboardPage() {
                 />
               </div>
             )}
-            <h3 className="text-lg font-semibold text-primary pt-2">{venueData.venueName}</h3>
+            <h3 className="text-lg font-semibold text-foreground pt-2">{venueData.venueName}</h3>
             {venueData.venueType && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {React.createElement(venueTypeIcons[venueData.venueType] || MapPin, { className: "w-5 h-5 text-secondary" })}
@@ -431,7 +431,7 @@ export default function PartnerDashboardPage() {
       {/* Main Content Area - Below preview */}
       <div className="space-y-6 sm:space-y-8">
         <header className="mb-2 text-center lg:text-left">
-          <h1 className="text-3xl sm:text-4xl font-bold text-primary">{venueData.venueName}</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{venueData.venueName}</h1>
           <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center lg:justify-start px-2">
               <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-primary/70 shrink-0"/>
               <span className="truncate">{fullAddress}</span>
@@ -444,7 +444,7 @@ export default function PartnerDashboardPage() {
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Gerenciar Eventos
               </CardTitle>
@@ -462,7 +462,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Estatísticas Gerais
               </CardTitle>
@@ -528,7 +528,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <Gift className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Resgatar Cupons
               </CardTitle>
@@ -547,7 +547,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                       <ScrollText className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                       Relatório de Cupons
                   </CardTitle>
@@ -566,7 +566,7 @@ export default function PartnerDashboardPage() {
           
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <Brain className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Análise de Feedback (IA)
               </CardTitle>
@@ -587,7 +587,7 @@ export default function PartnerDashboardPage() {
               {aiAnalysisResult && !isAnalyzingFeedback && (
                 <Accordion type="single" collapsible className="w-full">
                   <AccordionItem value="summary">
-                    <AccordionTrigger className="text-primary/90 hover:text-primary">Resumo Geral ({aiAnalysisResult.overallSentiment})</AccordionTrigger>
+                    <AccordionTrigger className="text-foreground hover:text-primary">Resumo Geral ({aiAnalysisResult.overallSentiment})</AccordionTrigger>
                     <AccordionContent className="text-sm text-foreground/80">
                       <p className="mb-2"><strong>Média de Notas:</strong> {aiAnalysisResult.averageRatingCalculated?.toFixed(1) || 'N/A'} de 5 estrelas ({aiAnalysisResult.totalFeedbackItems} feedbacks)</p>
                       {aiAnalysisResult.summary}
@@ -634,7 +634,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Configurações da Conta e Pagamentos
               </CardTitle>
@@ -653,7 +653,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                       <QrCode className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                       QR Codes de Eventos
                   </CardTitle>

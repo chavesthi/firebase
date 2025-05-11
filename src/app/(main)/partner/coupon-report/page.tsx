@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -176,7 +177,7 @@ const PartnerCouponReportPage: NextPage = () => {
   if (isLoadingUser) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <Loader2 className="w-12 h-12 text-foreground animate-spin" />
       </div>
     );
   }
@@ -191,7 +192,7 @@ const PartnerCouponReportPage: NextPage = () => {
       </div>
       <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
+          <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
             <ScrollText className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Relatório de Cupons Resgatados
           </CardTitle>
@@ -211,10 +212,10 @@ const PartnerCouponReportPage: NextPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-primary/90">Usuário</TableHead>
-                    <TableHead className="text-primary/90">Cupom</TableHead>
-                    <TableHead className="text-primary/90">Descrição</TableHead>
-                    <TableHead className="text-primary/90 text-right">Data Resgate</TableHead>
+                    <TableHead className="text-foreground/90">Usuário</TableHead>
+                    <TableHead className="text-foreground/90">Cupom</TableHead>
+                    <TableHead className="text-foreground/90">Descrição</TableHead>
+                    <TableHead className="text-foreground/90 text-right">Data Resgate</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

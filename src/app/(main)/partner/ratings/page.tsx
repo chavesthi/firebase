@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -183,8 +184,7 @@ const PartnerRatingsPage: NextPage = () => {
   if (!currentUser && !isLoading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-         {/* Changed loader color to primary */}
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <Loader2 className="w-12 h-12 text-foreground animate-spin" />
       </div>
     );
   }
@@ -194,18 +194,15 @@ const PartnerRatingsPage: NextPage = () => {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-         {/* Changed button colors to primary */}
         <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
             <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
             Painel
         </Button>
       </div>
 
-      {/* Changed card border/shadow to primary */}
       <Card className="mb-8 border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-           {/* Changed title text color to primary */}
-          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
+          <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
             <StarIcon className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Avaliações
           </CardTitle>
@@ -215,10 +212,8 @@ const PartnerRatingsPage: NextPage = () => {
         </CardHeader>
         <CardContent className="space-y-6 px-4 sm:px-6 pb-4 sm:pb-6">
             {partnerOverallRating && (
-                // Changed border color
                 <div className="p-3 sm:p-4 mb-6 border rounded-lg border-primary/30 bg-card/80">
-                     {/* Changed heading text color */}
-                    <h3 className="mb-2 text-md sm:text-lg font-semibold text-primary">Avaliação Geral do Local</h3>
+                    <h3 className="mb-2 text-md sm:text-lg font-semibold text-foreground">Avaliação Geral do Local</h3>
                     {partnerOverallRating.averageVenueRating !== undefined && partnerOverallRating.venueRatingCount !== undefined && partnerOverallRating.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-2">
                             <StarRating rating={partnerOverallRating.averageVenueRating} totalStars={5} size={20} smSize={24} readOnly />
@@ -231,7 +226,6 @@ const PartnerRatingsPage: NextPage = () => {
                     )}
                 </div>
             )}
-             {/* Changed separator color */}
             <Separator className="my-4 border-primary/20" />
 
 
@@ -241,8 +235,7 @@ const PartnerRatingsPage: NextPage = () => {
             {eventsWithRatings.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="md:col-span-1">
-                         {/* Changed heading text color */}
-                        <h3 className="mb-2 text-md sm:text-lg font-medium text-primary/90">Eventos Avaliados</h3>
+                        <h3 className="mb-2 text-md sm:text-lg font-medium text-foreground">Eventos Avaliados</h3>
                         <ScrollArea className="h-60 md:h-72 border rounded-md border-input">
                             {eventsWithRatings.map(event => (
                                 <Button
@@ -250,7 +243,6 @@ const PartnerRatingsPage: NextPage = () => {
                                     variant={selectedEventId === event.id ? "secondary" : "ghost"}
                                     className={cn(
                                         "w-full justify-start text-left p-2 sm:p-3 rounded-none h-auto flex flex-col items-start",
-                                         // Changed selected background/text color
                                         selectedEventId === event.id && "bg-primary/20 text-primary font-semibold"
                                     )}
                                     onClick={() => setSelectedEventId(event.id)}
@@ -269,11 +261,10 @@ const PartnerRatingsPage: NextPage = () => {
                         </ScrollArea>
                     </div>
                     <div className="md:col-span-2">
-                         {/* Changed heading text color */}
-                        <h3 className="mb-2 text-md sm:text-lg font-medium text-primary/90">
+                        <h3 className="mb-2 text-md sm:text-lg font-medium text-foreground">
                             Comentários para: <span className="font-semibold">{selectedEventDetails?.eventName || "Selecione um Evento"}</span>
                         </h3>
-                        {isLoading && selectedEventId && <div className="flex justify-center items-center h-60"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>} {/* Changed loader color */}
+                        {isLoading && selectedEventId && <div className="flex justify-center items-center h-60"><Loader2 className="w-8 h-8 text-primary animate-spin" /></div>}
                         {!isLoading && selectedEventId && eventRatings.length === 0 && (
                              <div className="flex items-center justify-center h-60 p-4 border border-dashed rounded-md border-border">
                                 <p className="text-muted-foreground text-sm sm:text-base">Nenhuma avaliação para este evento ainda.</p>
@@ -284,8 +275,7 @@ const PartnerRatingsPage: NextPage = () => {
                                 {eventRatings.map(rating => (
                                     <Card key={rating.id} className="bg-card/70 p-3 sm:p-4">
                                         <div className="flex justify-between items-center mb-1">
-                                             {/* Changed user name text color */}
-                                            <CardTitle className="text-sm sm:text-base text-primary/80">{rating.userName}</CardTitle>
+                                            <CardTitle className="text-sm sm:text-base text-foreground/80">{rating.userName}</CardTitle>
                                             <StarRating rating={rating.rating} readOnly size={16} />
                                         </div>
                                          <p className="text-xs text-muted-foreground mb-2">
@@ -293,7 +283,6 @@ const PartnerRatingsPage: NextPage = () => {
                                         </p>
                                         {rating.comment && (
                                           <p className="text-sm text-foreground/90 flex items-start">
-                                              {/* Changed icon color */}
                                              <MessageCircle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-primary/70" />
                                              <span className="italic">"{rating.comment}"</span>
                                           </p>

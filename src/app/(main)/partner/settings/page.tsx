@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -7,15 +8,16 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch } from 'firebase/firestore'; // Added collection, getDocs, writeBatch
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
 import { loadStripe } from "@stripe/stripe-js";
+import { QRCodeCanvas } from 'qrcode.react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2 } from 'lucide-react';
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2, Copy, Download, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
@@ -32,6 +34,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle as QrDialogTitle, // Renamed to avoid conflict with AlertDialogTitle
+  DialogDescription as QrDialogDescription, // Renamed
+  DialogFooter as QrDialogFooter, // Renamed
+} from '@/components/ui/dialog'; // Assuming you have a Dialog component
+
 
 // Schema for partner settings form
 const partnerSettingsSchema = z.object({
@@ -72,6 +83,9 @@ export default function PartnerSettingsPage() {
   const [deletePasswordInput, setDeletePasswordInput] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [showDeletePasswordInput, setShowDeletePasswordInput] = useState(false);
+  
+  const [showPixQrDialog, setShowPixQrDialog] = useState(false);
+  const [qrValue, setQrValue] = useState('');
 
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<PartnerSettingsFormInputs>({
@@ -203,53 +217,24 @@ export default function PartnerSettingsPage() {
     }
   };
 
-  const handleCheckout = async () => {
-    if (!currentUser) {
-      toast({ title: "Autenticação Necessária", description: "Faça login para gerenciar sua assinatura.", variant: "destructive" });
-      return;
-    }
-    setIsSubmittingCheckout(true);
-    try {
-      const response = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: currentUser.uid }),
-      });
+  const handlePixCheckout = () => {
+    // Simplified PIX QR Code generation logic (example for demonstration)
+    // In a real scenario, this would involve calling a PIX generation API
+    // and receiving a payload (e.g., BRCode) to render as QR.
+    // This example uses a static payload for demonstration.
+    // Replace with your actual PIX key and a correctly formatted BRCode payload.
+    const pixKey = "01791938132"; // Example CPF as PIX key
+    const amount = "2.00"; // Example amount
+    const merchantName = "Fervo App"; // Your merchant name
+    const merchantCity = "SAO PAULO"; // Your merchant city
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Falha ao criar sessão de checkout.' }));
-        throw new Error(errorData.message || 'Falha ao criar sessão de checkout');
-      }
-
-      const session = await response.json();
-
-      if (!STRIPE_PUBLIC_KEY) {
-        throw new Error("Chave pública do Stripe não configurada.");
-      }
-
-      const stripe = await loadStripe(STRIPE_PUBLIC_KEY);
-      if (!stripe) {
-        throw new Error("Stripe não pôde ser carregado.");
-      }
-
-      const result = await stripe.redirectToCheckout({ sessionId: session.url.split('/').pop() });
-
-      if (result.error) {
-        throw new Error(result.error.message || "Erro ao redirecionar para o checkout.");
-      }
-
-    } catch (error: any) {
-      console.error("Checkout error:", error);
-      toast({
-        title: "Erro no Checkout",
-        description: error.message || "Não foi possível iniciar o checkout. Tente novamente.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmittingCheckout(false);
-    }
+    // This is a VERY simplified example and likely NOT a valid BRCode.
+    // You need to use a library or service to generate a compliant BRCode.
+    const brCodePayload = `00020126580014BR.GOV.BCB.PIX0111${pixKey.replace(/\D/g, '')}5204000053039865404${amount.replace('.', '')}5802BR59${merchantName.length < 10 ? `0${merchantName.length}` : merchantName.length}${merchantName}60${merchantCity.length < 10 ? `0${merchantCity.length}` : merchantCity.length}${merchantCity}62070503***6304`;
+    
+    setQrValue(brCodePayload);
+    setShowPixQrDialog(true);
+    setIsSubmittingCheckout(false); // Reset as this is a different flow
   };
 
 
@@ -347,13 +332,45 @@ export default function PartnerSettingsPage() {
       setDeletePasswordInput('');
     }
   };
+  
+  const handlePrintQr = () => {
+    const canvas = document.getElementById('pix-qr-code-canvas') as HTMLCanvasElement;
+    if (canvas) {
+      const dataUrl = canvas.toDataURL();
+      let windowContent = '<!DOCTYPE html>';
+      windowContent += '<html><head><title>Print QR Code</title></head><body>';
+      windowContent += '<img src="' + dataUrl + '" style="max-width:90vw; max-height:90vh; display:block; margin:auto;">';
+      windowContent += '</body></html>';
+      const printWin = window.open('', '', 'width=600,height=600');
+      printWin?.document.open();
+      printWin?.document.write(windowContent);
+      printWin?.document.close();
+      printWin?.focus();
+      printWin?.print();
+      printWin?.close();
+    }
+  };
+
+  const handleDownloadQr = () => {
+    const canvas = document.getElementById('pix-qr-code-canvas') as HTMLCanvasElement;
+    if (canvas) {
+      const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+      let downloadLink = document.createElement("a");
+      downloadLink.href = pngUrl;
+      downloadLink.download = `fervo-app-pix-pagamento.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      toast({ title: "Download Iniciado", description: "O QR Code PIX está sendo baixado." });
+    }
+  };
 
 
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
-        <p className="ml-4 text-lg text-primary">Carregando configurações...</p>
+        <Loader2 className="w-12 h-12 text-foreground animate-spin" />
+        <p className="ml-4 text-lg text-foreground">Carregando configurações...</p>
       </div>
     );
   }
@@ -368,7 +385,7 @@ export default function PartnerSettingsPage() {
         </div>
       <Card className="max-w-2xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
         <CardHeader className="text-center p-4 sm:p-6">
-          <CardTitle className="text-2xl sm:text-3xl text-primary">Configurações da Conta</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl text-foreground">Configurações da Conta</CardTitle>
           <CardDescription className="text-sm sm:text-base">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -389,7 +406,7 @@ export default function PartnerSettingsPage() {
             {/* Basic Info Section */}
             <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="contactName" className="text-primary/90">Nome do Contato</Label>
+                  <Label htmlFor="contactName" className="text-foreground/90">Nome do Contato</Label>
                    <Controller
                     name="contactName"
                     control={control}
@@ -400,7 +417,7 @@ export default function PartnerSettingsPage() {
                   {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="companyName" className="text-primary/90">Nome da Empresa/Estabelecimento</Label>
+                  <Label htmlFor="companyName" className="text-foreground/90">Nome da Empresa/Estabelecimento</Label>
                    <Controller
                     name="companyName"
                     control={control}
@@ -411,7 +428,7 @@ export default function PartnerSettingsPage() {
                    {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-primary/90">E-mail de Login</Label>
+                  <Label htmlFor="email" className="text-foreground/90">E-mail de Login</Label>
                    <Controller
                     name="email"
                     control={control}
@@ -424,7 +441,7 @@ export default function PartnerSettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                  <Label htmlFor="notificationsEnabled" className="text-primary/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
+                  <Label htmlFor="notificationsEnabled" className="text-foreground/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
                    <Controller
                       name="notificationsEnabled"
                       control={control}
@@ -445,11 +462,11 @@ export default function PartnerSettingsPage() {
 
             {/* Coupon Report Password Section */}
             <div className="space-y-4">
-                <h3 className="text-lg font-medium text-primary">Senha para Limpar Relatório de Cupons</h3>
+                <h3 className="text-lg font-medium text-foreground">Senha para Limpar Relatório de Cupons</h3>
                 <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
 
                  <div className="space-y-2">
-                    <Label htmlFor="couponReportClearPassword" className="text-primary/90">Nova Senha</Label>
+                    <Label htmlFor="couponReportClearPassword" className="text-foreground/90">Nova Senha</Label>
                     <div className="relative">
                         <Controller
                             name="couponReportClearPassword"
@@ -479,7 +496,7 @@ export default function PartnerSettingsPage() {
                  </div>
 
                  <div className="space-y-2">
-                    <Label htmlFor="confirmCouponReportClearPassword" className="text-primary/90">Confirmar Nova Senha</Label>
+                    <Label htmlFor="confirmCouponReportClearPassword" className="text-foreground/90">Confirmar Nova Senha</Label>
                      <div className="relative">
                         <Controller
                             name="confirmCouponReportClearPassword"
@@ -512,8 +529,8 @@ export default function PartnerSettingsPage() {
             <Separator className="my-6 border-primary/20" />
 
             {/* Subscription Plans Section */}
-            <div className="space-y-4">
-                <h3 className="text-lg font-medium text-primary flex items-center">
+             <div className="space-y-4">
+                <h3 className="text-lg font-medium text-foreground flex items-center">
                     <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
                 </h3>
                 {hasActiveSubscription ? (
@@ -526,20 +543,21 @@ export default function PartnerSettingsPage() {
                     <>
                         <CardDescription className="text-xs sm:text-sm">
                             Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
-                            Detalhes sobre os planos e opções de pagamento serão disponibilizados em breve.
-                            <br/><strong>Substitua "price_YOUR_STRIPE_SUBSCRIPTION_PRICE_ID" no código da API com seu Price ID real do Stripe.</strong>
+                            Valor mensal: R$ 2,00.
                         </CardDescription>
                         <Button
-                            onClick={handleCheckout}
+                            onClick={handlePixCheckout}
                             className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
                             disabled={isSubmittingCheckout}
+                            type="button" 
                         >
                             {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            Assinar Plano Fervo (Teste)
+                            Assinar Plano Fervo (PIX)
                         </Button>
                     </>
                 )}
             </div>
+
 
             <Separator className="my-6 border-primary/20" />
 
@@ -613,7 +631,47 @@ export default function PartnerSettingsPage() {
           </CardContent>
         </form>
       </Card>
+      
+      <Dialog open={showPixQrDialog} onOpenChange={setShowPixQrDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <QrDialogTitle className="text-foreground">Pagamento via PIX - R$ 2,00</QrDialogTitle>
+            <QrDialogDescription>
+              Escaneie o QR Code abaixo com o aplicativo do seu banco para realizar o pagamento.
+            </QrDialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center py-4">
+            <QRCodeCanvas 
+                id="pix-qr-code-canvas"
+                value={qrValue} 
+                size={256} 
+                level="M"
+                imageSettings={{
+                    src: "/fervo_icon.png", 
+                    height: 38, // approx 15% of 256
+                    width: 38,  // approx 15% of 256
+                    excavate: true,
+                }}
+            />
+          </div>
+          <div className="text-center text-xs text-muted-foreground px-4">
+             <p><strong>Chave PIX (CPF):</strong> 017.919.381-32</p>
+             <p><strong>Valor:</strong> R$ 2,00</p>
+             <p>Após o pagamento, sua assinatura será ativada em alguns instantes.</p>
+             <p className="mt-2 font-semibold">Este QR Code é apenas um exemplo. Uma implementação real requer a geração de um BRCode válido por um sistema de pagamentos PIX.</p>
+          </div>
+          <QrDialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handlePrintQr} className="w-full sm:w-auto">
+              <Printer className="w-4 h-4 mr-2" /> Imprimir
+            </Button>
+            <Button variant="outline" onClick={handleDownloadQr} className="w-full sm:w-auto">
+              <Download className="w-4 h-4 mr-2" /> Baixar QR
+            </Button>
+            <Button onClick={() => setShowPixQrDialog(false)} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">Fechar</Button>
+          </QrDialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
-

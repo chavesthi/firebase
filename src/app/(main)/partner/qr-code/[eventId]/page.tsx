@@ -1,9 +1,10 @@
 
+
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react'; // Removed 'use' import
-import { useRouter } from 'next/navigation'; // Removed 'useParams'
+import { useEffect, useState, use } from 'react'; 
+import { useParams, useRouter } from 'next/navigation'; 
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { firestore, auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
@@ -28,9 +29,11 @@ interface EventQrCodePageProps {
 }
 
 const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
+  const rawParams = useParams();
+  const routeParams = use(rawParams as any);
   const router = useRouter();
   const { toast } = useToast();
-  const eventIdParam = params.eventId;
+  const eventIdParam = routeParams.eventId;
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -157,7 +160,7 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
   if (authLoading || eventLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background text-foreground">
-        <Loader2 className="w-12 h-12 mb-4 text-primary animate-spin" />
+        <Loader2 className="w-12 h-12 mb-4 text-foreground animate-spin" />
         Carregando QR Code do Evento...
       </div>
     );

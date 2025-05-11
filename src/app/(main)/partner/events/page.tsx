@@ -358,7 +358,7 @@ const ManageEventsPage: NextPage = () => {
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <Loader2 className="w-12 h-12 text-foreground animate-spin" />
       </div>
     );
   }
@@ -373,7 +373,7 @@ const ManageEventsPage: NextPage = () => {
       </div>
       <Card className="mb-8 border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
+          <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
             <PlusCircle className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             {editingEventId ? 'Editar Evento' : 'Adicionar Novo Evento'}
           </CardTitle>
@@ -385,35 +385,35 @@ const ManageEventsPage: NextPage = () => {
           <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               <div className="md:col-span-2">
-                <Label htmlFor="eventName" className="text-primary/90">Nome do Evento</Label>
+                <Label htmlFor="eventName" className="text-foreground/90">Nome do Evento</Label>
                 <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-destructive' : ''} />} />
                 {errors.eventName && <p className="mt-1 text-sm text-destructive">{errors.eventName.message}</p>}
               </div>
 
               <div>
-                <Label htmlFor="startDate" className="text-primary/90">Data de Início</Label>
+                <Label htmlFor="startDate" className="text-foreground/90">Data de Início</Label>
                 <Controller name="startDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.startDate ? 'border-destructive' : ''} />} />
                 {errors.startDate && <p className="mt-1 text-sm text-destructive">{errors.startDate.message}</p>}
               </div>
               <div>
-                <Label htmlFor="startTime" className="text-primary/90">Hora de Início</Label>
+                <Label htmlFor="startTime" className="text-foreground/90">Hora de Início</Label>
                 <Controller name="startTime" control={control} render={({ field }) => <Input id="startTime" type="time" {...field} className={errors.startTime ? 'border-destructive' : ''} />} />
                 {errors.startTime && <p className="mt-1 text-sm text-destructive">{errors.startTime.message}</p>}
               </div>
 
               <div>
-                <Label htmlFor="endDate" className="text-primary/90">Data de Fim</Label>
+                <Label htmlFor="endDate" className="text-foreground/90">Data de Fim</Label>
                 <Controller name="endDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.endDate ? 'border-destructive' : ''} />} />
                 {errors.endDate && <p className="mt-1 text-sm text-destructive">{errors.endDate.message}</p>}
               </div>
               <div>
-                <Label htmlFor="endTime" className="text-primary/90">Hora de Fim</Label>
+                <Label htmlFor="endTime" className="text-foreground/90">Hora de Fim</Label>
                 <Controller name="endTime" control={control} render={({ field }) => <Input id="endTime" type="time" {...field} className={errors.endTime ? 'border-destructive' : ''} />} />
                 {errors.endTime && <p className="mt-1 text-sm text-destructive">{errors.endTime.message}</p>}
               </div>
 
               <div className="md:col-span-2">
-                <Label className="text-primary/90">Estilos Musicais (Máx. 4)</Label>
+                <Label className="text-foreground/90">Estilos Musicais (Máx. 4)</Label>
                 <ScrollArea className="h-32 p-2 border rounded-md border-input">
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {MUSIC_STYLE_OPTIONS.map((option) => (
@@ -452,7 +452,7 @@ const ManageEventsPage: NextPage = () => {
               </div>
 
               <div>
-                <Label htmlFor="pricingType" className="text-primary/90">Tipo de Preço</Label>
+                <Label htmlFor="pricingType" className="text-foreground/90">Tipo de Preço</Label>
                 <Controller
                   name="pricingType"
                   control={control}
@@ -474,21 +474,21 @@ const ManageEventsPage: NextPage = () => {
 
               {watchedPricingType !== PricingType.FREE && (
                 <div>
-                  <Label htmlFor="pricingValue" className="text-primary/90">Valor (R$)</Label>
+                  <Label htmlFor="pricingValue" className="text-foreground/90">Valor (R$)</Label>
                   <Controller name="pricingValue" control={control} render={({ field }) => <Input id="pricingValue" type="number" step="0.01" placeholder="Ex: 25.50" {...field} value={field.value ?? ''} className={errors.pricingValue ? 'border-destructive' : ''} />} />
                   {errors.pricingValue && <p className="mt-1 text-sm text-destructive">{errors.pricingValue.message}</p>}
                 </div>
               )}
 
               <div className="md:col-span-2">
-                <Label htmlFor="description" className="text-primary/90">Descrição do Evento (Opcional)</Label>
+                <Label htmlFor="description" className="text-foreground/90">Descrição do Evento (Opcional)</Label>
                 <Controller name="description" control={control} render={({ field }) => <Textarea id="description" placeholder="Detalhes sobre o evento, atrações, etc." {...field} className={errors.description ? 'border-destructive' : ''} />} />
                 {errors.description && <p className="mt-1 text-sm text-destructive">{errors.description.message}</p>}
               </div>
 
               <div className="md:col-span-2 flex items-center space-x-2 pt-2">
                 <Controller name="shareRewardsEnabled" control={control} render={({ field }) => <Switch id="shareRewardsEnabled" checked={field.value} onCheckedChange={field.onChange} />} />
-                <Label htmlFor="shareRewardsEnabled" className="text-primary/90">Ativar Recompensa por Compartilhamento (FervoCoins). Quando o Usuário Compartilha o seu Evento para 10 pessoas ele ganha 20 moedas, 2 moedas por compartilhamento que valem um cupom de Cerveja ou Refrigerante 350ml. Esse Cupom pode ser Autenticado no seu painel Resgatar Cupons. Isso é um incentivo ao Usuário</Label>
+                <Label htmlFor="shareRewardsEnabled" className="text-foreground/90">Ativar Recompensa por Compartilhamento (FervoCoins). Quando o Usuário Compartilha o seu Evento para 10 pessoas ele ganha 20 moedas, 2 moedas por compartilhamento que valem um cupom de Cerveja ou Refrigerante 350ml. Esse Cupom pode ser Autenticado no seu painel Resgatar Cupons. Isso é um incentivo ao Usuário</Label>
               </div>
               <div className="md:col-span-2 -mt-3">
                 <p className="text-xs text-muted-foreground pl-8">
@@ -500,7 +500,7 @@ const ManageEventsPage: NextPage = () => {
 
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Controller name="visibility" control={control} render={({ field }) => <Switch id="visibility" checked={field.value} onCheckedChange={field.onChange} />} />
-                <Label htmlFor="visibility" className="text-primary/90">Visível para usuários?</Label>
+                <Label htmlFor="visibility" className="text-foreground/90">Visível para usuários?</Label>
                 {errors.visibility && <p className="mt-1 text-sm text-destructive">{errors.visibility.message}</p>}
               </div>
             </div>
@@ -520,7 +520,7 @@ const ManageEventsPage: NextPage = () => {
 
       <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
+          <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
             <CalendarDays className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Meus Eventos Cadastrados
           </CardTitle>
