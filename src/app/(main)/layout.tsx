@@ -140,7 +140,7 @@ const useAuthAndUserSubscription = () => {
     };
   }, [pathname, toast]); 
 
-  return { firebaseUser, appUser, loading };
+  return { firebaseUser, appUser, setAppUser, loading };
 };
 
 
@@ -149,7 +149,7 @@ export default function MainAppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { appUser, loading } = useAuthAndUserSubscription();
+  const { appUser, setAppUser, loading } = useAuthAndUserSubscription();
   const { theme, setTheme } = useTheme();
 
   const router = useRouter();
@@ -282,7 +282,7 @@ export default function MainAppLayout({
         const freshExistingNotificationsFromDB = currentUserDocSnap.data()?.notifications || [];
         
         const notificationsActuallyToAdd = potentialNewNotifications.filter(newNotif => 
-            !freshExistingNotificationsFromDB.some(exNotif => exNotif.id === newNotif.id)
+            !freshExistingNotificationsFromDB.some((exNotif: Notification) => exNotif.id === newNotif.id)
         );
 
         if (notificationsActuallyToAdd.length > 0) {
@@ -371,7 +371,7 @@ export default function MainAppLayout({
             const freshExistingUserNotifications = currentUserDocSnap.data()?.notifications || [];
 
             const notificationsActuallyToAdd = notificationsToAddThisCycle.filter(newNotif => 
-                !freshExistingUserNotifications.some(exNotif => exNotif.id === newNotif.id)
+                !freshExistingUserNotifications.some((exNotif: Notification) => exNotif.id === newNotif.id)
             );
 
             if (notificationsActuallyToAdd.length > 0) {
@@ -427,13 +427,22 @@ export default function MainAppLayout({
     
     setShowNotificationDropdown(prev => !prev); 
 
-    if (unreadNotificationsCount > 0) {
+    if (unreadNotificationsCount > 0 && appUser.notifications) {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        const currentNotifications = appUser.notifications || [];
+        const currentNotifications = appUser.notifications; // Use local appUser state
         const updatedNotifications = currentNotifications.map(n => ({ ...n, read: true }));
+        
+        // Optimistically update UI by setting local appUser notifications to read
+        if (setAppUser) {
+          setAppUser(prev => prev ? {...prev, notifications: updatedNotifications, lastNotificationCheckTimestamp: Timestamp.now()} : null);
+        }
+        // Then update Firestore in the background
         await updateDoc(userDocRef, {
             notifications: updatedNotifications,
             lastNotificationCheckTimestamp: serverTimestamp() 
+        }).catch(error => {
+            console.error("Error updating notifications in Firestore:", error);
+            // Optionally revert optimistic update or show error
         });
     } else if (appUser.notifications && appUser.notifications.length === 0){
          toast({ title: "Nenhuma Notificação", description: "Você não tem novas notificações. Continue explorando!", duration: 5000 });
@@ -441,8 +450,7 @@ export default function MainAppLayout({
   };
 
  const dismissNotification = async (notificationId: string) => {
-    if (!appUser || !appUser.uid) return;
-    const userDocRef = doc(firestore, "users", appUser.uid);
+    if (!appUser || !appUser.uid || !setAppUser) return;
     
     // Optimistically update local state for faster UI response
     if (appUser.notifications) {
@@ -451,7 +459,7 @@ export default function MainAppLayout({
     }
 
     try {
-        // Fetch current notifications from Firestore to ensure we're updating based on the latest state
+        const userDocRef = doc(firestore, "users", appUser.uid);
         const userSnap = await getDoc(userDocRef);
         const currentDbNotifications = userSnap.data()?.notifications || [];
         const updatedDbNotifications = currentDbNotifications.filter((n: Notification) => n.id !== notificationId);
@@ -460,7 +468,8 @@ export default function MainAppLayout({
         toast({ title: "Notificação Removida", variant:"default" });
     } catch (error) {
         console.error("Error dismissing notification:", error);
-        // Revert optimistic update if Firestore update fails (or rely on next onSnapshot update)
+        // Revert optimistic update by re-fetching or relying on next onSnapshot update
+        // For simplicity, we'll let onSnapshot handle potential inconsistencies here
         toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação.", variant: "destructive" });
     }
   };
@@ -738,6 +747,7 @@ export default function MainAppLayout({
     </div>
   );
 }
+
 
 
 
