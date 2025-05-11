@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -96,23 +95,24 @@ const useAuthAndUserSubscription = () => {
               favoriteVenueNotificationSettings: userData.favoriteVenueNotificationSettings || {}, // Initialize
             });
           } else {
+            // If user doc doesn't exist, create a default AppUser structure
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
               uid: user.uid,
               name: user.displayName || (defaultRoleBasedOnInitialAuthAttempt === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
               email: user.email,
               role: defaultRoleBasedOnInitialAuthAttempt,
+              questionnaireCompleted: false, // Important: default to false
               venueCoins: {},
-              questionnaireCompleted: false,
               notifications: [],
               favoriteVenueIds: [],
-              favoriteVenueNotificationSettings: {}, // Initialize
+              favoriteVenueNotificationSettings: {}, 
             });
           }
           setLoading(false);
         }, (error) => {
           console.error("Error fetching user document with onSnapshot:", error);
-          setAppUser(null);
+          setAppUser(null); // Ensure appUser is null on error
           setLoading(false);
           toast({ title: "Erro ao carregar dados", description: "Não foi possível sincronizar os dados do usuário.", variant: "destructive" });
         });
@@ -158,7 +158,7 @@ export default function MainAppLayout({
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
   const [showLoginQrHint, setShowLoginQrHint] = useState(false);
-  const prevAppUserRef = useRef<AppUser | null>(null);
+  const [prevAppUserRef = useRef<AppUser | null>(null);
 
 
   const totalFervoCoins = useMemo(() => {
@@ -173,19 +173,43 @@ export default function MainAppLayout({
 
 
   useEffect(() => {
-    if (!loading) {
-      const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
-      const isSharedEventPage = pathname.startsWith('/shared-event');
-      const isUserPage = pathname.startsWith('/user/'); // Allow access to all /user/* subpages
-
-      if (!appUser && !isAuthPage && !isSharedEventPage && !isUserPage) {
+    if (loading) {
+      // Do not attempt to redirect or make decisions while initial data is loading.
+      return;
+    }
+  
+    const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
+    const isSharedEventPage = pathname.startsWith('/shared-event');
+    // Define general user-accessible pages (e.g., profile, settings) that don't strictly require questionnaire completion to view
+    // but do require login.
+    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons');
+  
+    if (!appUser) {
+      // No user logged in.
+      // Redirect to login if not on an auth page, shared event page, or a generally accessible user page (which might handle their own public view or redirect).
+      if (!isAuthPage && !isSharedEventPage && !isGeneralUserAccessiblePage) {
         router.push('/login');
-      } else if (appUser && !appUser.questionnaireCompleted) {
-        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && !isUserPage) { 
+      }
+    } else {
+      // User is logged in (appUser exists).
+      if (!appUser.questionnaireCompleted) {
+        // Questionnaire not completed.
+        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && !isGeneralUserAccessiblePage) {
           router.push('/questionnaire');
-        } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage && !isUserPage) {
+        } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage && !isGeneralUserAccessiblePage) {
           router.push('/partner-questionnaire');
         }
+        // Allow access to questionnaire page, shared event, or general user pages even if questionnaire is incomplete.
+      } else {
+        // Questionnaire is completed.
+        if (appUser.role === UserRole.USER && (pathname === '/login' || pathname === '/questionnaire')) {
+          // If a completed user is on login/questionnaire, redirect them to the map.
+          router.push('/map');
+        } else if (appUser.role === UserRole.PARTNER && (pathname === '/login' || pathname === '/partner-questionnaire')) {
+          // If a completed partner is on login/partner-questionnaire, redirect them to their dashboard.
+          router.push('/partner/dashboard');
+        }
+        // Otherwise, they are on an appropriate page (e.g., /map, /partner/dashboard, or a user settings page).
       }
     }
   }, [appUser, loading, router, pathname]);
@@ -470,8 +494,39 @@ export default function MainAppLayout({
     );
   }
 
-  const allowedUnauthenticatedPaths = ['/login', '/questionnaire', '/partner-questionnaire', '/shared-event', '/user/favorites', '/user/coupons', '/user/profile', '/user/coins']; 
-  const canRenderChildren = appUser || allowedUnauthenticatedPaths.some(p => pathname.startsWith(p) || pathname === p);
+  let renderChildrenContent = false;
+  if (!loading) {
+    const isAuthPg = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
+    const isSharedEvtPg = pathname.startsWith('/shared-event');
+    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons');
+
+    if (isAuthPg || isSharedEvtPg || isGeneralUserAccPg) {
+      renderChildrenContent = true;
+    } else if (appUser) {
+      if (appUser.questionnaireCompleted) {
+        renderChildrenContent = true;
+      } else {
+        // User exists but questionnaire not done, and not on an allowed page.
+        // useEffect will handle redirect. Show a specific loader.
+        return (
+          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <p className="ml-2">Redirecionando para questionário...</p>
+          </div>
+        );
+      }
+    } else {
+      // No appUser, and not on an allowed public/auth page.
+      // useEffect will handle redirect. Show a specific loader.
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="ml-2">Verificando autenticação...</p>
+        </div>
+      );
+    }
+  }
+
 
   const activeColorClass = 'text-primary';
   const activeBorderColorClass = 'border-primary';
@@ -480,7 +535,7 @@ export default function MainAppLayout({
 
   return (
     <div className="flex flex-col min-h-screen">
-      {appUser && (
+      {appUser && ( // Only render header if user is logged in (appUser is not null)
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
             <Logo iconClassName={activeColorClass} />
@@ -670,7 +725,7 @@ export default function MainAppLayout({
         </header>
       )}
       <main className="flex-1">
-        {canRenderChildren ? children : null }
+        {renderChildrenContent ? children : null }
       </main>
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal
@@ -683,5 +738,3 @@ export default function MainAppLayout({
   );
 }
 
-
-    
