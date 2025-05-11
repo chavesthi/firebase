@@ -202,18 +202,6 @@ export default function MainAppLayout({
     prevAppUserRef.current = appUser;
   }, [appUser, loading]);
 
-  // Effect to show toast when QR hint is active
-  useEffect(() => {
-    if (showLoginQrHint && appUser?.role === UserRole.USER) {
-      toast({
-        title: "Dica de Check-in!",
-        description: "Esse é O Local Onde você Escaneia o Qrcode No Evento Para Fazer chek-in e poder Avaliar.",
-        duration: 3000, 
-      });
-    }
-  }, [showLoginQrHint, toast, appUser?.role]);
-
-
   // Effect for new partner notifications
   useEffect(() => {
     if (loading || !appUser || !appUser.uid || !appUser.questionnaireCompleted || appUser.role !== UserRole.USER) {
@@ -680,3 +668,5 @@ export default function MainAppLayout({
   );
 }
 
+
+    
