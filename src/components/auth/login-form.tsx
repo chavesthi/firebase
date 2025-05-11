@@ -72,58 +72,81 @@ export function LoginForm() {
     const userDocRef = doc(firestore, "users", user.uid);
     const userDoc = await getDoc(userDocRef);
 
+    let userNameForGreeting: string;
+    let questionnaireCompletedForRedirect: boolean = false;
+    let userRoleInDbForRedirect: UserRole = role;
+
     if (!userDoc.exists()) {
-      // New user (either via Google first time or regular signup)
+      // New user
+      userNameForGreeting = isGoogleSignIn ? (googleName || user.displayName || (role === UserRole.USER ? "Usuário" : "Parceiro")) : signupMethods.getValues("name");
       await setDoc(userDocRef, {
         uid: user.uid,
-        name: isGoogleSignIn ? (googleName || user.displayName || "Usuário") : signupMethods.getValues("name"),
+        name: userNameForGreeting,
         email: user.email,
         role: role,
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
-        fervoCoins: 0, // Initialize fervoCoins for new users
         venueCoins: {}, // Initialize venueCoins map
       });
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
         description: "Quase lá! Conte-nos um pouco mais sobre você.",
-        variant: "default", // Use default (primary) for both new user/partner
+        variant: "default",
       });
       router.push(role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire');
     } else {
       // Existing user
       const userData = userDoc.data();
-      const userRoleInDb = userData.role || UserRole.USER;
-      const questionnaireCompleted = userData.questionnaireCompleted || false;
+      userNameForGreeting = userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro');
+      userRoleInDbForRedirect = userData.role || UserRole.USER;
+      questionnaireCompletedForRedirect = userData.questionnaireCompleted || false;
 
-      if (role !== userRoleInDb) {
+      if (role !== userRoleInDbForRedirect) {
         toast({
           title: "Tipo de Conta Incorreto",
-          description: `Este e-mail está registrado como ${userRoleInDb === UserRole.USER ? 'usuário comum' : 'parceiro'}. Por favor, use a aba correta.`,
+          description: `Este e-mail está registrado como ${userRoleInDbForRedirect === UserRole.USER ? 'usuário comum' : 'parceiro'}. Por favor, use a aba correta.`,
           variant: "destructive",
         });
-         // Sign out the user if they logged in with the wrong role tab
-         await auth.signOut();
+        await auth.signOut();
         return;
       }
 
+      // Time-based greeting for existing users
+      const now = new Date();
+      const hour = now.getHours();
+      let greeting = "";
+
+      if (hour >= 0 && hour < 5) { // 00:00 to 04:59
+        greeting = "Boa Madrugada";
+      } else if (hour >= 5 && hour < 12) { // 05:00 to 11:59
+        greeting = "Bom Dia";
+      } else if (hour >= 12 && hour < 18) { // 12:00 to 17:59
+        greeting = "Boa Tarde";
+      } else { // 18:00 to 23:59
+        greeting = "Boa Noite";
+      }
+      
+      const greetingTitle = `${greeting}, ${userNameForGreeting}!`;
+      const greetingDescription = "Onde vamos hoje?";
+
       toast({
-        title: "Login Bem Sucedido!",
-        description: `Bem-vindo de volta, ${userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro')}! Redirecionando...`,
-        variant: "default", // Use default (primary) for both user/partner login success
+        title: greetingTitle,
+        description: greetingDescription,
+        variant: "default",
+        duration: 3000, 
       });
 
-      if (role === UserRole.USER) {
-        router.push(questionnaireCompleted ? '/map' : '/questionnaire');
+      if (userRoleInDbForRedirect === UserRole.USER) {
+        router.push(questionnaireCompletedForRedirect ? '/map' : '/questionnaire');
       } else {
-        router.push(questionnaireCompleted ? '/partner/dashboard' : '/partner-questionnaire');
+        router.push(questionnaireCompletedForRedirect ? '/partner/dashboard' : '/partner-questionnaire');
       }
     }
   };
 
 
   const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
-    loginMethods.formState.isSubmitting; // Ensure isSubmitting is accessed
+    loginMethods.formState.isSubmitting; 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
       await handleSuccessfulAuth(userCredential, activeRole);
@@ -143,10 +166,9 @@ export function LoginForm() {
   };
 
   const onSignupSubmit: SubmitHandler<SignupFormInputs> = async (data) => {
-    signupMethods.formState.isSubmitting; // Ensure isSubmitting is accessed
+    signupMethods.formState.isSubmitting; 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      // Firestore document will be created in handleSuccessfulAuth
       await handleSuccessfulAuth(userCredential, activeRole, false, data.name);
       signupMethods.reset();
     } catch (error: any) {
@@ -189,19 +211,17 @@ export function LoginForm() {
   };
 
 
-  // Use primary styles consistently for both roles in the card/button
   const cardStyles = 'border-primary/80 [--card-glow:hsl(var(--primary))] [--card-glow-soft:hsla(var(--primary),0.2)]';
   const buttonStyles = 'bg-primary hover:bg-primary/90 text-primary-foreground';
   const commonLabelStyle = "text-primary/80";
-  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive"; // Keep error border red
+  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive"; 
 
-  // Style for active/inactive tabs
   const userTabStyle = activeRole === UserRole.USER
     ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]"
     : "hover:bg-primary/10";
   const partnerTabStyle = activeRole === UserRole.PARTNER
-    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]" // Use primary styling for active partner tab
-    : "hover:bg-primary/10"; // Use primary hover for inactive partner tab
+    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]" 
+    : "hover:bg-primary/10"; 
 
   return (
     <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as UserRole)} className="w-full">
