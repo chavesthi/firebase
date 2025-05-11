@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,7 +7,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where } from 'firebase/firestore';
 import { loadStripe } from "@stripe/stripe-js";
 import { QRCodeCanvas } from 'qrcode.react';
 
@@ -218,29 +217,21 @@ export default function PartnerSettingsPage() {
   };
 
   const handlePixCheckout = () => {
-    // Simplified PIX QR Code generation logic (example for demonstration)
-    // In a real scenario, this would involve calling a PIX generation API
-    // and receiving a payload (e.g., BRCode) to render as QR.
-    // This example uses a static payload for demonstration.
-    // Replace with your actual PIX key and a correctly formatted BRCode payload.
-    const pixKey = "01791938132"; // Example CPF as PIX key
-    const amount = "2.00"; // Example amount
-    const merchantName = "Fervo App"; // Your merchant name
-    const merchantCity = "SAO PAULO"; // Your merchant city
-
-    // This is a VERY simplified example and likely NOT a valid BRCode.
-    // You need to use a library or service to generate a compliant BRCode.
+    const pixKey = "01791938132"; 
+    const amount = "2.00"; 
+    const merchantName = "Fervo App"; 
+    const merchantCity = "SAO PAULO"; 
     const brCodePayload = `00020126580014BR.GOV.BCB.PIX0111${pixKey.replace(/\D/g, '')}5204000053039865404${amount.replace('.', '')}5802BR59${merchantName.length < 10 ? `0${merchantName.length}` : merchantName.length}${merchantName}60${merchantCity.length < 10 ? `0${merchantCity.length}` : merchantCity.length}${merchantCity}62070503***6304`;
     
     setQrValue(brCodePayload);
     setShowPixQrDialog(true);
-    setIsSubmittingCheckout(false); // Reset as this is a different flow
+    setIsSubmittingCheckout(false); 
   };
 
 
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    if (query.get("session_id")) {
+    const queryParams = new URLSearchParams(window.location.search);
+    if (queryParams.get("session_id")) {
       toast({
         title: "Pagamento Processado",
         description: "Seu pagamento está sendo processado. O status da sua assinatura será atualizado em breve.",
@@ -249,7 +240,7 @@ export default function PartnerSettingsPage() {
       });
       router.replace('/partner/settings', { scroll: false });
     }
-     if (query.get("canceled")) {
+     if (queryParams.get("canceled")) {
       toast({
         title: "Pagamento Cancelado",
         description: "O processo de assinatura foi cancelado. Você pode tentar novamente quando desejar.",
@@ -274,13 +265,12 @@ export default function PartnerSettingsPage() {
       const credential = EmailAuthProvider.credential(currentUser.email, deletePasswordInput);
       await reauthenticateWithCredential(currentUser, credential);
 
-      // --- FervoCoin Redistribution Logic ---
-      // WARNING: This operation can be very slow and costly on large user bases.
-      // It reads ALL user documents. Consider a server-side Cloud Function for production.
       const partnerIdToDelete = currentUser.uid;
+
+      // --- FervoCoin Redistribution Logic ---
       const usersCollectionRef = collection(firestore, "users");
       const usersSnapshot = await getDocs(usersCollectionRef);
-      const batch = writeBatch(firestore);
+      const coinBatch = writeBatch(firestore);
 
       usersSnapshot.forEach(userDocSnap => {
         const userData = userDocSnap.data();
@@ -289,33 +279,49 @@ export default function PartnerSettingsPage() {
         if (userSpecificVenueCoins && typeof userSpecificVenueCoins[partnerIdToDelete] === 'number' && userSpecificVenueCoins[partnerIdToDelete] > 0) {
           const coinsToRedistribute = userSpecificVenueCoins[partnerIdToDelete];
           const updatedVenueCoins = { ...userSpecificVenueCoins };
-          delete updatedVenueCoins[partnerIdToDelete]; // Remove coins from deleted partner
+          delete updatedVenueCoins[partnerIdToDelete]; 
 
           const remainingVenueIds = Object.keys(updatedVenueCoins).filter(id => typeof updatedVenueCoins[id] === 'number' && updatedVenueCoins[id] >= 0 && updatedVenueCoins[id] > 0);
 
           if (remainingVenueIds.length > 0) {
-            // Simple redistribution: add all to the first remaining venue with existing coins.
-            // A more complex strategy (e.g., proportional) could be implemented here.
-            const primaryRecipientId = remainingVenueIds[0]; // Could be improved (e.g. largest existing coin balance)
+            const primaryRecipientId = remainingVenueIds[0]; 
             updatedVenueCoins[primaryRecipientId] = (updatedVenueCoins[primaryRecipientId] || 0) + coinsToRedistribute;
-            console.log(`Redistributed ${coinsToRedistribute} coins from ${partnerIdToDelete} to ${primaryRecipientId} for user ${userDocSnap.id}`);
-          } else {
-            // No other venues for this user to redistribute to. Coins are "lost" or could be moved to a general pool.
-            console.log(`User ${userDocSnap.id} had ${coinsToRedistribute} coins for ${partnerIdToDelete} but no other venues to redistribute to.`);
           }
-          batch.update(doc(firestore, "users", userDocSnap.id), { venueCoins: updatedVenueCoins });
+          coinBatch.update(doc(firestore, "users", userDocSnap.id), { venueCoins: updatedVenueCoins });
         }
       });
-      await batch.commit();
-      toast({ title: "Redistribuição de Moedas", description: "Moedas de usuários foram reatribuídas a outros locais.", duration: 4000 });
+      await coinBatch.commit();
+      toast({ title: "Redistribuição de Moedas Concluída", description: "Moedas de usuários foram reatribuídas.", duration: 4000 });
       // --- End FervoCoin Redistribution Logic ---
+
+      // --- Notification Cleanup Logic ---
+      const notificationCleanupBatch = writeBatch(firestore);
+      // Re-fetch users or use the existing usersSnapshot if appropriate
+      const allUsersSnapshotForNotifications = await getDocs(query(collection(firestore, "users"))); // Consider query for users with notifications array if performance is an issue
+
+      allUsersSnapshotForNotifications.forEach(userDoc => {
+          const userData = userDoc.data();
+          if (userData.notifications && Array.isArray(userData.notifications)) {
+              const currentNotifications = userData.notifications;
+              const filteredNotifications = currentNotifications.filter(
+                  (notification: any) => notification.partnerId !== partnerIdToDelete && notification.eventId?.split('_')[0] !== partnerIdToDelete // Basic check for eventId originating from partner
+              );
+
+              if (filteredNotifications.length < currentNotifications.length) {
+                  notificationCleanupBatch.update(doc(firestore, "users", userDoc.id), { notifications: filteredNotifications });
+              }
+          }
+      });
+      await notificationCleanupBatch.commit();
+      toast({ title: "Limpeza de Notificações", description: "Notificações relacionadas ao local foram removidas dos usuários.", duration: 4000 });
+      // --- End Notification Cleanup Logic ---
 
       const partnerDocRef = doc(firestore, "users", currentUser.uid);
       await deleteFirestoreDoc(partnerDocRef);
 
       await deleteFirebaseAuthUser(currentUser);
 
-      toast({ title: "Conta Excluída", description: "Sua conta de parceiro e dados foram excluídos.", variant: "default", duration: 7000 });
+      toast({ title: "Conta Excluída", description: "Sua conta de parceiro e dados associados foram excluídos.", variant: "default", duration: 7000 });
       router.push('/login');
       setShowDeleteDialog(false);
     } catch (error: any) {
@@ -369,8 +375,8 @@ export default function PartnerSettingsPage() {
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-foreground animate-spin" />
-        <p className="ml-4 text-lg text-foreground">Carregando configurações...</p>
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <p className="ml-4 text-lg text-primary">Carregando configurações...</p>
       </div>
     );
   }
@@ -385,7 +391,7 @@ export default function PartnerSettingsPage() {
         </div>
       <Card className="max-w-2xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
         <CardHeader className="text-center p-4 sm:p-6">
-          <CardTitle className="text-2xl sm:text-3xl text-foreground">Configurações da Conta</CardTitle>
+          <CardTitle className="text-2xl sm:text-3xl text-primary">Configurações da Conta e Pagamentos</CardTitle>
           <CardDescription className="text-sm sm:text-base">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -406,7 +412,7 @@ export default function PartnerSettingsPage() {
             {/* Basic Info Section */}
             <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="contactName" className="text-foreground/90">Nome do Contato</Label>
+                  <Label htmlFor="contactName" className="text-primary/90">Nome do Contato</Label>
                    <Controller
                     name="contactName"
                     control={control}
@@ -417,7 +423,7 @@ export default function PartnerSettingsPage() {
                   {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="companyName" className="text-foreground/90">Nome da Empresa/Estabelecimento</Label>
+                  <Label htmlFor="companyName" className="text-primary/90">Nome da Empresa/Estabelecimento</Label>
                    <Controller
                     name="companyName"
                     control={control}
@@ -428,7 +434,7 @@ export default function PartnerSettingsPage() {
                    {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-foreground/90">E-mail de Login</Label>
+                  <Label htmlFor="email" className="text-primary/90">E-mail de Login</Label>
                    <Controller
                     name="email"
                     control={control}
@@ -441,7 +447,7 @@ export default function PartnerSettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                  <Label htmlFor="notificationsEnabled" className="text-foreground/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
+                  <Label htmlFor="notificationsEnabled" className="text-primary/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
                    <Controller
                       name="notificationsEnabled"
                       control={control}
@@ -462,11 +468,11 @@ export default function PartnerSettingsPage() {
 
             {/* Coupon Report Password Section */}
             <div className="space-y-4">
-                <h3 className="text-lg font-medium text-foreground">Senha para Limpar Relatório de Cupons</h3>
+                <h3 className="text-lg font-medium text-primary">Senha para Limpar Relatório de Cupons</h3>
                 <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
 
                  <div className="space-y-2">
-                    <Label htmlFor="couponReportClearPassword" className="text-foreground/90">Nova Senha</Label>
+                    <Label htmlFor="couponReportClearPassword" className="text-primary/90">Nova Senha</Label>
                     <div className="relative">
                         <Controller
                             name="couponReportClearPassword"
@@ -485,7 +491,7 @@ export default function PartnerSettingsPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-primary"
                             onClick={() => setShowPassword(!showPassword)}
                             aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
                         >
@@ -496,7 +502,7 @@ export default function PartnerSettingsPage() {
                  </div>
 
                  <div className="space-y-2">
-                    <Label htmlFor="confirmCouponReportClearPassword" className="text-foreground/90">Confirmar Nova Senha</Label>
+                    <Label htmlFor="confirmCouponReportClearPassword" className="text-primary/90">Confirmar Nova Senha</Label>
                      <div className="relative">
                         <Controller
                             name="confirmCouponReportClearPassword"
@@ -515,7 +521,7 @@ export default function PartnerSettingsPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-primary"
                             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                             aria-label={showConfirmPassword ? "Esconder confirmação de senha" : "Mostrar confirmação de senha"}
                         >
@@ -530,7 +536,7 @@ export default function PartnerSettingsPage() {
 
             {/* Subscription Plans Section */}
              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-foreground flex items-center">
+                <h3 className="text-lg font-medium text-primary flex items-center">
                     <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
                 </h3>
                 {hasActiveSubscription ? (
@@ -580,6 +586,7 @@ export default function PartnerSettingsPage() {
                         <AlertDialogDescription>
                             Esta ação é irreversível. Todos os seus dados como parceiro serão removidos.
                             As FervoCoins associadas ao seu local serão redistribuídas para os usuários.
+                            Notificações sobre seu local ou eventos serão removidas dos usuários.
                             Para continuar, por favor, insira sua senha.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
@@ -598,7 +605,7 @@ export default function PartnerSettingsPage() {
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-primary"
                                     onClick={() => setShowDeletePasswordInput(!showDeletePasswordInput)}
                                     aria-label={showDeletePasswordInput ? "Esconder senha" : "Mostrar senha"}
                                 >
@@ -635,7 +642,7 @@ export default function PartnerSettingsPage() {
       <Dialog open={showPixQrDialog} onOpenChange={setShowPixQrDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <QrDialogTitle className="text-foreground">Pagamento via PIX - R$ 2,00</QrDialogTitle>
+            <QrDialogTitle className="text-primary">Pagamento via PIX - R$ 2,00</QrDialogTitle>
             <QrDialogDescription>
               Escaneie o QR Code abaixo com o aplicativo do seu banco para realizar o pagamento.
             </QrDialogDescription>
@@ -648,8 +655,8 @@ export default function PartnerSettingsPage() {
                 level="M"
                 imageSettings={{
                     src: "/fervo_icon.png", 
-                    height: 38, // approx 15% of 256
-                    width: 38,  // approx 15% of 256
+                    height: 38, 
+                    width: 38,  
                     excavate: true,
                 }}
             />
