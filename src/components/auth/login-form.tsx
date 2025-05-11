@@ -73,6 +73,7 @@ export function LoginForm() {
     const userDoc = await getDoc(userDocRef);
 
     let userNameForGreeting: string;
+    let venueNameForGreeting: string | undefined;
     let questionnaireCompletedForRedirect: boolean = false;
     let userRoleInDbForRedirect: UserRole = role;
 
@@ -81,7 +82,8 @@ export function LoginForm() {
       userNameForGreeting = isGoogleSignIn ? (googleName || user.displayName || (role === UserRole.USER ? "Usuário" : "Parceiro")) : signupMethods.getValues("name");
       await setDoc(userDocRef, {
         uid: user.uid,
-        name: userNameForGreeting,
+        name: userNameForGreeting, // For users, this is 'name'. For partners, this can be contact name.
+        // venueName will be set in partner questionnaire
         email: user.email,
         role: role,
         createdAt: serverTimestamp(),
@@ -102,6 +104,7 @@ export function LoginForm() {
       // Existing user
       const userData = userDoc.data();
       userNameForGreeting = userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro');
+      venueNameForGreeting = userData.venueName || (role === UserRole.PARTNER ? userNameForGreeting : undefined); // Partner's venueName
       userRoleInDbForRedirect = userData.role || UserRole.USER;
       questionnaireCompletedForRedirect = userData.questionnaireCompleted || false;
 
@@ -115,24 +118,31 @@ export function LoginForm() {
         return;
       }
       
-      // Time-based greeting for existing users who completed the questionnaire
       if (questionnaireCompletedForRedirect) {
         const now = new Date();
         const hour = now.getHours();
         let greetingPrefix = "";
 
-        if (hour >= 0 && hour < 5) { // 00:00 to 04:59
+        if (hour >= 0 && hour < 5) { 
           greetingPrefix = "Boa Madrugada";
-        } else if (hour >= 5 && hour < 12) { // 05:00 to 11:59
+        } else if (hour >= 5 && hour < 12) { 
           greetingPrefix = "Bom Dia";
-        } else if (hour >= 12 && hour < 18) { // 12:00 to 17:59
+        } else if (hour >= 12 && hour < 18) { 
           greetingPrefix = "Boa Tarde";
-        } else { // 18:00 to 23:59
+        } else { 
           greetingPrefix = "Boa Noite";
         }
         
-        const greetingTitle = `${greetingPrefix}, ${userNameForGreeting}!`;
-        const greetingDescription = "Onde vamos hoje?";
+        let greetingTitle = "";
+        let greetingDescription = "";
+
+        if (userRoleInDbForRedirect === UserRole.USER) {
+            greetingTitle = `${greetingPrefix}, ${userNameForGreeting}!`;
+            greetingDescription = "Onde vamos hoje?";
+        } else if (userRoleInDbForRedirect === UserRole.PARTNER) {
+            greetingTitle = `${greetingPrefix}, ${venueNameForGreeting || userNameForGreeting}!`;
+            greetingDescription = "Qual Evento Vai Rolar Hoje?";
+        }
 
         toast({
           title: greetingTitle,
@@ -141,7 +151,6 @@ export function LoginForm() {
           duration: 3000, 
         });
       } else {
-         // If questionnaire not completed, show the standard welcome back / complete profile message
          toast({
             title: `Bem-vindo(a) de volta, ${userNameForGreeting}!`,
             description: "Por favor, complete seu perfil para continuar.",
