@@ -1,16 +1,17 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useEffect, useState, useMemo, useCallback, use } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { NextPage } from 'next';
-import { useRouter, useSearchParams, useParams } from 'next/navigation'; // Added useParams
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle as UICardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -39,6 +40,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
+import { Logo } from '@/components/shared/logo';
 
 
 interface VenueEvent {
@@ -49,11 +51,11 @@ interface VenueEvent {
   musicStyles?: MusicStyle[];
   pricingType: PricingType;
   pricingValue?: number;
-  description?: string;
   visibility: boolean;
   averageRating?: number;
   ratingCount?: number;
   shareRewardsEnabled?: boolean; // Added for FervoCoin sharing rewards
+  description?: string; // Added for event description
 }
 
 interface Venue {
@@ -192,7 +194,7 @@ const VenueCustomMapMarker = ({
             ...(isFilterActive && { animation: `${animationName} 1.5s infinite ease-in-out` })
           }}
         >
-          {IconComponent ? <IconComponent className="w-6 h-6 text-black" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
+          {IconComponent ? <IconComponent className="w-6 h-6 text-black" /> : <div className="w-6 h-6 bg-black rounded-full"/>}
         </div>
         <div
           className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px]"
@@ -245,6 +247,12 @@ const isEventHappeningNow = (startDateTime: FirebaseTimestamp, endDateTime: Fire
   const endTime = endDateTime.toDate();
   return now >= startTime && now <= endTime;
 };
+
+const isEventPast = (endDateTime: FirebaseTimestamp): boolean => {
+    const now = new Date();
+    return endDateTime.toDate() < now;
+}
+
 
 // Function to update partner's overall rating based on their event ratings
 const updatePartnerOverallRating = async (partnerId: string) => {
@@ -868,7 +876,7 @@ const MapContentAndLogic = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
-  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
@@ -891,7 +899,7 @@ const MapContentAndLogic = () => {
         )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
+          <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
@@ -934,19 +942,25 @@ const MapContentAndLogic = () => {
       </Card>
 
       <div className="flex-1 h-full relative"> 
-        {!filterSidebarOpen && (
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setFilterSidebarOpen(true)}
-            className="absolute z-20 p-2 rounded-full top-4 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
-            aria-label="Abrir filtros"
-          >
-            <Filter className="w-5 h-5" />
-          </Button>
-        )}
+         <div className="absolute top-4 left-4 z-20">
+            {!filterSidebarOpen && (
+            <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setFilterSidebarOpen(true)}
+                className="p-2 rounded-full text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg mr-2"
+                aria-label="Abrir filtros"
+            >
+                <Filter className="w-5 h-5" />
+            </Button>
+            )}
+             {/* Logo is now only shown when filter sidebar is closed for better space management */}
+            {!filterSidebarOpen && (
+                 <Logo iconClassName="text-primary h-8 w-auto" className="bg-background/80 p-1.5 rounded-md shadow-lg" />
+            )}
+        </div>
         
-        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && mapsApi && (
+        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
             <GoogleMap
                 defaultCenter={userLocation}
                 defaultZoom={15}
@@ -985,7 +999,7 @@ const MapContentAndLogic = () => {
                 })}
             </GoogleMap>
         )}
-        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
+        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE") && (
              <div className="flex items-center justify-center h-full bg-background text-destructive">
                 API Key do Google Maps não configurada ou inválida.
             </div>
@@ -999,7 +1013,7 @@ const MapContentAndLogic = () => {
                 setSelectedVenue(null); 
 
                 if (isPreviewMode && venueIdInParams) {
-                    router.replace('/map', { scroll: false });
+                    router.replace('/map', { scroll: false }); // Clear query params for preview mode
                     if (actualUserLocation) {
                         setUserLocation(actualUserLocation);
                     } else {
@@ -1012,7 +1026,7 @@ const MapContentAndLogic = () => {
                         setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
                     }
                     if (venueIdInParams) {
-                        router.replace('/map', { scroll: false });
+                        router.replace('/map', { scroll: false }); // Clear query params for normal mode
                     }
                 }
             }
@@ -1040,7 +1054,7 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                 <div className="flex items-center">
-                   {currentUser && currentAppUser && currentAppUser.role === UserRole.USER && (
+                   {currentUser && currentAppUser && currentAppUser.role === UserRole.USER && !isPreviewMode && (
                      <Button
                         variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "destructive" : "outline"}
                         size="icon"
@@ -1149,7 +1163,7 @@ const MapContentAndLogic = () => {
                       <div className="space-y-3">
                         {selectedVenue.events.map(event => {
                           const isHappening = isEventHappeningNow(event.startDateTime, event.endDateTime);
-                          const eventHasEnded = event.endDateTime.toDate() < new Date();
+                          const eventHasEnded = isEventPast(event.endDateTime);
                           const userCheckedInData = userCheckIns[event.id];
                           const userHasCheckedIn = !!userCheckedInData;
                           const userHasRated = userHasCheckedIn && !!userCheckedInData.hasRated;
@@ -1159,7 +1173,7 @@ const MapContentAndLogic = () => {
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
                                   <div className="flex-1">
-                                    <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
+                                    <CardTitle className="text-md text-secondary mb-1">{event.eventName}</CardTitle>
                                     {isHappening && (
                                       <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                                         <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
@@ -1173,7 +1187,7 @@ const MapContentAndLogic = () => {
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
                                           onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime)}
                                           title={isPreviewMode ? "Compartilhamento desabilitado no modo de preview" : (eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!")}
-                                          disabled={!currentUser || eventHasEnded || isPreviewMode}
+                                          disabled={!currentUser || eventHasEnded || isPreviewMode || (currentAppUser?.role === UserRole.PARTNER && isPreviewMode)}
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
@@ -1330,7 +1344,7 @@ const MapContentAndLogic = () => {
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
 
-  if (!apiKey || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { // Check against the actual placeholder key
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") { 
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
@@ -1341,3 +1355,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
