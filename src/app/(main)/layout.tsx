@@ -59,6 +59,7 @@ interface AppUser {
   notifications?: Notification[];
   favoriteVenueIds?: string[];
   favoriteVenueNotificationSettings?: FavoriteVenueNotificationSettings; // Added for favorite venue notifications
+  venueName?: string; // For partner role, to show in greeting
 }
 
 // Keep track of active listeners to avoid duplicates and for cleanup
@@ -93,7 +94,8 @@ const useAuthAndUserSubscription = () => {
               venueCoins: userData.venueCoins || {}, 
               notifications: userData.notifications || [],
               favoriteVenueIds: userData.favoriteVenueIds || [],
-              favoriteVenueNotificationSettings: userData.favoriteVenueNotificationSettings || {}, // Initialize
+              favoriteVenueNotificationSettings: userData.favoriteVenueNotificationSettings || {},
+              venueName: userData.venueName, // For partner role
             });
           } else {
             // If user doc doesn't exist, create a default AppUser structure
@@ -108,6 +110,7 @@ const useAuthAndUserSubscription = () => {
               notifications: [],
               favoriteVenueIds: [],
               favoriteVenueNotificationSettings: {}, 
+              venueName: undefined,
             });
           }
           setLoading(false);
@@ -175,57 +178,76 @@ export default function MainAppLayout({
 
   useEffect(() => {
     if (loading) {
-      // Do not attempt to redirect or make decisions while initial data is loading.
       return;
     }
   
     const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEventPage = pathname.startsWith('/shared-event');
-    // Define general user-accessible pages (e.g., profile, settings) that don't strictly require questionnaire completion to view
-    // but do require login.
     const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons');
   
     if (!appUser) {
-      // No user logged in.
-      // Redirect to login if not on an auth page, shared event page, or a generally accessible user page (which might handle their own public view or redirect).
       if (!isAuthPage && !isSharedEventPage && !isGeneralUserAccessiblePage) {
         router.push('/login');
       }
     } else {
-      // User is logged in (appUser exists).
-      if (!appUser.questionnaireCompleted) {
-        // Questionnaire not completed.
-        if (appUser.role === UserRole.USER && pathname !== '/questionnaire' && !isSharedEventPage && !isGeneralUserAccessiblePage) {
-          router.push('/questionnaire');
-        } else if (appUser.role === UserRole.PARTNER && pathname !== '/partner-questionnaire' && !isSharedEventPage && !isGeneralUserAccessiblePage) {
-          router.push('/partner-questionnaire');
+      if (isAuthPage) { // User is logged in AND on an auth page
+        if (appUser.questionnaireCompleted) {
+          const targetPath = appUser.role === UserRole.USER ? '/map' : '/partner/dashboard';
+          router.push(targetPath);
+        } else {
+          // Questionnaire not completed, but on an auth page (login/questionnaire).
+          // Allow them to stay, or redirect to the correct questionnaire if they are on /login.
+          if (pathname === '/login') {
+            const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
+            router.push(questionnairePath);
+          }
         }
-        // Allow access to questionnaire page, shared event, or general user pages even if questionnaire is incomplete.
-      } else {
-        // Questionnaire is completed.
-        if (appUser.role === UserRole.USER && (pathname === '/login' || pathname === '/questionnaire')) {
-          // If a completed user is on login/questionnaire, redirect them to the map.
-          router.push('/map');
-        } else if (appUser.role === UserRole.PARTNER && (pathname === '/login' || pathname === '/partner-questionnaire')) {
-          // If a completed partner is on login/partner-questionnaire, redirect them to their dashboard.
-          router.push('/partner/dashboard');
+      } else { // User is logged in AND NOT on an auth page
+        if (!appUser.questionnaireCompleted && !isSharedEventPage && !isGeneralUserAccessiblePage) {
+          const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
+          router.push(questionnairePath);
         }
-        // Otherwise, they are on an appropriate page (e.g., /map, /partner/dashboard, or a user settings page).
       }
     }
   }, [appUser, loading, router, pathname]);
 
-  // Effect to detect login and show QR scanner hint
+  // Effect to detect login and show appropriate toast
   useEffect(() => {
-    if (!loading && prevAppUserRef.current === null && appUser !== null && appUser.role === UserRole.USER) {
-      setShowLoginQrHint(true);
-      const timer = setTimeout(() => {
-        setShowLoginQrHint(false);
-      }, 3000); // Show hint for 3 seconds
-      return () => clearTimeout(timer);
+    if (!loading && prevAppUserRef.current === null && appUser !== null && appUser.questionnaireCompleted) {
+      const now = new Date();
+      const hour = now.getHours();
+      let greetingPrefix = "";
+
+      if (hour >= 0 && hour < 5) { 
+        greetingPrefix = "Boa Madrugada";
+      } else if (hour >= 5 && hour < 12) { 
+        greetingPrefix = "Bom Dia";
+      } else if (hour >= 12 && hour < 18) { 
+        greetingPrefix = "Boa Tarde";
+      } else { 
+        greetingPrefix = "Boa Noite";
+      }
+      
+      let greetingTitle = "";
+      let greetingDescription = "";
+
+      if (appUser.role === UserRole.USER) {
+          greetingTitle = `${greetingPrefix}, ${appUser.name}!`;
+          greetingDescription = "Onde vamos hoje?";
+      } else if (appUser.role === UserRole.PARTNER) {
+          greetingTitle = `${greetingPrefix}, ${appUser.venueName || appUser.name}!`;
+          greetingDescription = "Qual Evento Vai Rolar Hoje?";
+      }
+      
+      toast({
+        title: greetingTitle,
+        description: greetingDescription,
+        variant: "default",
+        duration: 3000, 
+      });
     }
     prevAppUserRef.current = appUser;
-  }, [appUser, loading]);
+  }, [appUser, loading, toast]);
 
   // Effect for new partner notifications
   useEffect(() => {
@@ -274,7 +296,7 @@ export default function MainAppLayout({
       if (potentialNewNotifications.length > 0 && appUser.uid) {
         const userDocRef = doc(firestore, "users", appUser.uid);
         const currentUserDocSnap = await getDoc(userDocRef); // Fresh read
-        const freshExistingNotificationsFromDB = currentUserDocSnap.data()?.notifications || [];
+        const freshExistingNotificationsFromDB: Notification[] = currentUserDocSnap.data()?.notifications || [];
         
         const notificationsActuallyToAdd = potentialNewNotifications.filter(newNotif => 
             !freshExistingNotificationsFromDB.some((exNotif: Notification) => exNotif.id === newNotif.id)
@@ -292,7 +314,7 @@ export default function MainAppLayout({
     });
 
     return () => unsubscribe();
-  }, [appUser, loading]); // Key dependencies: appUser for UID, preferences, lastNotificationCheckTimestamp
+  }, [appUser, loading]); 
 
   // Effect for new/updated event notifications from favorited venues
   useEffect(() => {
@@ -363,7 +385,7 @@ export default function MainAppLayout({
 
           if (notificationsToAddThisCycle.length > 0) {
             const currentUserDocSnap = await getDoc(userDocRefToUpdate); // Fresh read
-            const freshExistingUserNotifications = currentUserDocSnap.data()?.notifications || [];
+            const freshExistingUserNotifications: Notification[] = currentUserDocSnap.data()?.notifications || [];
 
             const notificationsActuallyToAdd = notificationsToAddThisCycle.filter(newNotif => 
                 !freshExistingUserNotifications.some((exNotif: Notification) => exNotif.id === newNotif.id)
@@ -445,31 +467,41 @@ export default function MainAppLayout({
   };
 
  const dismissNotification = async (notificationId: string) => {
-    if (!appUser || !appUser.uid || !setAppUser) return;
+    if (!appUser || !appUser.uid) {
+      toast({ title: "Erro", description: "Usuário não autenticado para remover notificação.", variant: "destructive"});
+      return;
+    }
     
-    // Optimistically update local state for faster UI response
-    if (appUser.notifications) {
-        const updatedLocalNotifications = appUser.notifications.filter(n => n.id !== notificationId);
-        setAppUser(prev => prev ? {...prev, notifications: updatedLocalNotifications} : null);
+    const originalNotifications = appUser.notifications ? [...appUser.notifications] : [];
+
+    // Optimistic UI Update
+    if (setAppUser && appUser.notifications) {
+      const updatedLocalNotifications = appUser.notifications.filter(n => n.id !== notificationId);
+      setAppUser(prev => prev ? {...prev, notifications: updatedLocalNotifications} : null);
     }
 
     try {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        // Fetch the current notifications array from Firestore
-        const userSnap = await getDoc(userDocRef);
-        const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
         
-        // Filter out the notification to be dismissed
+        const userSnap = await getDoc(userDocRef);
+        if (!userSnap.exists()) {
+            console.error("User document not found for dismissing notification.");
+            if (setAppUser) setAppUser(prev => prev ? {...prev, notifications: originalNotifications} : null); 
+            toast({ title: "Erro ao Remover", description: "Usuário não encontrado.", variant: "destructive" });
+            return;
+        }
+
+        const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
         const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
         
-        // Update Firestore with the new array
         await updateDoc(userDocRef, { notifications: updatedDbNotifications });
-        toast({ title: "Notificação Removida", variant:"default" });
+        
+        toast({ title: "Notificação Removida", description: "A notificação foi removida permanentemente.", variant: "default" });
+
     } catch (error) {
         console.error("Error dismissing notification from Firestore:", error);
-        // Optionally, revert optimistic update or inform user of server-side failure
-        // For now, onSnapshot listener will eventually correct the local state if Firestore update failed.
-        toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação do servidor.", variant: "destructive" });
+        if (setAppUser) setAppUser(prev => prev ? {...prev, notifications: originalNotifications} : null); 
+        toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação do sistema.", variant: "destructive" });
     }
   };
 
@@ -559,7 +591,7 @@ export default function MainAppLayout({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className={cn(activeColorClass, hoverBgClass, showLoginQrHint && 'animate-pulse ring-2 ring-primary ring-offset-2 ring-offset-background')}
+                    className={cn(activeColorClass, hoverBgClass)}
                     onClick={() => setIsQrScannerOpen(true)}
                     title="Check-in com QR Code"
                     disabled={isFetchingCoinDetails} 
@@ -746,3 +778,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
