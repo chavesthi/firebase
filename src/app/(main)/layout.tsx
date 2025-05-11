@@ -15,7 +15,7 @@ import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, Ticket
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
-import { useEffect, useState, useMemo, useCallback } from 'react'; 
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'; 
 import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -157,6 +157,8 @@ export default function MainAppLayout({
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
+  const [showLoginQrHint, setShowLoginQrHint] = useState(false);
+  const prevAppUserRef = useRef<AppUser | null>(null);
 
 
   const totalFervoCoins = useMemo(() => {
@@ -187,6 +189,29 @@ export default function MainAppLayout({
       }
     }
   }, [appUser, loading, router, pathname]);
+
+  // Effect to detect login and show QR scanner hint
+  useEffect(() => {
+    if (!loading && prevAppUserRef.current === null && appUser !== null && appUser.role === UserRole.USER) {
+      setShowLoginQrHint(true);
+      const timer = setTimeout(() => {
+        setShowLoginQrHint(false);
+      }, 3000); // Show hint for 3 seconds
+      return () => clearTimeout(timer);
+    }
+    prevAppUserRef.current = appUser;
+  }, [appUser, loading]);
+
+  // Effect to show toast when QR hint is active
+  useEffect(() => {
+    if (showLoginQrHint && appUser?.role === UserRole.USER) {
+      toast({
+        title: "Dica de Check-in!",
+        description: "Esse é O Local Onde você Escaneia o Qrcode No Evento Para Fazer chek-in e poder Avaliar.",
+        duration: 3000, 
+      });
+    }
+  }, [showLoginQrHint, toast, appUser?.role]);
 
 
   // Effect for new partner notifications
@@ -467,7 +492,7 @@ export default function MainAppLayout({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className={cn(activeColorClass, hoverBgClass)}
+                    className={cn(activeColorClass, hoverBgClass, showLoginQrHint && 'animate-pulse')}
                     onClick={() => setIsQrScannerOpen(true)}
                     title="Check-in com QR Code"
                     disabled={isFetchingCoinDetails} 
