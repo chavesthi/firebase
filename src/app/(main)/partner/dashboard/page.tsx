@@ -420,7 +420,7 @@ export default function PartnerDashboardPage() {
             <Button
               variant="outline"
               className="w-full border-secondary text-secondary hover:bg-secondary/10"
-              onClick={() => router.push(`/map?venueId=${currentUser.uid}`)}
+              onClick={() => router.push(`/map?venueId=${currentUser.uid}&isPreview=true`)}
             >
               <ExternalLink className="w-4 h-4 mr-2"/> Ver Detalhes Completos no Mapa
             </Button>
@@ -620,7 +620,7 @@ export default function PartnerDashboardPage() {
                 </Accordion>
               )}
             </CardContent>
-            <CardFooter className="p-4 sm:p-6 pt-0 sm:pt-0">
+            <CardFooter className="p-4 sm:p-6 pt-0">
               <Button
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
                 onClick={handleGenerateFeedbackAnalysis}

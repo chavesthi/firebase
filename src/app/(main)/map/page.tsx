@@ -297,7 +297,8 @@ const MapContentAndLogic = () => {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams(); // For reading query params
+  const searchParams = useSearchParams(); 
+  const isPreviewMode = searchParams.get('isPreview') === 'true';
 
 
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
@@ -1026,13 +1027,16 @@ const MapContentAndLogic = () => {
         <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { 
             if (!isOpen) {
                 setSelectedVenue(null);
-                 if (actualUserLocation) {
+                 if (actualUserLocation && !isPreviewMode) { // Only reset to user location if not in preview mode
                     setUserLocation(actualUserLocation); 
-                } else {
-                    // Fallback to a default if actualUserLocation is somehow null
+                } else if (!isPreviewMode) {
+                    // Fallback to a default if actualUserLocation is somehow null and not in preview
                     setUserLocation({ lat: -23.55052, lng: -46.633308 });
                 }
-                router.replace('/map', { scroll: false }); 
+                // Clear venueId from URL if it's not a preview mode initiated by query param
+                if(!searchParams.get('venueId') || !isPreviewMode) {
+                    router.replace('/map', { scroll: false }); 
+                }
             }
         }}>
           <SheetContent
@@ -1070,7 +1074,8 @@ const MapContentAndLogic = () => {
                              "animate-pulse" 
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
-                        title={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
+                        title={isPreviewMode ? "Favoritar desabilitado no modo de preview" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
+                        disabled={isPreviewMode}
                       >
                         <Heart 
                           className="w-4 h-4 sm:w-5 sm:w-5 fill-current" 
@@ -1189,8 +1194,8 @@ const MapContentAndLogic = () => {
                                           size="icon"
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
                                           onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime)}
-                                          title={eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!"}
-                                          disabled={!currentUser || eventHasEnded} 
+                                          title={isPreviewMode ? "Compartilhamento desabilitado no modo de preview" : (eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!")}
+                                          disabled={!currentUser || eventHasEnded || isPreviewMode} 
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
@@ -1357,4 +1362,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
