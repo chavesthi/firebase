@@ -71,7 +71,7 @@ export default function LoginPage() {
         Then, place your desired login music file (e.g., 'login-music.mp3') into 'public/audio/'.
         If you use a different filename or path, update the src attribute below accordingly.
       */}
-      <audio ref={audioRef} src="/audio/login-music.mp3" preload="auto" />
+      <audio ref={audioRef} src="public\audio\Name The Time And Place - Telecasted.mp3" preload="auto" />
 
       {/* Music Controls */}
       <div className="absolute bottom-4 right-4 sm:bottom-8 sm:right-8 flex gap-2 z-10">

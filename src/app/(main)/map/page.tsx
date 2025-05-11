@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -92,6 +91,7 @@ interface MapPageAppUser {
     uid: string;
     name: string;
     favoriteVenueIds?: string[];
+    role: UserRole; // Added role
 }
 
 
@@ -285,7 +285,7 @@ const updatePartnerOverallRating = async (partnerId: string) => {
 
 const MapContentAndLogic = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null); // Store app user data including favorites
+  const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null); // Store app user data including favorites and role
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [actualUserLocation, setActualUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
@@ -317,18 +317,19 @@ const MapContentAndLogic = () => {
       setCurrentUser(user);
       if (user) {
         const userDocRef = doc(firestore, "users", user.uid);
-        // Use onSnapshot for real-time updates to favoriteVenueIds
+        // Use onSnapshot for real-time updates to favoriteVenueIds and role
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data();
               setCurrentAppUser({
                 uid: user.uid,
-                name: userData.name || "Usuário Fervo", // Fallback name
+                name: userData.name || (userData.role === UserRole.PARTNER ? "Parceiro Fervo" : "Usuário Fervo"),
                 favoriteVenueIds: userData.favoriteVenueIds || [],
+                role: userData.role as UserRole || UserRole.USER, // Assign role
               });
             } else {
-              // Handle case where user document might not exist yet (e.g., new signup)
-              setCurrentAppUser({ uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [] });
+              // Handle case where user document might not exist yet
+              setCurrentAppUser({ uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER });
             }
         });
         return () => unsubscribeUser(); // Cleanup user snapshot listener
@@ -352,13 +353,8 @@ const MapContentAndLogic = () => {
         setUserCheckIns(checkInsData);
       });
 
-      // The problematic collectionGroup query for user ratings is removed from here.
-      // User ratings for specific events will be fetched in another useEffect
-      // when selectedVenue.events are available.
-
       return () => {
         unsubscribeCheckIns();
-        // No global userRatings listener to unsubscribe from here anymore
       };
     }
   }, [currentUser]);
@@ -366,9 +362,6 @@ const MapContentAndLogic = () => {
   // New useEffect to fetch current user's ratings for the selected venue's events
   useEffect(() => {
     if (!currentUser || !selectedVenue || !selectedVenue.events || selectedVenue.events.length === 0) {
-      // Optionally clear or manage userRatings when context changes
-      // For instance, if you want ratings to only be for the currently selected venue's events:
-      // setUserRatings({});
       return;
     }
 
@@ -376,8 +369,6 @@ const MapContentAndLogic = () => {
       const newRatingsData: Record<string, UserRatingData> = {};
       for (const event of selectedVenue.events!) {
         try {
-          // Assuming eventRatings documents are named `${eventId}_${userId}`
-          // This fetches a specific document, not a query that needs indexing.
           const ratingDocRef = doc(firestore, 'eventRatings', `${event.id}_${currentUser.uid}`);
           const ratingDocSnap = await getDoc(ratingDocRef);
           if (ratingDocSnap.exists()) {
@@ -387,16 +378,13 @@ const MapContentAndLogic = () => {
               comment: data.comment,
               createdAt: data.createdAt as FirebaseTimestamp,
               userName: data.userName,
-              eventName: data.eventName, // Ensure eventName is on the rating document
+              eventName: data.eventName, 
             };
           }
         } catch (error) {
           console.warn(`Could not fetch user rating for event ${event.id}:`, error);
         }
       }
-      // Update userRatings state. Consider if merging or replacing is better.
-      // If ratings are only for the current venue, replace: setUserRatings(newRatingsData);
-      // If you want to accumulate ratings from different venues (less likely for this UI):
       setUserRatings(prevRatings => ({ ...prevRatings, ...newRatingsData }));
     };
 
@@ -417,14 +405,12 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
-          // Fallback to a default location (e.g., São Paulo)
           const defaultLoc = { lat: -23.55052, lng: -46.633308 };
           setUserLocation(defaultLoc);
           setActualUserLocation(defaultLoc);
         }
       );
     } else {
-      // Geolocation not supported
       console.error("Geolocation is not supported by this browser.");
       const defaultLoc = { lat: -23.55052, lng: -46.633308 };
       setUserLocation(defaultLoc);
@@ -438,21 +424,18 @@ const MapContentAndLogic = () => {
     const qPartners = query(
       usersCollectionRef,
       where('role', '==', UserRole.PARTNER),
-      where('questionnaireCompleted', '==', true) // Only fetch partners who completed setup
+      where('questionnaireCompleted', '==', true) 
     );
 
-    // Use onSnapshot for real-time updates of venues
     const unsubscribeVenues = onSnapshot(qPartners, async (partnersSnapshot) => {
       const venuePromises = partnersSnapshot.docs.map(async (partnerDoc) => {
         const partnerData = partnerDoc.data();
-
-        // Determine if venue has an active event
         let hasActiveEvent = false;
         let activeEventName: string | null = null;
 
         const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
         const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
-        const eventsSnapshot = await getDocs(eventsQuery); // Fetch once for active event check
+        const eventsSnapshot = await getDocs(eventsQuery); 
 
         if (!eventsSnapshot.empty) {
           for (const eventDoc of eventsSnapshot.docs) {
@@ -461,7 +444,7 @@ const MapContentAndLogic = () => {
                 isEventHappeningNow(eventData.startDateTime as FirebaseTimestamp, eventData.endDateTime as FirebaseTimestamp)) {
               hasActiveEvent = true;
               activeEventName = eventData.eventName as string;
-              break; // Found an active event, no need to check further
+              break; 
             }
           }
         }
@@ -476,15 +459,14 @@ const MapContentAndLogic = () => {
           instagramUrl: partnerData.instagramUrl,
           facebookUrl: partnerData.facebookUrl,
           whatsappPhone: partnerData.whatsappPhone,
-          averageVenueRating: partnerData.averageVenueRating, // Get overall venue rating
-          venueRatingCount: partnerData.venueRatingCount, // Get total ratings for venue
+          averageVenueRating: partnerData.averageVenueRating, 
+          venueRatingCount: partnerData.venueRatingCount, 
           hasActiveEvent,
           activeEventName,
         };
       });
 
       const fetchedVenues = (await Promise.all(venuePromises))
-        // Filter out venues without valid location or type (essential for map display)
         .filter(venue => venue.location && typeof venue.location.lat === 'number' && typeof venue.location.lng === 'number' && venue.type && venueTypeIcons[venue.type]);
 
       setVenues(fetchedVenues);
@@ -495,7 +477,7 @@ const MapContentAndLogic = () => {
       setIsLoadingVenues(false);
     });
 
-    return () => unsubscribeVenues(); // Cleanup listener on component unmount
+    return () => unsubscribeVenues(); 
   }, [toast]);
 
    // Effect to handle selecting venue from query parameter
@@ -507,10 +489,9 @@ const MapContentAndLogic = () => {
         if (venueToSelect) {
           setSelectedVenue(venueToSelect);
           if (venueToSelect.location) {
-            setUserLocation(venueToSelect.location); // Center map on venue when selected via query
+            setUserLocation(venueToSelect.location); 
           }
         } else {
-          // Venue ID in query not found, clear it to avoid confusion
           if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
           router.replace('/map', { scroll: false });
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
@@ -522,20 +503,17 @@ const MapContentAndLogic = () => {
 
   // Fetch events for a selected venue
   const fetchVenueEvents = async (venueId: string) => {
-    // Avoid re-fetching if events are already loaded for this venue or if it's not the selected one
     if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return;
     setIsLoadingEvents(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
-      // Query for visible events, ordered by start time
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
 
-      // Use onSnapshot for real-time event updates
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-        } as VenueEvent)); // Cast to VenueEvent type
+        } as VenueEvent)); 
 
         setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
         setIsLoadingEvents(false);
@@ -544,7 +522,7 @@ const MapContentAndLogic = () => {
         toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
         setIsLoadingEvents(false);
       });
-      return unsubscribe; // Return the unsubscriber function for cleanup
+      return unsubscribe; 
     } catch (error) {
       console.error("Error fetching venue events:", error);
       toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
@@ -552,23 +530,20 @@ const MapContentAndLogic = () => {
     }
   };
 
-  // Effect to fetch events when a venue is selected or if events are not yet loaded for it
   useEffect(() => {
     let unsubscribeEvents: (() => void) | undefined;
-    if (selectedVenue && !selectedVenue.events) { // Only fetch if events are not already loaded
+    if (selectedVenue && !selectedVenue.events) { 
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
-      // Reset rating state when a new venue with events is selected, or when venue data updates
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
     }
-    // Cleanup function for the events listener
     return () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVenue]); // Re-run when selectedVenue changes
+  }, [selectedVenue]); 
 
 
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
@@ -585,55 +560,47 @@ const MapContentAndLogic = () => {
 
   const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
 
-  // Memoized list of venues that match active filters (for blinking effect)
   const filteredVenuesForBlinking = useMemo(() => {
-    if (!isAnyFilterActive) return []; // No filters active, so no venues should blink
+    if (!isAnyFilterActive) return []; 
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
       const musicStyleMatch = activeMusicStyleFilters.length === 0 ||
                              (venue.musicStyles && venue.musicStyles.some(style => activeMusicStyleFilters.includes(style)));
 
-      // Logic for combining filters:
-      // If both types of filters are active, venue must match both (AND logic)
       if (activeVenueTypeFilters.length > 0 && activeMusicStyleFilters.length > 0) {
         return venueTypeMatch && musicStyleMatch;
       }
-      // If only venue type filters are active, match venue type
       if (activeVenueTypeFilters.length > 0) {
         return venueTypeMatch;
       }
-      // If only music style filters are active, match music style
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false; // Should not be reached if isAnyFilterActive is true
+      return false; 
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
-  // All venues are always displayed on the map; blinking highlights filtered ones.
   const displayedVenues = useMemo(() => {
     return venues;
   }, [venues]);
 
 
-  // Helper component to display venue type icons in the filter sidebar
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    // Dynamically assign color class based on venue type for filter buttons
-    let colorClass = "text-foreground"; // Default color
+    let colorClass = "text-foreground"; 
 
     if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
     else if (type === VenueType.BAR) colorClass = "text-accent";
-    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; // Example: yellow for stand-up
+    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; 
     else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
-    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; // Example: pink for adult
-    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; // Example: orange for LGBT
+    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; 
+    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; 
 
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
 
   const handleRateEvent = async (eventId: string, partnerId: string) => {
-    if (!currentUser || !currentAppUser?.name) { // Check currentAppUser.name
+    if (!currentUser || !currentAppUser?.name) { 
         toast({ title: "Não Autenticado", description: "Você precisa estar logado para avaliar.", variant: "destructive" });
         return;
     }
@@ -642,16 +609,14 @@ const MapContentAndLogic = () => {
         return;
     }
     setIsSubmittingRating(true);
-    setCurrentlyRatingEventId(eventId); // Keep track of which event is being rated
+    setCurrentlyRatingEventId(eventId); 
 
     const eventNameForRating = selectedVenue?.events?.find(e => e.id === eventId)?.eventName || "Evento Desconhecido";
 
     try {
         const eventDocRef = doc(firestore, `users/${partnerId}/events/${eventId}`);
-        // Unique ID for the rating document: eventId_userId
         const ratingDocRef = doc(firestore, 'eventRatings', `${eventId}_${currentUser.uid}`);
 
-        // Firestore transaction to update event's average rating and rating count atomically
         await runTransaction(firestore, async (transaction) => {
             const eventSnap = await transaction.get(eventDocRef);
             if (!eventSnap.exists()) throw new Error("Evento não encontrado para atualizar avaliação.");
@@ -660,13 +625,11 @@ const MapContentAndLogic = () => {
             const oldRatingCount = eventData.ratingCount || 0;
             const oldAverageRating = eventData.averageRating || 0;
 
-            // Check if this user has already rated this event
             const existingRatingSnap = await transaction.get(ratingDocRef);
             let newRatingCount = oldRatingCount;
             let newAverageRating = oldAverageRating;
 
             if (existingRatingSnap.exists()) {
-                // User is updating their previous rating
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
                  if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) {
@@ -674,7 +637,6 @@ const MapContentAndLogic = () => {
                 }
 
             } else {
-                // New rating from this user
                 newRatingCount = oldRatingCount + 1;
                 newAverageRating = newRatingCount > 0 ? ((oldAverageRating * oldRatingCount) + currentRating) / newRatingCount : currentRating;
             }
@@ -692,7 +654,7 @@ const MapContentAndLogic = () => {
                 rating: currentRating,
                 comment: currentComment || null,
                 createdAt: serverTimestamp(),
-                eventName: eventNameForRating, // Store eventName on rating document
+                eventName: eventNameForRating, 
             }, { merge: true });
 
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
@@ -731,7 +693,6 @@ const MapContentAndLogic = () => {
         return;
     }
 
-    // --- Fetch the specific event to check its shareRewardsEnabled status ---
     let eventDataForShare: VenueEvent | undefined;
     if (selectedVenue && selectedVenue.id === partnerId) {
         eventDataForShare = selectedVenue.events?.find(e => e.id === eventId);
@@ -756,7 +717,6 @@ const MapContentAndLogic = () => {
         toast({ title: "Evento não Encontrado", description: "Não foi possível encontrar os detalhes deste evento.", variant: "destructive" });
         return;
     }
-    // --- End event fetch ---
 
     const shareUrl = `${window.location.origin}/shared-event/${partnerId}/${eventId}`;
     let sharedSuccessfully = false;
@@ -773,7 +733,6 @@ const MapContentAndLogic = () => {
       } catch (shareError: any) {
         if (shareError.name === 'AbortError') {
           console.log('Share operation cancelled by user.');
-          // No toast for user cancelling, as it's intentional
           return;
         } else {
           console.warn('navigator.share failed, falling back to clipboard:', shareError);
@@ -798,7 +757,7 @@ const MapContentAndLogic = () => {
       }
     }
 
-    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true)) { // Default to true if field is missing
+    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true)) { 
       const userDocRef = doc(firestore, "users", currentUser.uid);
       const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
@@ -856,7 +815,6 @@ const MapContentAndLogic = () => {
       }
     } else if (sharedSuccessfully && currentUser && !(eventDataForShare.shareRewardsEnabled ?? true)) {
         console.log(`Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
-        // No specific toast message if rewards are disabled, as per user request.
     }
   };
 
@@ -865,10 +823,16 @@ const MapContentAndLogic = () => {
         toast({ title: "Modo Preview", description: "Ação de favoritar desabilitada no modo de preview.", variant: "default" });
         return;
     }
-    if (!currentUser?.uid) {
+    if (!currentUser?.uid || !currentAppUser) {
       toast({ title: "Login Necessário", description: "Faça login para favoritar locais.", variant: "destructive" });
       return;
     }
+
+    if (currentAppUser.role === UserRole.PARTNER) {
+        toast({ title: "Ação não permitida", description: "Parceiros não podem favoritar locais.", variant: "default" });
+        return;
+    }
+
 
     const userDocRef = doc(firestore, "users", currentUser.uid);
     try {
@@ -904,7 +868,7 @@ const MapContentAndLogic = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
-  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
@@ -969,7 +933,7 @@ const MapContentAndLogic = () => {
         </CardContent>
       </Card>
 
-      <div className="flex-1 h-full relative"> {/* Added relative positioning for Logo */}
+      <div className="flex-1 h-full relative"> 
         {!filterSidebarOpen && (
           <Button
             variant="outline"
@@ -981,12 +945,8 @@ const MapContentAndLogic = () => {
             <Filter className="w-5 h-5" />
           </Button>
         )}
-        {/* Logo positioned on top of the map */}
-        {/* <div className="absolute top-4 left-16 z-20"> // Adjusted left to not overlap filter button
-          <Logo iconClassName="text-primary" />
-        </div> */}
-
-        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
+        
+        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && mapsApi && (
             <GoogleMap
                 defaultCenter={userLocation}
                 defaultZoom={15}
@@ -1025,7 +985,7 @@ const MapContentAndLogic = () => {
                 })}
             </GoogleMap>
         )}
-        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE") && (
+        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
              <div className="flex items-center justify-center h-full bg-background text-destructive">
                 API Key do Google Maps não configurada ou inválida.
             </div>
@@ -1034,26 +994,23 @@ const MapContentAndLogic = () => {
 
       {selectedVenue && (
         <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => {
-            if (!isOpen) { // Sheet is closing
+            if (!isOpen) { 
                 const venueIdInParams = searchParams.get('venueId');
-                setSelectedVenue(null); // Always clear selection
+                setSelectedVenue(null); 
 
                 if (isPreviewMode && venueIdInParams) {
-                    // If it was a preview and a venueId was in params, clear URL and reset map
                     router.replace('/map', { scroll: false });
                     if (actualUserLocation) {
                         setUserLocation(actualUserLocation);
                     } else {
-                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); // Fallback
+                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
                     }
                 } else if (!isPreviewMode) {
-                    // If not a preview, just reset map center to user's location (or default)
                     if (actualUserLocation) {
                         setUserLocation(actualUserLocation);
                     } else {
-                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); // Fallback
+                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
                     }
-                    // And if there was a non-preview venueId in URL, clear it
                     if (venueIdInParams) {
                         router.replace('/map', { scroll: false });
                     }
@@ -1072,9 +1029,9 @@ const MapContentAndLogic = () => {
                     {selectedVenue.name}
                     </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
-                        <div className="flex items-center gap-2 mt-1"> {/* Increased gap for better spacing */}
+                        <div className="flex items-center gap-2 mt-1"> 
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="#FFD700" readOnly />
-                            <span className="text-sm text-foreground font-semibold"> {/* Display numerical rating */}
+                            <span className="text-sm text-foreground font-semibold"> 
                                 {selectedVenue.averageVenueRating.toFixed(1)}
                             </span>
                         </div>
@@ -1083,7 +1040,7 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                 <div className="flex items-center">
-                   {currentUser && (
+                   {currentUser && currentAppUser && currentAppUser.role === UserRole.USER && (
                      <Button
                         variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "destructive" : "outline"}
                         size="icon"
@@ -1373,7 +1330,7 @@ const MapContentAndLogic = () => {
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
 
-  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") {
+  if (!apiKey || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { // Check against the actual placeholder key
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
@@ -1384,4 +1341,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
