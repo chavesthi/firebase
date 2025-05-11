@@ -196,11 +196,16 @@ export default function MainAppLayout({
       setShowLoginQrHint(true);
       const timer = setTimeout(() => {
         setShowLoginQrHint(false);
-      }, 3000); // Show hint for 3 seconds
+        toast({
+            title: "Dica de Check-in!",
+            description: "Use este ícone para escanear o QR Code nos eventos e fazer check-in. Assim você poderá avaliá-los depois!",
+            duration: 7000, // Show toast longer
+        });
+      }, 3000); // Show hint for 3 seconds, then toast
       return () => clearTimeout(timer);
     }
     prevAppUserRef.current = appUser;
-  }, [appUser, loading]);
+  }, [appUser, loading, toast]);
 
   // Effect for new partner notifications
   useEffect(() => {
@@ -215,8 +220,7 @@ export default function MainAppLayout({
     );
 
     const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-      const newNotifications: Notification[] = [];
-      const existingNotifications = appUser.notifications || [];
+      const potentialNewNotifications: Notification[] = [];
       const userLastCheck = appUser.lastNotificationCheckTimestamp?.toDate() || new Date(0);
 
       for (const partnerDoc of querySnapshot.docs) {
@@ -225,16 +229,15 @@ export default function MainAppLayout({
         const partnerProfileCompletedAt = (partnerData.questionnaireCompletedAt as FirebaseTimestamp)?.toDate();
 
         if (!partnerProfileCompletedAt) continue;
+        
+        const isPartnerConsideredNew = partnerProfileCompletedAt > userLastCheck;
 
-        const isTrulyNewPartner = partnerProfileCompletedAt > userLastCheck;
-        const alreadyNotifiedForPartner = existingNotifications.some(n => n.partnerId === partnerId && !n.eventId); 
-
-        if (isTrulyNewPartner && !alreadyNotifiedForPartner) {
+        if (isPartnerConsideredNew) {
           const typeMatch = appUser.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
           const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => appUser.preferredMusicStyles?.includes(style));
 
           if (typeMatch || styleMatch) {
-            newNotifications.push({
+            potentialNewNotifications.push({
               id: `partner_${partnerId}_${partnerProfileCompletedAt.getTime()}`, 
               partnerId: partnerId,
               venueName: partnerData.venueName,
@@ -248,26 +251,28 @@ export default function MainAppLayout({
         }
       }
 
-      if (newNotifications.length > 0 && appUser.uid) {
+      if (potentialNewNotifications.length > 0 && appUser.uid) {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        const updatedNotifications = [...existingNotifications];
-        newNotifications.forEach(newNotif => {
-            if (!updatedNotifications.some(exNotif => exNotif.id === newNotif.id)) {
-                updatedNotifications.push(newNotif);
-            }
-        });
+        const currentUserDocSnap = await getDoc(userDocRef); // Fresh read
+        const freshExistingNotificationsFromDB = currentUserDocSnap.data()?.notifications || [];
         
-        updatedNotifications.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-        await updateDoc(userDocRef, {
-          notifications: updatedNotifications.slice(0, 20) 
-        });
+        const notificationsActuallyToAdd = potentialNewNotifications.filter(newNotif => 
+            !freshExistingNotificationsFromDB.some(exNotif => exNotif.id === newNotif.id)
+        );
+
+        if (notificationsActuallyToAdd.length > 0) {
+            const finalNotifications = [...freshExistingNotificationsFromDB, ...notificationsActuallyToAdd]
+                .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+                .slice(0, 20); // Keep max 20 notifications
+            await updateDoc(userDocRef, { notifications: finalNotifications });
+        }
       }
     }, (error) => {
       console.error("Error listening for new partner notifications:", error);
     });
 
     return () => unsubscribe();
-  }, [appUser, loading]);
+  }, [appUser, loading]); // Key dependencies: appUser for UID, preferences, lastNotificationCheckTimestamp
 
   // Effect for new/updated event notifications from favorited venues
   useEffect(() => {
@@ -297,10 +302,8 @@ export default function MainAppLayout({
   
         const unsubscribe = onSnapshot(qEvents, async (snapshot) => {
           const userDocRefToUpdate = doc(firestore, "users", appUser.uid!);
-          const currentUserDocSnap = await getDoc(userDocRefToUpdate);
-          const existingUserNotifications = currentUserDocSnap.data()?.notifications || [];
-          let newNotificationsFound = false;
-          const notificationsToAdd: Notification[] = [];
+          
+          const notificationsToAddThisCycle: Notification[] = [];
 
           snapshot.docChanges().forEach((change) => {
             const eventData = change.doc.data();
@@ -310,11 +313,8 @@ export default function MainAppLayout({
             const lastUserCheck = appUser.lastNotificationCheckTimestamp?.toMillis() || 0;
 
             if (change.type === "added") {
-              const alreadyNotifiedForNew = existingUserNotifications.some((n: Notification) => 
-                n.eventId === eventId && n.partnerId === venueId && !n.message.includes("atualizado")
-              );
-              if (!alreadyNotifiedForNew && eventCreatedAt && eventCreatedAt.toMillis() > lastUserCheck) {
-                notificationsToAdd.push({
+              if (eventCreatedAt && eventCreatedAt.toMillis() > lastUserCheck) {
+                notificationsToAddThisCycle.push({
                   id: `event_new_${venueId}_${eventId}_${eventCreatedAt.toMillis()}`,
                   partnerId: venueId,
                   eventId: eventId,
@@ -324,18 +324,10 @@ export default function MainAppLayout({
                   createdAt: eventCreatedAt,
                   read: false,
                 });
-                newNotificationsFound = true;
               }
             } else if (change.type === "modified") {
-              const alreadyNotifiedForThisUpdate = existingUserNotifications.some((n: Notification) => 
-                n.eventId === eventId && 
-                n.partnerId === venueId && 
-                n.message.includes("atualizado") &&
-                n.createdAt.toMillis() >= eventUpdatedAt.toMillis() 
-              );
-
-              if (!alreadyNotifiedForThisUpdate && eventUpdatedAt && eventUpdatedAt.toMillis() > lastUserCheck) {
-                notificationsToAdd.push({
+              if (eventUpdatedAt && eventUpdatedAt.toMillis() > lastUserCheck) {
+                notificationsToAddThisCycle.push({
                   id: `event_update_${venueId}_${eventId}_${eventUpdatedAt.toMillis()}`,
                   partnerId: venueId,
                   eventId: eventId,
@@ -345,16 +337,24 @@ export default function MainAppLayout({
                   createdAt: eventUpdatedAt, 
                   read: false,
                 });
-                newNotificationsFound = true;
               }
             }
           });
 
-          if (newNotificationsFound) {
-            const allNotifications = [...existingUserNotifications, ...notificationsToAdd]
-              .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-              .slice(0, 20); 
-            updateDoc(userDocRefToUpdate, { notifications: allNotifications });
+          if (notificationsToAddThisCycle.length > 0) {
+            const currentUserDocSnap = await getDoc(userDocRefToUpdate); // Fresh read
+            const freshExistingUserNotifications = currentUserDocSnap.data()?.notifications || [];
+
+            const notificationsActuallyToAdd = notificationsToAddThisCycle.filter(newNotif => 
+                !freshExistingUserNotifications.some(exNotif => exNotif.id === newNotif.id)
+            );
+
+            if (notificationsActuallyToAdd.length > 0) {
+                const allNotifications = [...freshExistingUserNotifications, ...notificationsActuallyToAdd]
+                  .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+                  .slice(0, 20); 
+                await updateDoc(userDocRefToUpdate, { notifications: allNotifications });
+            }
           }
         }, (error) => {
           console.error(`Error listening for events in venue ${venueId}:`, error);
@@ -366,10 +366,13 @@ export default function MainAppLayout({
       }
     });
   
+    // Clean up listeners for venues no longer favorited
     Object.keys(activeEventNotificationListeners).forEach(venueId => {
       if (!currentFavorites.includes(venueId)) {
-        activeEventNotificationListeners[venueId]();
-        delete activeEventNotificationListeners[venueId];
+        if (activeEventNotificationListeners[venueId]) {
+             activeEventNotificationListeners[venueId]();
+             delete activeEventNotificationListeners[venueId];
+        }
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -415,12 +418,24 @@ export default function MainAppLayout({
  const dismissNotification = async (notificationId: string) => {
     if (!appUser || !appUser.uid) return;
     const userDocRef = doc(firestore, "users", appUser.uid);
-    const updatedNotifications = (appUser.notifications || []).filter(n => n.id !== notificationId);
+    
+    // Optimistically update local state for faster UI response
+    if (appUser.notifications) {
+        const updatedLocalNotifications = appUser.notifications.filter(n => n.id !== notificationId);
+        setAppUser(prev => prev ? {...prev, notifications: updatedLocalNotifications} : null);
+    }
+
     try {
-        await updateDoc(userDocRef, { notifications: updatedNotifications });
+        // Fetch current notifications from Firestore to ensure we're updating based on the latest state
+        const userSnap = await getDoc(userDocRef);
+        const currentDbNotifications = userSnap.data()?.notifications || [];
+        const updatedDbNotifications = currentDbNotifications.filter((n: Notification) => n.id !== notificationId);
+        
+        await updateDoc(userDocRef, { notifications: updatedDbNotifications });
         toast({ title: "Notificação Removida", variant:"default" });
     } catch (error) {
         console.error("Error dismissing notification:", error);
+        // Revert optimistic update if Firestore update fails (or rely on next onSnapshot update)
         toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação.", variant: "destructive" });
     }
   };
@@ -480,7 +495,7 @@ export default function MainAppLayout({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className={cn(activeColorClass, hoverBgClass, showLoginQrHint && 'animate-pulse')}
+                    className={cn(activeColorClass, hoverBgClass, showLoginQrHint && 'animate-pulse ring-2 ring-primary ring-offset-2 ring-offset-background')}
                     onClick={() => setIsQrScannerOpen(true)}
                     title="Check-in com QR Code"
                     disabled={isFetchingCoinDetails} 
@@ -493,7 +508,7 @@ export default function MainAppLayout({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className={cn(activeColorClass, unreadNotificationsCount > 0 && 'animate-pulse', hoverBgClass)}
+                            className={cn(activeColorClass, unreadNotificationsCount > 0 && 'animate-pulse ring-2 ring-destructive ring-offset-2 ring-offset-background', hoverBgClass)}
                             onClick={handleNotificationsClick}
                             disabled={isFetchingCoinDetails} 
                             title="Notificações"
