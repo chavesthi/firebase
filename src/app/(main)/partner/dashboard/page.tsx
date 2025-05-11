@@ -636,9 +636,9 @@ export default function PartnerDashboardPage() {
             <CardHeader className="p-4 sm:p-6">
               <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-                Configurações da Conta
+                Configurações da Conta e Pagamentos
               </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Ajuste suas preferências e informações de contato.</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Ajuste suas preferências, informações de contato e gerencie pagamentos.</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
               <Button
