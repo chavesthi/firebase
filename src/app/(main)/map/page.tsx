@@ -717,6 +717,10 @@ const MapContentAndLogic = () => {
 };
 
  const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp) => {
+    if (isPreviewMode) {
+        toast({ title: "Modo Preview", description: "Compartilhamento de eventos desabilitado no modo de preview.", variant: "default" });
+        return;
+    }
     if (!currentUser) {
       toast({ title: "Login Necessário", description: "Faça login para compartilhar e ganhar moedas.", variant: "destructive" });
       return;
@@ -856,6 +860,10 @@ const MapContentAndLogic = () => {
   };
 
   const handleToggleFavorite = async (venueId: string, venueName: string) => {
+    if (isPreviewMode) {
+        toast({ title: "Modo Preview", description: "Ação de favoritar desabilitada no modo de preview.", variant: "default" });
+        return;
+    }
     if (!currentUser?.uid) {
       toast({ title: "Login Necessário", description: "Faça login para favoritar locais.", variant: "destructive" });
       return;
@@ -981,7 +989,7 @@ const MapContentAndLogic = () => {
             <GoogleMap
                 defaultCenter={userLocation}
                 defaultZoom={15}
-                mapId="2cc43a385ccd3370d4c3b889"
+                mapId="2cc43a385ccd3370d4c3b889" // Reverted to original working mapId
                 gestureHandling="greedy"
                 disableDefaultUI={true}
                 className="w-full h-full"
