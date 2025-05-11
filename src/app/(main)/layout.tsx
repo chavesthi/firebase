@@ -221,12 +221,8 @@ export default function MainAppLayout({
       setShowLoginQrHint(true);
       const timer = setTimeout(() => {
         setShowLoginQrHint(false);
-        toast({
-            title: "Dica de Check-in!",
-            description: "Use este ícone para escanear o QR Code nos eventos e fazer check-in. Assim você poderá avaliá-los depois!",
-            duration: 7000, // Show toast longer
-        });
-      }, 3000); // Show hint for 3 seconds, then toast
+        // Toast removed as per user request. The pulsing animation will still occur.
+      }, 3000); // Show hint for 3 seconds
       return () => clearTimeout(timer);
     }
     prevAppUserRef.current = appUser;
@@ -747,6 +743,7 @@ export default function MainAppLayout({
     </div>
   );
 }
+
 
 
 
