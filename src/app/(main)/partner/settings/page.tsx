@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -211,6 +210,11 @@ export default function PartnerSettingsPage() {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
     }
+    if (!STRIPE_PUBLIC_KEY) {
+      toast({ title: "Erro de Configuração", description: "Chave pública do Stripe não configurada.", variant: "destructive" });
+      setIsSubmittingCheckout(false);
+      return;
+    }
     setIsSubmittingCheckout(true);
     try {
       const response = await fetch('/api/stripe/checkout', {
@@ -233,12 +237,17 @@ export default function PartnerSettingsPage() {
         throw new Error("Stripe.js não carregou.");
       }
 
+      // When the customer clicks on the button, redirect them to Checkout.
+      // Returns a Prome that resolves when checkout is completed.
       const { error } = await stripe.redirectToCheckout({ sessionId: session.url }); 
 
       if (error) {
         console.error("Stripe redirect error:", error);
         toast({ title: "Erro no Checkout", description: error.message || "Não foi possível redirecionar para o pagamento.", variant: "destructive" });
       }
+      // If `redirectToCheckout` fails due to a browser issue (e.g., popup blocker),
+      // customer will be redirected to the success_url or cancel_url already.
+      // So, no explicit redirection here if error occurs.
     } catch (error: any) {
       console.error("Checkout error:", error);
       toast({
@@ -253,6 +262,7 @@ export default function PartnerSettingsPage() {
 
 
   useEffect(() => {
+    // Check to see if this is a redirect back from Checkout
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get("session_id")) {
       toast({
@@ -261,6 +271,7 @@ export default function PartnerSettingsPage() {
         variant: "default",
         duration: 7000,
       });
+      // Remove query params from URL
       router.replace('/partner/settings', { scroll: false });
     }
      if (queryParams.get("canceled")) {
@@ -269,7 +280,7 @@ export default function PartnerSettingsPage() {
         description: "O processo de assinatura foi cancelado. Você pode tentar novamente quando desejar.",
         variant: "default",
       });
-      router.replace('/partner/settings', { scroll: false });
+       router.replace('/partner/settings', { scroll: false });
     }
   }, [router, toast]);
 
@@ -542,6 +553,7 @@ export default function PartnerSettingsPage() {
                     <div className="p-4 bg-green-100 dark:bg-green-900/30 border border-green-500 rounded-md">
                         <p className="font-semibold text-green-700 dark:text-green-400">Você tem uma assinatura ativa!</p>
                         <p className="text-sm text-muted-foreground">Detalhes da sua assinatura e opções de gerenciamento em breve.</p>
+                         {/* TODO: Add link to Stripe customer portal if available */}
                     </div>
                 ) : (
                     <>
@@ -552,19 +564,18 @@ export default function PartnerSettingsPage() {
                         <Button
                             onClick={handleStripeCheckout}
                             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                            disabled={isSubmittingCheckout}
+                            disabled={isSubmittingCheckout || isSubmitting}
                             type="button" 
                         >
                             {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                             Assinar Plano Fervo (Cartão)
                         </Button>
-                        {/* <!-- INICIO FORMULARIO BOTAO PAGBANK: NAO EDITE OS COMANDOS DAS LINHAS ABAIXO --> */}
+                        {/* PagBank Button Form - Keep this if PagBank is still an option */}
                         <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full">
-                        <input type="hidden" name="code" value="A584618E1414728444067FA92A607421" />
-                        <input type="hidden" name="iot" value="button" />
-                        <input type="image" src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" name="submit" alt="Pague com PagBank - É rápido, grátis e seguro!" width="209" height="48" className="mx-auto" />
+                          <input type="hidden" name="code" value="A584618E1414728444067FA92A607421" />
+                          <input type="hidden" name="iot" value="button" />
+                          <input type="image" src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" name="submit" alt="Pague com PagBank - É rápido, grátis e seguro!" width="209" height="48" className="mx-auto" />
                         </form>
-                        {/* <!-- FINAL FORMULARIO BOTAO PAGBANK --> */}
                     </>
                 )}
             </div>
@@ -639,4 +650,3 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
-

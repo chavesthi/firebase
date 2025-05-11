@@ -1,4 +1,4 @@
-export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "YOUR_DEFAULT_API_KEY_HERE";
+export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0";
 
 export enum UserRole {
   USER = 'user',
@@ -70,9 +70,13 @@ export const FERVO_COINS_FOR_COUPON = 20; // Coins needed *per venue*
 export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 350ml";
 export const COUPON_CODE_PREFIX = "FERVO";
 
-// Stripe API Keys - these should be environment variables in a real app
+// Stripe API Keys
 export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_live_51RMuSWL8kxrPyagwUXEKGuW3XUbY2Rt98Ff7kqfqM8t3A65teTG0VADs1n863vV3SFdXxvUXtp25olh92tlIDNyW00g4g9ou7f";
 export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "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";
 
+
 // App URL
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
+
+// PagBank Pre-approval Code (if still used as an alternative)
+export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
