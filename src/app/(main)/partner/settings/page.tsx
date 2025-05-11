@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,14 +10,14 @@ import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where } from 'firebase/firestore';
 import { loadStripe } from "@stripe/stripe-js";
-import { QRCodeCanvas } from 'qrcode.react';
+
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2, Copy, Download, Printer } from 'lucide-react';
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
@@ -33,14 +34,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle as QrDialogTitle, // Renamed to avoid conflict with AlertDialogTitle
-  DialogDescription as QrDialogDescription, // Renamed
-  DialogFooter as QrDialogFooter, // Renamed
-} from '@/components/ui/dialog'; // Assuming you have a Dialog component
 
 
 // Schema for partner settings form
@@ -83,9 +76,6 @@ export default function PartnerSettingsPage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [showDeletePasswordInput, setShowDeletePasswordInput] = useState(false);
   
-  const [showPixQrDialog, setShowPixQrDialog] = useState(false);
-  const [qrValue, setQrValue] = useState('');
-
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<PartnerSettingsFormInputs>({
     resolver: zodResolver(partnerSettingsSchema),
@@ -156,7 +146,7 @@ export default function PartnerSettingsPage() {
 
       const dataToUpdate: { [key: string]: any } = {
         name: data.contactName,
-        venueName: data.companyName, // Assuming company name is venueName for partners
+        venueName: data.companyName, 
         notificationsEnabled: data.notificationsEnabled,
         settingsUpdatedAt: serverTimestamp(),
       };
@@ -215,17 +205,50 @@ export default function PartnerSettingsPage() {
       });
     }
   };
+  
+  const handleStripeCheckout = async () => {
+    if (!currentUser) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
+    setIsSubmittingCheckout(true);
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: currentUser.uid }), // Send userId if needed by backend for customer lookup
+      });
 
-  const handlePixCheckout = () => {
-    const pixKey = "01791938132"; 
-    const amount = "2.00"; 
-    const merchantName = "Fervo App"; 
-    const merchantCity = "SAO PAULO"; 
-    const brCodePayload = `00020126580014BR.GOV.BCB.PIX0111${pixKey.replace(/\D/g, '')}5204000053039865404${amount.replace('.', '')}5802BR59${merchantName.length < 10 ? `0${merchantName.length}` : merchantName.length}${merchantName}60${merchantCity.length < 10 ? `0${merchantCity.length}` : merchantCity.length}${merchantCity}62070503***6304`;
-    
-    setQrValue(brCodePayload);
-    setShowPixQrDialog(true);
-    setIsSubmittingCheckout(false); 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Falha ao criar sessão de checkout.' }));
+        throw new Error(errorData.message || 'Falha ao criar sessão de checkout.');
+      }
+
+      const session = await response.json();
+      const stripe = await loadStripe(STRIPE_PUBLIC_KEY);
+
+      if (!stripe) {
+        throw new Error("Stripe.js não carregou.");
+      }
+
+      const { error } = await stripe.redirectToCheckout({ sessionId: session.url });
+
+      if (error) {
+        console.error("Stripe redirect error:", error);
+        toast({ title: "Erro no Checkout", description: error.message || "Não foi possível redirecionar para o pagamento.", variant: "destructive" });
+      }
+    } catch (error: any) {
+      console.error("Checkout error:", error);
+      toast({
+        title: "Erro no Checkout",
+        description: error.message || "Não foi possível iniciar o checkout. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingCheckout(false);
+    }
   };
 
 
@@ -296,15 +319,14 @@ export default function PartnerSettingsPage() {
 
       // --- Notification Cleanup Logic ---
       const notificationCleanupBatch = writeBatch(firestore);
-      // Re-fetch users or use the existing usersSnapshot if appropriate
-      const allUsersSnapshotForNotifications = await getDocs(query(collection(firestore, "users"))); // Consider query for users with notifications array if performance is an issue
+      const allUsersSnapshotForNotifications = await getDocs(query(collection(firestore, "users"))); 
 
       allUsersSnapshotForNotifications.forEach(userDoc => {
           const userData = userDoc.data();
           if (userData.notifications && Array.isArray(userData.notifications)) {
               const currentNotifications = userData.notifications;
               const filteredNotifications = currentNotifications.filter(
-                  (notification: any) => notification.partnerId !== partnerIdToDelete && notification.eventId?.split('_')[0] !== partnerIdToDelete // Basic check for eventId originating from partner
+                  (notification: any) => notification.partnerId !== partnerIdToDelete && (!notification.eventId || notification.eventId?.split('_')[0] !== partnerIdToDelete) 
               );
 
               if (filteredNotifications.length < currentNotifications.length) {
@@ -339,38 +361,6 @@ export default function PartnerSettingsPage() {
     }
   };
   
-  const handlePrintQr = () => {
-    const canvas = document.getElementById('pix-qr-code-canvas') as HTMLCanvasElement;
-    if (canvas) {
-      const dataUrl = canvas.toDataURL();
-      let windowContent = '<!DOCTYPE html>';
-      windowContent += '<html><head><title>Print QR Code</title></head><body>';
-      windowContent += '<img src="' + dataUrl + '" style="max-width:90vw; max-height:90vh; display:block; margin:auto;">';
-      windowContent += '</body></html>';
-      const printWin = window.open('', '', 'width=600,height=600');
-      printWin?.document.open();
-      printWin?.document.write(windowContent);
-      printWin?.document.close();
-      printWin?.focus();
-      printWin?.print();
-      printWin?.close();
-    }
-  };
-
-  const handleDownloadQr = () => {
-    const canvas = document.getElementById('pix-qr-code-canvas') as HTMLCanvasElement;
-    if (canvas) {
-      const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-      let downloadLink = document.createElement("a");
-      downloadLink.href = pngUrl;
-      downloadLink.download = `fervo-app-pix-pagamento.png`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-      toast({ title: "Download Iniciado", description: "O QR Code PIX está sendo baixado." });
-    }
-  };
-
 
   if (loading) {
     return (
@@ -543,7 +533,6 @@ export default function PartnerSettingsPage() {
                     <div className="p-4 bg-green-100 dark:bg-green-900/30 border border-green-500 rounded-md">
                         <p className="font-semibold text-green-700 dark:text-green-400">Você tem uma assinatura ativa!</p>
                         <p className="text-sm text-muted-foreground">Detalhes da sua assinatura e opções de gerenciamento em breve.</p>
-                        {/* Add link to Stripe Customer Portal if configured */}
                     </div>
                 ) : (
                     <>
@@ -552,13 +541,22 @@ export default function PartnerSettingsPage() {
                             Valor mensal: R$ 2,00.
                         </CardDescription>
                         <Button
-                            onClick={handlePixCheckout}
-                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+                            onClick={handleStripeCheckout}
+                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                             disabled={isSubmittingCheckout}
                             type="button" 
                         >
                             {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            Assinar Plano Fervo (PIX)
+                            Assinar Plano Fervo (Cartão)
+                        </Button>
+                        <Button
+                            onClick={handleStripeCheckout} // Changed to use Stripe Checkout which can handle PIX
+                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+                            disabled={isSubmittingCheckout}
+                            type="button"
+                        >
+                            {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                            Assinar Plano (PIX)
                         </Button>
                     </>
                 )}
@@ -638,47 +636,6 @@ export default function PartnerSettingsPage() {
           </CardContent>
         </form>
       </Card>
-      
-      <Dialog open={showPixQrDialog} onOpenChange={setShowPixQrDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <QrDialogTitle className="text-primary">Pagamento via PIX - R$ 2,00</QrDialogTitle>
-            <QrDialogDescription>
-              Escaneie o QR Code abaixo com o aplicativo do seu banco para realizar o pagamento.
-            </QrDialogDescription>
-          </DialogHeader>
-          <div className="flex justify-center py-4">
-            <QRCodeCanvas 
-                id="pix-qr-code-canvas"
-                value={qrValue} 
-                size={256} 
-                level="M"
-                imageSettings={{
-                    src: "/fervo_icon.png", 
-                    height: 38, 
-                    width: 38,  
-                    excavate: true,
-                }}
-            />
-          </div>
-          <div className="text-center text-xs text-muted-foreground px-4">
-             <p><strong>Chave PIX (CPF):</strong> 017.919.381-32</p>
-             <p><strong>Valor:</strong> R$ 2,00</p>
-             <p>Após o pagamento, sua assinatura será ativada em alguns instantes.</p>
-             <p className="mt-2 font-semibold">Este QR Code é apenas um exemplo. Uma implementação real requer a geração de um BRCode válido por um sistema de pagamentos PIX.</p>
-          </div>
-          <QrDialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={handlePrintQr} className="w-full sm:w-auto">
-              <Printer className="w-4 h-4 mr-2" /> Imprimir
-            </Button>
-            <Button variant="outline" onClick={handleDownloadQr} className="w-full sm:w-auto">
-              <Download className="w-4 h-4 mr-2" /> Baixar QR
-            </Button>
-            <Button onClick={() => setShowPixQrDialog(false)} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">Fechar</Button>
-          </QrDialogFooter>
-        </DialogContent>
-      </Dialog>
-
     </div>
   );
 }
