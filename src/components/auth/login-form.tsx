@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -114,19 +113,19 @@ export function LoginForm() {
       // Time-based greeting for existing users
       const now = new Date();
       const hour = now.getHours();
-      let greeting = "";
+      let greetingPrefix = "";
 
       if (hour >= 0 && hour < 5) { // 00:00 to 04:59
-        greeting = "Boa Madrugada";
+        greetingPrefix = "Boa Madrugada";
       } else if (hour >= 5 && hour < 12) { // 05:00 to 11:59
-        greeting = "Bom Dia";
+        greetingPrefix = "Bom Dia";
       } else if (hour >= 12 && hour < 18) { // 12:00 to 17:59
-        greeting = "Boa Tarde";
+        greetingPrefix = "Boa Tarde";
       } else { // 18:00 to 23:59
-        greeting = "Boa Noite";
+        greetingPrefix = "Boa Noite";
       }
       
-      const greetingTitle = `${greeting}, ${userNameForGreeting}!`;
+      const greetingTitle = `${greetingPrefix}, ${userNameForGreeting}!`;
       const greetingDescription = "Onde vamos hoje?";
 
       toast({
@@ -408,4 +407,3 @@ export function LoginForm() {
     </Tabs>
   );
 }
-
