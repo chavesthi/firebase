@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -233,7 +232,7 @@ export default function PartnerSettingsPage() {
         throw new Error("Stripe.js não carregou.");
       }
 
-      const { error } = await stripe.redirectToCheckout({ sessionId: session.url });
+      const { error } = await stripe.redirectToCheckout({ sessionId: session.url }); // session.url contains the checkout URL
 
       if (error) {
         console.error("Stripe redirect error:", error);
@@ -549,15 +548,13 @@ export default function PartnerSettingsPage() {
                             {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                             Assinar Plano Fervo (Cartão)
                         </Button>
-                        <Button
-                            onClick={handleStripeCheckout} // Changed to use Stripe Checkout which can handle PIX
-                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-                            disabled={isSubmittingCheckout}
-                            type="button"
-                        >
-                            {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            Assinar Plano (PIX)
-                        </Button>
+                        {/* <!-- INICIO FORMULARIO BOTAO PAGBANK: NAO EDITE OS COMANDOS DAS LINHAS ABAIXO --> */}
+                        <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full">
+                        <input type="hidden" name="code" value="A584618E1414728444067FA92A607421" />
+                        <input type="hidden" name="iot" value="button" />
+                        <input type="image" src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" name="submit" alt="Pague com PagBank - É rápido, grátis e seguro!" width="209" height="48" className="mx-auto" />
+                        </form>
+                        {/* <!-- FINAL FORMULARIO BOTAO PAGBANK --> */}
                     </>
                 )}
             </div>
@@ -639,3 +636,4 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
