@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -158,7 +159,7 @@ export default function MainAppLayout({
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
   const [showLoginQrHint, setShowLoginQrHint] = useState(false);
-  const [prevAppUserRef = useRef<AppUser | null>(null);
+  const prevAppUserRef = useRef<AppUser | null>(null);
 
 
   const totalFervoCoins = useMemo(() => {
@@ -737,4 +738,6 @@ export default function MainAppLayout({
     </div>
   );
 }
+
+
 
