@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -11,7 +10,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -959,7 +958,7 @@ const MapContentAndLogic = () => {
         </CardContent>
       </Card>
 
-      <div className="flex-1 h-full">
+      <div className="flex-1 h-full relative"> {/* Added relative positioning for Logo */}
         {!filterSidebarOpen && (
           <Button
             variant="outline"
@@ -971,11 +970,16 @@ const MapContentAndLogic = () => {
             <Filter className="w-5 h-5" />
           </Button>
         )}
+        {/* Logo positioned on top of the map */}
+        {/* <div className="absolute top-4 left-16 z-20"> // Adjusted left to not overlap filter button 
+          <Logo iconClassName="text-primary" />
+        </div> */}
+
         {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
             <GoogleMap
                 defaultCenter={userLocation} 
                 defaultZoom={15}
-                mapId="2cc43a385ccd3370d4c3b889"
+                mapId="ec411dbe9f75cb23"
                 gestureHandling="greedy"
                 disableDefaultUI={true}
                 className="w-full h-full" 
@@ -1024,6 +1028,7 @@ const MapContentAndLogic = () => {
                  if (actualUserLocation) {
                     setUserLocation(actualUserLocation); 
                 } else {
+                    // Fallback to a default if actualUserLocation is somehow null
                     setUserLocation({ lat: -23.55052, lng: -46.633308 });
                 }
                 router.replace('/map', { scroll: false }); 
@@ -1351,4 +1356,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-

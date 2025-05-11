@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -438,7 +437,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                             <GoogleMap
                                 defaultCenter={initialMapCenter}
                                 defaultZoom={venueLocation ? 17 : 3}
-                                mapId="2cc43a385ccd3370d4c3b889"
+                                mapId="ec411dbe9f75cb23"
                                 gestureHandling="greedy"
                                 disableDefaultUI={true}
                                 className="w-full h-full"
@@ -506,16 +505,16 @@ const PartnerQuestionnairePage: NextPage = () => {
       </Card>
        <style jsx global>{`
         .shadow-2xl {
-          /* Changed shadow colors from destructive/secondary to primary/secondary */
+          /* Changed shadow colors from destructive/secondary to primary/secondary */}
           box-shadow: 0 0 15px 5px hsl(var(--primary)), 0 0 30px 10px hsla(var(--primary), 0.3), 0 0 15px 5px hsl(var(--secondary)), 0 0 30px 10px hsla(var(--secondary), 0.3);
         }
-        @media (max-width: 640px) { /* xs breakpoint */
+        @media (max-width: 640px) { /* xs breakpoint */}
           .grid-cols-xs-2 {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
           .text-xs {
-            font-size: 0.75rem; /* 12px */
-            line-height: 1rem; /* 16px */
+            font-size: 0.75rem; /* 12px */}
+            line-height: 1rem; /* 16px */}
           }
         }
       `}</style>
@@ -524,4 +523,3 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
-
