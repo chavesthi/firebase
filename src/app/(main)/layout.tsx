@@ -221,12 +221,11 @@ export default function MainAppLayout({
       setShowLoginQrHint(true);
       const timer = setTimeout(() => {
         setShowLoginQrHint(false);
-        // Toast removed as per user request. The pulsing animation will still occur.
       }, 3000); // Show hint for 3 seconds
       return () => clearTimeout(timer);
     }
     prevAppUserRef.current = appUser;
-  }, [appUser, loading, toast]);
+  }, [appUser, loading]);
 
   // Effect for new partner notifications
   useEffect(() => {
@@ -425,20 +424,20 @@ export default function MainAppLayout({
 
     if (unreadNotificationsCount > 0 && appUser.notifications) {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        const currentNotifications = appUser.notifications; // Use local appUser state
+        const currentNotifications = appUser.notifications; 
         const updatedNotifications = currentNotifications.map(n => ({ ...n, read: true }));
         
-        // Optimistically update UI by setting local appUser notifications to read
+        
         if (setAppUser) {
           setAppUser(prev => prev ? {...prev, notifications: updatedNotifications, lastNotificationCheckTimestamp: Timestamp.now()} : null);
         }
-        // Then update Firestore in the background
+        
         await updateDoc(userDocRef, {
             notifications: updatedNotifications,
             lastNotificationCheckTimestamp: serverTimestamp() 
         }).catch(error => {
             console.error("Error updating notifications in Firestore:", error);
-            // Optionally revert optimistic update or show error
+            toast({ title: "Erro ao atualizar notificações", description: "Não foi possível marcar notificações como lidas no servidor.", variant: "destructive" });
         });
     } else if (appUser.notifications && appUser.notifications.length === 0){
          toast({ title: "Nenhuma Notificação", description: "Você não tem novas notificações. Continue explorando!", duration: 5000 });
@@ -456,17 +455,21 @@ export default function MainAppLayout({
 
     try {
         const userDocRef = doc(firestore, "users", appUser.uid);
+        // Fetch the current notifications array from Firestore
         const userSnap = await getDoc(userDocRef);
-        const currentDbNotifications = userSnap.data()?.notifications || [];
-        const updatedDbNotifications = currentDbNotifications.filter((n: Notification) => n.id !== notificationId);
+        const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
         
+        // Filter out the notification to be dismissed
+        const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
+        
+        // Update Firestore with the new array
         await updateDoc(userDocRef, { notifications: updatedDbNotifications });
         toast({ title: "Notificação Removida", variant:"default" });
     } catch (error) {
-        console.error("Error dismissing notification:", error);
-        // Revert optimistic update by re-fetching or relying on next onSnapshot update
-        // For simplicity, we'll let onSnapshot handle potential inconsistencies here
-        toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação.", variant: "destructive" });
+        console.error("Error dismissing notification from Firestore:", error);
+        // Optionally, revert optimistic update or inform user of server-side failure
+        // For now, onSnapshot listener will eventually correct the local state if Firestore update failed.
+        toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação do servidor.", variant: "destructive" });
     }
   };
 
@@ -541,7 +544,7 @@ export default function MainAppLayout({
 
   return (
     <div className="flex flex-col min-h-screen">
-      {appUser && ( // Only render header if user is logged in (appUser is not null)
+      {appUser && ( 
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
             <Logo iconClassName={activeColorClass} />
@@ -743,8 +746,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-
-
-
-
-
