@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -6,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
-import { doc, onSnapshot, collection, getDocs, query, where, collectionGroup } from 'firebase/firestore';
+import { doc, onSnapshot, collection, getDocs, query, where, collectionGroup, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb, Brain, Eye, MessageSquare, Instagram, Facebook, Youtube, ExternalLink } from 'lucide-react';
 import type { Location } from '@/services/geocoding';
@@ -321,9 +322,114 @@ export default function PartnerDashboardPage() {
   const fullAddress = `${venueData.address.street}, ${venueData.address.number}, ${venueData.address.city} - ${venueData.address.state}, ${venueData.address.cep}`;
 
   return (
-    <div className="container py-6 sm:py-8 mx-auto px-4 flex flex-col lg:flex-row gap-6 sm:gap-8">
-      {/* Main Content Area */}
-      <div className="lg:w-2/3 space-y-6 sm:space-y-8">
+    <div className="container py-6 sm:py-8 mx-auto px-4">
+      {/* Preview Area at the top */}
+      <div className="mb-6 sm:mb-8">
+        <Card className="border-secondary/50 shadow-lg shadow-secondary/15">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-xl text-secondary flex items-center">
+              <Eye className="w-6 h-6 mr-3" />
+              Preview do Local
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Como os usuários veem seu estabelecimento no Fervo App.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 sm:p-6 pt-0 sm:pt-0">
+            {getYouTubeEmbedUrl(venueData.youtubeUrl) && (
+              <div className="relative w-full rounded-lg overflow-hidden shadow-md" style={{ paddingTop: '56.25%' }}>
+                <iframe
+                  src={getYouTubeEmbedUrl(venueData.youtubeUrl)!}
+                  title="YouTube video player"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  className="absolute top-0 left-0 w-full h-full"
+                />
+              </div>
+            )}
+            <h3 className="text-lg font-semibold text-primary pt-2">{venueData.venueName}</h3>
+            {venueData.venueType && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {React.createElement(venueTypeIcons[venueData.venueType] || MapPin, { className: "w-5 h-5 text-secondary" })}
+                <span>{venueTypeLabels[venueData.venueType] || venueData.venueType}</span>
+              </div>
+            )}
+            {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 && (
+              <div className="flex items-center gap-2">
+                <StarRating rating={venueData.averageVenueRating} readOnly size={18} />
+                <span className="text-sm text-foreground">({venueData.averageVenueRating.toFixed(1)})</span>
+              </div>
+            )}
+            {venueData.musicStyles && venueData.musicStyles.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">Estilos Musicais:</h4>
+                <div className="flex flex-wrap gap-1">
+                  {venueData.musicStyles.map(style => (
+                    <Badge key={style} variant="outline" className="text-xs border-accent text-accent">{musicStyleLabels[style]}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {venueData.address && (
+              <p className="text-sm text-muted-foreground flex items-center">
+                <MapPin className="w-4 h-4 mr-1.5 text-secondary shrink-0" />
+                {venueData.address.city}, {venueData.address.state}
+              </p>
+            )}
+            {(venueData.instagramUrl || venueData.facebookUrl || venueData.youtubeUrl || venueData.phone) && (
+              <div className="pt-3 mt-3 border-t border-border/50">
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">Contatos e Redes:</h4>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  {venueData.phone && (
+                    <a
+                      href={`https://wa.me/${venueData.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${venueData.venueName}, te encontrei pelo Fervo App.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="WhatsApp"
+                      className="text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <MessageSquare className="w-5 h-5" />
+                    </a>
+                  )}
+                  {venueData.instagramUrl && (
+                    <a href={venueData.instagramUrl} target="_blank" rel="noopener noreferrer" title="Instagram" className="text-muted-foreground hover:text-primary transition-colors">
+                      <Instagram className="w-5 h-5" />
+                    </a>
+                  )}
+                  {venueData.facebookUrl && (
+                    <a href={venueData.facebookUrl} target="_blank" rel="noopener noreferrer" title="Facebook" className="text-muted-foreground hover:text-primary transition-colors">
+                      <Facebook className="w-5 h-5" />
+                    </a>
+                  )}
+                  {venueData.youtubeUrl && (
+                    <a href={venueData.youtubeUrl} target="_blank" rel="noopener noreferrer" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
+                      <Youtube className="w-5 h-5" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+             <div className="pt-3 mt-3 border-t border-border/50">
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">Próximos Eventos (Exemplo):</h4>
+                <p className="text-xs text-muted-foreground italic">
+                    A lista de eventos dinâmicos aparecerá aqui para os usuários.
+                    Este é um preview estático.
+                </p>
+             </div>
+          </CardContent>
+          <CardFooter className="p-4 sm:p-6 pt-0">
+            <Button
+              variant="outline"
+              className="w-full border-secondary text-secondary hover:bg-secondary/10"
+              onClick={() => router.push(`/map?venueId=${currentUser.uid}`)}
+            >
+              <ExternalLink className="w-4 h-4 mr-2"/> Ver Detalhes Completos no Mapa
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+
+      {/* Main Content Area - Below preview */}
+      <div className="space-y-6 sm:space-y-8">
         <header className="mb-2 text-center lg:text-left">
           <h1 className="text-3xl sm:text-4xl font-bold text-primary">{venueData.venueName}</h1>
           <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center lg:justify-start px-2">
@@ -564,112 +670,6 @@ export default function PartnerDashboardPage() {
               </CardContent>
           </Card>
         </div>
-      </div>
-
-      {/* Preview Area */}
-      <div className="lg:w-1/3">
-        <Card className="sticky top-20 border-secondary/50 shadow-lg shadow-secondary/15 max-h-[calc(100vh-6rem)] overflow-y-auto">
-          <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-xl text-secondary flex items-center">
-              <Eye className="w-6 h-6 mr-3" />
-              Preview do Local
-            </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Como os usuários veem seu estabelecimento no Fervo App.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 p-4 sm:p-6 pt-0 sm:pt-0">
-            {getYouTubeEmbedUrl(venueData.youtubeUrl) && (
-              <div className="relative w-full rounded-lg overflow-hidden shadow-md" style={{ paddingTop: '56.25%' }}>
-                <iframe
-                  src={getYouTubeEmbedUrl(venueData.youtubeUrl)!}
-                  title="YouTube video player"
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  className="absolute top-0 left-0 w-full h-full"
-                />
-              </div>
-            )}
-            <h3 className="text-lg font-semibold text-primary pt-2">{venueData.venueName}</h3>
-            {venueData.venueType && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {React.createElement(venueTypeIcons[venueData.venueType] || MapPin, { className: "w-5 h-5 text-secondary" })}
-                <span>{venueTypeLabels[venueData.venueType] || venueData.venueType}</span>
-              </div>
-            )}
-            {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 && (
-              <div className="flex items-center gap-2">
-                <StarRating rating={venueData.averageVenueRating} readOnly size={18} />
-                <span className="text-sm text-foreground">({venueData.averageVenueRating.toFixed(1)})</span>
-              </div>
-            )}
-            {venueData.musicStyles && venueData.musicStyles.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Estilos Musicais:</h4>
-                <div className="flex flex-wrap gap-1">
-                  {venueData.musicStyles.map(style => (
-                    <Badge key={style} variant="outline" className="text-xs border-accent text-accent">{musicStyleLabels[style]}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {venueData.address && (
-              <p className="text-sm text-muted-foreground flex items-center">
-                <MapPin className="w-4 h-4 mr-1.5 text-secondary shrink-0" />
-                {venueData.address.city}, {venueData.address.state}
-              </p>
-            )}
-            {(venueData.instagramUrl || venueData.facebookUrl || venueData.youtubeUrl || venueData.phone) && (
-              <div className="pt-3 mt-3 border-t border-border/50">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Contatos e Redes:</h4>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  {venueData.phone && (
-                    <a
-                      href={`https://wa.me/${venueData.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${venueData.venueName}, te encontrei pelo Fervo App.`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="WhatsApp"
-                      className="text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <MessageSquare className="w-5 h-5" />
-                    </a>
-                  )}
-                  {venueData.instagramUrl && (
-                    <a href={venueData.instagramUrl} target="_blank" rel="noopener noreferrer" title="Instagram" className="text-muted-foreground hover:text-primary transition-colors">
-                      <Instagram className="w-5 h-5" />
-                    </a>
-                  )}
-                  {venueData.facebookUrl && (
-                    <a href={venueData.facebookUrl} target="_blank" rel="noopener noreferrer" title="Facebook" className="text-muted-foreground hover:text-primary transition-colors">
-                      <Facebook className="w-5 h-5" />
-                    </a>
-                  )}
-                  {venueData.youtubeUrl && (
-                    <a href={venueData.youtubeUrl} target="_blank" rel="noopener noreferrer" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
-                      <Youtube className="w-5 h-5" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-             <div className="pt-3 mt-3 border-t border-border/50">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Próximos Eventos (Exemplo):</h4>
-                <p className="text-xs text-muted-foreground italic">
-                    A lista de eventos dinâmicos aparecerá aqui para os usuários.
-                    Este é um preview estático.
-                </p>
-                {/* Placeholder for a couple of example events if desired, or leave as text */}
-             </div>
-          </CardContent>
-          <CardFooter className="p-4 sm:p-6 pt-0">
-            <Button
-              variant="outline"
-              className="w-full border-secondary text-secondary hover:bg-secondary/10"
-              onClick={() => router.push(`/map?venueId=${currentUser.uid}`)}
-            >
-              <ExternalLink className="w-4 h-4 mr-2"/> Ver Detalhes Completos no Mapa
-            </Button>
-          </CardFooter>
-        </Card>
       </div>
     </div>
   );
