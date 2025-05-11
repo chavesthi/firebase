@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -297,7 +296,7 @@ const MapContentAndLogic = () => {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams(); 
+  const searchParams = useSearchParams();
   const isPreviewMode = searchParams.get('isPreview') === 'true';
 
 
@@ -368,7 +367,7 @@ const MapContentAndLogic = () => {
     if (!currentUser || !selectedVenue || !selectedVenue.events || selectedVenue.events.length === 0) {
       // Optionally clear or manage userRatings when context changes
       // For instance, if you want ratings to only be for the currently selected venue's events:
-      // setUserRatings({}); 
+      // setUserRatings({});
       return;
     }
 
@@ -511,13 +510,13 @@ const MapContentAndLogic = () => {
           }
         } else {
           // Venue ID in query not found, clear it to avoid confusion
-          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); // Clear selection if it matches invalid ID
-          router.replace('/map', { scroll: false }); // Remove invalid venueId from URL
+          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
+          router.replace('/map', { scroll: false });
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
       }
     }
-  }, [searchParams, venues, router, selectedVenue?.id, toast]);
+  }, [searchParams, venues, router, selectedVenue?.id, toast, isPreviewMode]);
 
 
   // Fetch events for a selected venue
@@ -669,7 +668,7 @@ const MapContentAndLogic = () => {
                 // User is updating their previous rating
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
-                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { 
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) {
                     newAverageRating = currentRating;
                 }
 
@@ -686,14 +685,14 @@ const MapContentAndLogic = () => {
 
             transaction.set(ratingDocRef, {
                 eventId: eventId,
-                partnerId: partnerId, 
+                partnerId: partnerId,
                 userId: currentUser.uid,
-                userName: currentAppUser.name, 
+                userName: currentAppUser.name,
                 rating: currentRating,
-                comment: currentComment || null, 
-                createdAt: serverTimestamp(), 
+                comment: currentComment || null,
+                createdAt: serverTimestamp(),
                 eventName: eventNameForRating, // Store eventName on rating document
-            }, { merge: true }); 
+            }, { merge: true });
 
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
             transaction.update(userCheckedInEventRef, { hasRated: true });
@@ -704,7 +703,7 @@ const MapContentAndLogic = () => {
         setCurrentComment('');
         setCurrentlyRatingEventId(null);
 
-        if (selectedVenue) { 
+        if (selectedVenue) {
             await updatePartnerOverallRating(selectedVenue.id);
         }
 
@@ -726,7 +725,7 @@ const MapContentAndLogic = () => {
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
         return;
     }
-    
+
     // --- Fetch the specific event to check its shareRewardsEnabled status ---
     let eventDataForShare: VenueEvent | undefined;
     if (selectedVenue && selectedVenue.id === partnerId) {
@@ -769,24 +768,24 @@ const MapContentAndLogic = () => {
       } catch (shareError: any) {
         if (shareError.name === 'AbortError') {
           console.log('Share operation cancelled by user.');
-          return; 
-        } else { 
+          return;
+        } else {
           console.warn('navigator.share failed, falling back to clipboard:', shareError);
            try {
             await navigator.clipboard.writeText(shareUrl);
             toast({ title: "Link Copiado!", description: "O compartilhamento falhou ou não está disponível. O link foi copiado para a área de transferência!", variant: "default", duration: 6000 });
-            sharedSuccessfully = true; 
+            sharedSuccessfully = true;
           } catch (clipError) {
             console.error('Failed to copy link to clipboard:', clipError);
             toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link automaticamente.", variant: "destructive"});
           }
         }
       }
-    } else { 
+    } else {
       try {
         await navigator.clipboard.writeText(shareUrl);
         toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
-        sharedSuccessfully = true; 
+        sharedSuccessfully = true;
       } catch (clipError) {
         console.error('Failed to copy link to clipboard (fallback):', clipError);
         toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
@@ -817,15 +816,15 @@ const MapContentAndLogic = () => {
             transaction.update(userDocRef, { [venueCoinFieldPath]: increment(-FERVO_COINS_FOR_COUPON) });
 
             const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-            const newCouponRef = doc(couponCollectionRef); 
+            const newCouponRef = doc(couponCollectionRef);
             transaction.set(newCouponRef, {
-              userId: currentUser.uid, 
+              userId: currentUser.uid,
               couponCode: couponCode,
-              description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`, 
+              description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
               createdAt: serverTimestamp(),
-              status: 'active', 
-              validAtPartnerId: partnerId, 
-              partnerVenueName: partnerName, 
+              status: 'active',
+              validAtPartnerId: partnerId,
+              partnerVenueName: partnerName,
             });
             couponGenerated = true;
           }
@@ -875,9 +874,9 @@ const MapContentAndLogic = () => {
           updatedFavorites = currentFavorites.filter(id => id !== venueId);
           toast({ title: "Removido dos Favoritos!", description: `${venueName} não é mais um dos seus fervos favoritos.` });
         } else {
-          if (currentFavorites.length >= 20) { 
+          if (currentFavorites.length >= 20) {
               toast({ title: "Limite de Favoritos Atingido", description: "Você pode ter no máximo 20 locais favoritos.", variant: "destructive", duration: 4000 });
-              return; 
+              return;
           }
           updatedFavorites = [...currentFavorites, venueId];
           toast({ title: "Adicionado aos Favoritos!", description: `${venueName} agora é um dos seus fervos favoritos!`, variant: "default" });
@@ -891,7 +890,7 @@ const MapContentAndLogic = () => {
   };
 
 
-  if (!userLocation) { 
+  if (!userLocation) {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
@@ -910,11 +909,11 @@ const MapContentAndLogic = () => {
 
 
   return (
-    <div className="relative flex w-full h-[calc(100vh-4rem)]"> 
+    <div className="relative flex w-full h-[calc(100vh-4rem)]">
       <Card
         className={cn(
-          "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50", 
-          filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]' 
+          "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
+          filterSidebarOpen ? 'translate-x-0' : '-translate-x-full md:-translate-x-[calc(100%+1rem)]'
         )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -924,7 +923,7 @@ const MapContentAndLogic = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-15rem)] pr-3"> 
+          <ScrollArea className="h-[calc(100vh-15rem)] pr-3">
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Tipo de Local</h3>
               {VENUE_TYPE_OPTIONS.map((option) => (
@@ -940,7 +939,7 @@ const MapContentAndLogic = () => {
                 </Button>
               ))}
             </div>
-            <Separator className="my-4 bg-primary/30" /> 
+            <Separator className="my-4 bg-primary/30" />
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-primary/80">Estilo Musical do Local</h3>
               {MUSIC_STYLE_OPTIONS.map((option) => (
@@ -951,7 +950,7 @@ const MapContentAndLogic = () => {
                   className={`w-full justify-start ${activeMusicStyleFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
                   aria-pressed={activeMusicStyleFilters.includes(option.value)}
                 >
-                  <Music2 className="w-5 h-5 text-primary/70" /> 
+                  <Music2 className="w-5 h-5 text-primary/70" />
                   <span className="ml-2">{option.label}</span>
                 </Button>
               ))}
@@ -966,29 +965,29 @@ const MapContentAndLogic = () => {
             variant="outline"
             size="icon"
             onClick={() => setFilterSidebarOpen(true)}
-            className="absolute z-20 p-2 rounded-full top-4 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg" 
+            className="absolute z-20 p-2 rounded-full top-4 left-4 text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
             aria-label="Abrir filtros"
           >
             <Filter className="w-5 h-5" />
           </Button>
         )}
         {/* Logo positioned on top of the map */}
-        {/* <div className="absolute top-4 left-16 z-20"> // Adjusted left to not overlap filter button 
+        {/* <div className="absolute top-4 left-16 z-20"> // Adjusted left to not overlap filter button
           <Logo iconClassName="text-primary" />
         </div> */}
 
         {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
             <GoogleMap
-                defaultCenter={userLocation} 
+                defaultCenter={userLocation}
                 defaultZoom={15}
                 mapId="2cc43a385ccd3370d4c3b889"
                 gestureHandling="greedy"
                 disableDefaultUI={true}
-                className="w-full h-full" 
+                className="w-full h-full"
             >
                 <MapUpdater center={userLocation} />
 
-                {actualUserLocation && ( 
+                {actualUserLocation && (
                     <AdvancedMarker position={actualUserLocation} title="Sua Localização">
                         <UserCustomMapMarker />
                     </AdvancedMarker>
@@ -1001,9 +1000,9 @@ const MapContentAndLogic = () => {
                     <AdvancedMarker
                         key={venue.id}
                         position={venue.location}
-                        onClick={() => { setSelectedVenue(venue); }} 
+                        onClick={() => { setSelectedVenue(venue); }}
                         title={venue.name}
-                        zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1} 
+                        zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1}
                     >
                         <VenueCustomMapMarker
                             type={venue.type}
@@ -1024,25 +1023,37 @@ const MapContentAndLogic = () => {
       </div>
 
       {selectedVenue && (
-        <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => { 
-            if (!isOpen) {
-                setSelectedVenue(null);
-                 if (actualUserLocation && !isPreviewMode) { // Only reset to user location if not in preview mode
-                    setUserLocation(actualUserLocation); 
+        <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => {
+            if (!isOpen) { // Sheet is closing
+                const venueIdInParams = searchParams.get('venueId');
+                setSelectedVenue(null); // Always clear selection
+
+                if (isPreviewMode && venueIdInParams) {
+                    // If it was a preview and a venueId was in params, clear URL and reset map
+                    router.replace('/map', { scroll: false });
+                    if (actualUserLocation) {
+                        setUserLocation(actualUserLocation);
+                    } else {
+                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); // Fallback
+                    }
                 } else if (!isPreviewMode) {
-                    // Fallback to a default if actualUserLocation is somehow null and not in preview
-                    setUserLocation({ lat: -23.55052, lng: -46.633308 });
-                }
-                // Clear venueId from URL if it's not a preview mode initiated by query param
-                if(!searchParams.get('venueId') || !isPreviewMode) {
-                    router.replace('/map', { scroll: false }); 
+                    // If not a preview, just reset map center to user's location (or default)
+                    if (actualUserLocation) {
+                        setUserLocation(actualUserLocation);
+                    } else {
+                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); // Fallback
+                    }
+                    // And if there was a non-preview venueId in URL, clear it
+                    if (venueIdInParams) {
+                        router.replace('/map', { scroll: false });
+                    }
                 }
             }
         }}>
           <SheetContent
             side="right"
-            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto" 
-            onOpenAutoFocus={(e) => e.preventDefault()} 
+            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto"
+            onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4">
@@ -1052,7 +1063,7 @@ const MapContentAndLogic = () => {
                     </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-2 mt-1"> {/* Increased gap for better spacing */}
-                            <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} readOnly />
+                            <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="#FFD700" readOnly />
                             <span className="text-sm text-foreground font-semibold"> {/* Display numerical rating */}
                                 {selectedVenue.averageVenueRating.toFixed(1)}
                             </span>
@@ -1062,23 +1073,23 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                 <div className="flex items-center">
-                   {currentUser && ( 
+                   {currentUser && (
                      <Button
                         variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "destructive" : "outline"}
                         size="icon"
                         className={cn(
                            "mr-2 h-8 w-8 sm:h-9 sm:w-9",
-                           !currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && 
-                             "border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground", 
-                           currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) && 
-                             "animate-pulse" 
+                           !currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) &&
+                             "border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground",
+                           currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) &&
+                             "animate-pulse"
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
                         title={isPreviewMode ? "Favoritar desabilitado no modo de preview" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
                         disabled={isPreviewMode}
                       >
-                        <Heart 
-                          className="w-4 h-4 sm:w-5 sm:w-5 fill-current" 
+                        <Heart
+                          className="w-4 h-4 sm:w-5 sm:w-5 fill-current"
                         />
                       </Button>
                    )}
@@ -1092,11 +1103,11 @@ const MapContentAndLogic = () => {
                 <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
             </SheetHeader>
 
-            <ScrollArea className="h-[calc(100vh-6rem)]"> 
+            <ScrollArea className="h-[calc(100vh-6rem)]">
               <div className="px-4 sm:px-6 pb-6 pt-4 space-y-6">
                   {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
                     <div className="mb-4">
-                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' }}> 
+                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' }}>
                         <iframe
                           src={getYouTubeEmbedUrl(selectedVenue.youtubeUrl)!}
                           title="YouTube video player"
@@ -1150,7 +1161,7 @@ const MapContentAndLogic = () => {
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && ( 
+                        {selectedVenue.youtubeUrl && (
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1174,8 +1185,8 @@ const MapContentAndLogic = () => {
                           const eventHasEnded = event.endDateTime.toDate() < new Date();
                           const userCheckedInData = userCheckIns[event.id];
                           const userHasCheckedIn = !!userCheckedInData;
-                          const userHasRated = userHasCheckedIn && !!userCheckedInData.hasRated; 
-                          const existingRatingForEvent = userRatings[event.id]; 
+                          const userHasRated = userHasCheckedIn && !!userCheckedInData.hasRated;
+                          const existingRatingForEvent = userRatings[event.id];
 
                           return (
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
@@ -1195,7 +1206,7 @@ const MapContentAndLogic = () => {
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
                                           onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime)}
                                           title={isPreviewMode ? "Compartilhamento desabilitado no modo de preview" : (eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!")}
-                                          disabled={!currentUser || eventHasEnded || isPreviewMode} 
+                                          disabled={!currentUser || eventHasEnded || isPreviewMode}
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
@@ -1221,7 +1232,7 @@ const MapContentAndLogic = () => {
                               </p>
                                {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
                                 <div className="flex items-center gap-1 mt-1">
-                                    <StarRating rating={event.averageRating} totalStars={5} size={14} readOnly />
+                                    <StarRating rating={event.averageRating} totalStars={5} size={14} fillColor="#FFD700" readOnly />
                                     <span className="text-xs text-muted-foreground">({event.ratingCount} {event.ratingCount === 1 ? 'avaliação' : 'avaliações'})</span>
                                 </div>
                                ): (
@@ -1239,16 +1250,17 @@ const MapContentAndLogic = () => {
                                   <h4 className="text-sm font-semibold text-primary mb-1.5">Avalie este evento:</h4>
                                   <StarRating
                                     rating={currentlyRatingEventId === event.id ? currentRating : 0}
-                                    setRating={setCurrentRating} 
+                                    setRating={setCurrentRating}
                                     readOnly={isSubmittingRating && currentlyRatingEventId === event.id}
                                     totalStars={5}
-                                    size={20} 
+                                    size={20}
+                                    fillColor="#FFD700"
                                   />
                                   <Textarea
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
                                     onChange={(e) => {
-                                      setCurrentlyRatingEventId(event.id); 
+                                      setCurrentlyRatingEventId(event.id);
                                       setCurrentComment(e.target.value);
                                     }}
                                     className="mt-2 text-xs"
@@ -1260,10 +1272,10 @@ const MapContentAndLogic = () => {
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
                                         if(currentlyRatingEventId !== event.id) {
-                                            setCurrentRating(0); 
+                                            setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id); 
+                                        setCurrentlyRatingEventId(event.id);
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1276,7 +1288,7 @@ const MapContentAndLogic = () => {
                               {currentUser && userHasCheckedIn && userHasRated && existingRatingForEvent && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
                                     <h4 className="text-sm font-semibold text-primary mb-1.5">Sua avaliação:</h4>
-                                    <StarRating rating={existingRatingForEvent.rating} totalStars={5} size={16} readOnly />
+                                    <StarRating rating={existingRatingForEvent.rating} totalStars={5} size={16} fillColor="#FFD700" readOnly />
                                     {existingRatingForEvent.comment && <p className="mt-1 text-xs text-muted-foreground italic">"{existingRatingForEvent.comment}"</p>}
                                 </div>
                               )}
@@ -1288,7 +1300,7 @@ const MapContentAndLogic = () => {
                       </div>
                     )}
                   </div>
-                   {selectedVenue.location && ( 
+                   {selectedVenue.location && (
                     <div className="pt-6 mt-6 border-t border-border">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1322,7 +1334,7 @@ const MapContentAndLogic = () => {
                             className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
-                              const venueName = encodeURIComponent(selectedVenue.name); 
+                              const venueName = encodeURIComponent(selectedVenue.name);
                               window.open(`https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[formatted_address]=${venueName}`, '_blank');
                               toast({
                                 title: "Uber (Redirecionando)",
