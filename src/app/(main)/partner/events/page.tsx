@@ -10,7 +10,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy, type FieldValue, collectionGroup } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy, type FieldValue, collectionGroup, getDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -25,9 +25,9 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
-import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS } from '@/lib/constants';
+import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS, APP_URL } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode, Loader2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode, Loader2, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 
@@ -105,6 +105,7 @@ const ManageEventsPage: NextPage = () => {
   const router = useRouter();
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [partnerName, setPartnerName] = useState<string>('Seu Local');
   const [loading, setLoading] = useState(true);
   const [partnerEvents, setPartnerEvents] = useState<EventDocument[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
@@ -130,11 +131,19 @@ const ManageEventsPage: NextPage = () => {
 
   useEffect(() => {
     let unsubscribeEvents: (() => void) | null = null;
+    let unsubscribeUserDoc: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
         setLoading(true); 
+
+        const userDocRef = doc(firestore, 'users', user.uid);
+        unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setPartnerName(docSnap.data()?.venueName || 'Seu Local');
+            }
+        });
 
         const eventsCollectionRef = collection(firestore, 'users', user.uid, 'events');
         const q = query(eventsCollectionRef, orderBy('updatedAt', 'desc')); 
@@ -144,9 +153,9 @@ const ManageEventsPage: NextPage = () => {
         }
 
         unsubscribeEvents = onSnapshot(q, (snapshot) => {
-          const eventsData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
+          const eventsData = snapshot.docs.map(docSnap => ({ // Renamed doc to docSnap to avoid conflict
+            id: docSnap.id,
+            ...docSnap.data(),
           } as EventDocument));
           setPartnerEvents(eventsData);
           setLoading(false); 
@@ -158,18 +167,16 @@ const ManageEventsPage: NextPage = () => {
 
       } else {
         router.push('/login');
-        if (unsubscribeEvents) {
-          unsubscribeEvents();
-        }
+        if (unsubscribeEvents) unsubscribeEvents();
+        if (unsubscribeUserDoc) unsubscribeUserDoc();
         setLoading(false); 
       }
     });
 
     return () => {
       unsubscribeAuth();
-      if (unsubscribeEvents) {
-        unsubscribeEvents();
-      }
+      if (unsubscribeEvents) unsubscribeEvents();
+      if (unsubscribeUserDoc) unsubscribeUserDoc();
     };
   }, [router, toast]); 
 
@@ -305,6 +312,48 @@ const ManageEventsPage: NextPage = () => {
       toast({ title: "Erro ao Alterar Visibilidade", variant: "destructive" });
     }
   };
+
+  const handleSharePartnerEvent = async (event: EventDocument) => {
+    if (!currentUser) {
+        toast({ title: "Não Autenticado", description: "Faça login para compartilhar.", variant: "destructive" });
+        return;
+    }
+    if (isEventPast(event.endDateTime)) {
+        toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
+        return;
+    }
+
+    const shareUrl = `${APP_URL}/shared-event/${event.partnerId}/${event.id}`;
+    
+    try {
+        if (navigator.share) {
+            await navigator.share({
+                title: `Confira este Fervo: ${partnerName} - ${event.eventName}`,
+                text: `Olha esse evento que encontrei no Fervo App!`,
+                url: shareUrl,
+            });
+            toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default" });
+        } else {
+            await navigator.clipboard.writeText(shareUrl);
+            toast({ title: "Link Copiado!", description: "O link do evento foi copiado para a área de transferência.", variant: "default" });
+        }
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            console.log('Share operation cancelled by user.');
+            return; 
+        }
+        console.error("Error sharing event:", error);
+        // Fallback to clipboard if navigator.share failed for other reasons
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            toast({ title: "Link Copiado!", description: "O compartilhamento falhou ou não está disponível. O link foi copiado para a área de transferência!", variant: "default", duration: 6000 });
+        } catch (clipError) {
+            console.error('Failed to copy link to clipboard (fallback):', clipError);
+            toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive" });
+        }
+    }
+  };
+
 
   if (loading) {
     return (
@@ -530,6 +579,15 @@ const ManageEventsPage: NextPage = () => {
                             <QrCode className={`w-4 h-4 sm:w-5 sm:h-5 ${eventIsPast ? 'text-muted-foreground' : 'text-primary'}`} />
                           </Button>
                         )}
+                         <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleSharePartnerEvent(event)} 
+                            title={eventIsPast ? "Evento encerrado, não pode compartilhar" : "Compartilhar este evento"}
+                            disabled={eventIsPast}
+                          >
+                            <Share2 className={`w-4 h-4 sm:w-5 sm:h-5 ${eventIsPast ? 'text-muted-foreground' : 'text-accent'}`} />
+                          </Button>
                       </div>
                     </div>
                     {event.description && <p className="mt-2 text-sm text-foreground/80">{event.description}</p>}
