@@ -2,9 +2,9 @@
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, use } from 'react';
 import type { NextPage } from 'next';
-import { useRouter, useSearchParams } from 'next/navigation'; // Added useSearchParams
+import { useRouter, useSearchParams, useParams } from 'next/navigation'; // Added useParams
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -773,6 +773,7 @@ const MapContentAndLogic = () => {
       } catch (shareError: any) {
         if (shareError.name === 'AbortError') {
           console.log('Share operation cancelled by user.');
+          // No toast for user cancelling, as it's intentional
           return;
         } else {
           console.warn('navigator.share failed, falling back to clipboard:', shareError);
@@ -989,7 +990,7 @@ const MapContentAndLogic = () => {
             <GoogleMap
                 defaultCenter={userLocation}
                 defaultZoom={15}
-                mapId="2cc43a385ccd3370d4c3b889" // Reverted to original working mapId
+                mapId="ec411dbe9f75cb23"
                 gestureHandling="greedy"
                 disableDefaultUI={true}
                 className="w-full h-full"
@@ -1082,7 +1083,7 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                 <div className="flex items-center">
-                   {currentUser && !isPreviewMode && (
+                   {currentUser && (
                      <Button
                         variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "destructive" : "outline"}
                         size="icon"
@@ -1094,7 +1095,7 @@ const MapContentAndLogic = () => {
                              "animate-pulse"
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
-                        title={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
+                        title={isPreviewMode ? "Favoritar desabilitado em modo preview" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
                         disabled={isPreviewMode}
                       >
                         <Heart
