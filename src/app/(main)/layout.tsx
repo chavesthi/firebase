@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -161,7 +160,7 @@ export default function MainAppLayout({
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
-  const [showLoginQrHint, setShowLoginQrHint] = useState(false);
+
   const prevAppUserRef = useRef<AppUser | null>(null);
 
 
@@ -277,6 +276,10 @@ export default function MainAppLayout({
         if (isPartnerConsideredNew) {
           const typeMatch = appUser.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
           const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => appUser.preferredMusicStyles?.includes(style));
+          // TODO: Future enhancement: Add city/state matching if user preferences for location are collected
+          // const cityMatch = appUser.city === partnerData.address?.city;
+          // const stateMatch = appUser.state === partnerData.address?.state;
+          // if ((typeMatch || styleMatch) && cityMatch && stateMatch) { ... }
 
           if (typeMatch || styleMatch) {
             potentialNewNotifications.push({
@@ -352,7 +355,13 @@ export default function MainAppLayout({
             const eventId = change.doc.id;
             const eventCreatedAt = eventData.createdAt as FirebaseTimestamp;
             const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp; 
+            const eventEndDateTime = eventData.endDateTime as FirebaseTimestamp;
             const lastUserCheck = appUser.lastNotificationCheckTimestamp?.toMillis() || 0;
+
+            // Prevent notifications for events that have already ended
+            if (eventEndDateTime && eventEndDateTime.toDate() < new Date()) {
+              return; 
+            }
 
             if (change.type === "added") {
               if (eventCreatedAt && eventCreatedAt.toMillis() > lastUserCheck) {
@@ -778,4 +787,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-
