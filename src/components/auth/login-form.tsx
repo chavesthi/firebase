@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -86,6 +87,10 @@ export function LoginForm() {
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
         venueCoins: {}, // Initialize venueCoins map
+        favoriteVenueIds: [],
+        favoriteVenueNotificationSettings: {},
+        notifications: [],
+        lastNotificationCheckTimestamp: null,
       });
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
@@ -109,31 +114,41 @@ export function LoginForm() {
         await auth.signOut();
         return;
       }
-
-      // Time-based greeting for existing users
-      const now = new Date();
-      const hour = now.getHours();
-      let greetingPrefix = "";
-
-      if (hour >= 0 && hour < 5) { // 00:00 to 04:59
-        greetingPrefix = "Boa Madrugada";
-      } else if (hour >= 5 && hour < 12) { // 05:00 to 11:59
-        greetingPrefix = "Bom Dia";
-      } else if (hour >= 12 && hour < 18) { // 12:00 to 17:59
-        greetingPrefix = "Boa Tarde";
-      } else { // 18:00 to 23:59
-        greetingPrefix = "Boa Noite";
-      }
       
-      const greetingTitle = `${greetingPrefix}, ${userNameForGreeting}!`;
-      const greetingDescription = "Onde vamos hoje?";
+      // Time-based greeting for existing users who completed the questionnaire
+      if (questionnaireCompletedForRedirect) {
+        const now = new Date();
+        const hour = now.getHours();
+        let greetingPrefix = "";
 
-      toast({
-        title: greetingTitle,
-        description: greetingDescription,
-        variant: "default",
-        duration: 3000, 
-      });
+        if (hour >= 0 && hour < 5) { // 00:00 to 04:59
+          greetingPrefix = "Boa Madrugada";
+        } else if (hour >= 5 && hour < 12) { // 05:00 to 11:59
+          greetingPrefix = "Bom Dia";
+        } else if (hour >= 12 && hour < 18) { // 12:00 to 17:59
+          greetingPrefix = "Boa Tarde";
+        } else { // 18:00 to 23:59
+          greetingPrefix = "Boa Noite";
+        }
+        
+        const greetingTitle = `${greetingPrefix}, ${userNameForGreeting}!`;
+        const greetingDescription = "Onde vamos hoje?";
+
+        toast({
+          title: greetingTitle,
+          description: greetingDescription,
+          variant: "default",
+          duration: 3000, 
+        });
+      } else {
+         // If questionnaire not completed, show the standard welcome back / complete profile message
+         toast({
+            title: `Bem-vindo(a) de volta, ${userNameForGreeting}!`,
+            description: "Por favor, complete seu perfil para continuar.",
+            variant: "default",
+         });
+      }
+
 
       if (userRoleInDbForRedirect === UserRole.USER) {
         router.push(questionnaireCompletedForRedirect ? '/map' : '/questionnaire');
@@ -155,6 +170,10 @@ export function LoginForm() {
       let errorMessage = "Falha no login. Verifique suas credenciais.";
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         errorMessage = "E-mail ou senha inválidos.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Muitas tentativas de login. Tente novamente mais tarde.";
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Erro de rede. Verifique sua conexão e tente novamente.";
       }
       toast({
         title: "Erro no Login",
@@ -198,6 +217,8 @@ export function LoginForm() {
         errorMessage = "Já existe uma conta com este e-mail usando um método de login diferente.";
       } else if (error.code === 'auth/popup-closed-by-user') {
         errorMessage = "Login com Google cancelado.";
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Erro de rede. Verifique sua conexão e tente novamente.";
       }
       toast({
         title: "Erro no Login com Google",
@@ -252,6 +273,7 @@ export function LoginForm() {
                   placeholder="seuemail@exemplo.com"
                   {...loginMethods.register('email')}
                   className={cn(loginMethods.formState.errors.email && commonErrorBorderStyle)}
+                  autoComplete="email"
                 />
                 {loginMethods.formState.errors.email && <p className="text-sm text-destructive">{loginMethods.formState.errors.email.message}</p>}
               </div>
@@ -264,6 +286,7 @@ export function LoginForm() {
                     placeholder="********"
                     {...loginMethods.register('password')}
                     className={cn(loginMethods.formState.errors.password && commonErrorBorderStyle)}
+                    autoComplete="current-password"
                   />
                   <Button
                     type="button"
@@ -312,6 +335,7 @@ export function LoginForm() {
                   placeholder="Seu nome"
                   {...signupMethods.register('name')}
                   className={cn(signupMethods.formState.errors.name && commonErrorBorderStyle)}
+                   autoComplete="name"
                 />
                 {signupMethods.formState.errors.name && <p className="text-sm text-destructive">{signupMethods.formState.errors.name.message}</p>}
               </div>
@@ -323,6 +347,7 @@ export function LoginForm() {
                   placeholder="seuemail@exemplo.com"
                   {...signupMethods.register('email')}
                   className={cn(signupMethods.formState.errors.email && commonErrorBorderStyle)}
+                  autoComplete="email"
                 />
                 {signupMethods.formState.errors.email && <p className="text-sm text-destructive">{signupMethods.formState.errors.email.message}</p>}
               </div>
@@ -335,6 +360,7 @@ export function LoginForm() {
                     placeholder="Crie uma senha"
                     {...signupMethods.register('password')}
                     className={cn(signupMethods.formState.errors.password && commonErrorBorderStyle)}
+                    autoComplete="new-password"
                   />
                   <Button
                     type="button"
@@ -358,6 +384,7 @@ export function LoginForm() {
                     placeholder="Confirme sua senha"
                     {...signupMethods.register('confirmPassword')}
                     className={cn(signupMethods.formState.errors.confirmPassword && commonErrorBorderStyle)}
+                    autoComplete="new-password"
                   />
                   <Button
                     type="button"
@@ -407,3 +434,4 @@ export function LoginForm() {
     </Tabs>
   );
 }
+
