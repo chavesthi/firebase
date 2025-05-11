@@ -1,3 +1,4 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -1374,3 +1375,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
