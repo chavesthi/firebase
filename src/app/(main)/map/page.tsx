@@ -192,7 +192,7 @@ const VenueCustomMapMarker = ({
             ...(isFilterActive && { animation: `${animationName} 1.5s infinite ease-in-out` })
           }}
         >
-          {IconComponent ? <IconComponent className="w-6 h-6 text-white" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
+          {IconComponent ? <IconComponent className="w-6 h-6 text-black" /> : <div className="w-6 h-6 bg-white rounded-full"/>}
         </div>
         <div
           className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px]"
@@ -1082,7 +1082,7 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                 <div className="flex items-center">
-                   {currentUser && (
+                   {currentUser && !isPreviewMode && (
                      <Button
                         variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "destructive" : "outline"}
                         size="icon"
@@ -1094,7 +1094,7 @@ const MapContentAndLogic = () => {
                              "animate-pulse"
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
-                        title={isPreviewMode ? "Favoritar desabilitado no modo de preview" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
+                        title={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
                         disabled={isPreviewMode}
                       >
                         <Heart
