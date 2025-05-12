@@ -1,87 +1,24 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+// Removed: import { useState, useEffect, useRef } from 'react';
 import { LoginForm } from '@/components/auth/login-form';
 import { Logo } from '@/components/shared/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
+// Removed: import { Button } from '@/components/ui/button';
+// Removed: import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 
 export default function LoginPage() {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false); 
-  const [isAudioMuted, setIsAudioMuted] = useState(true);    
-
-  // Attempt to play on mount (muted)
-  useEffect(() => {
-    const audioElement = audioRef.current;
-    if (audioElement) {
-      audioElement.loop = true;
-      audioElement.muted = true; // Start muted for autoplay policies
-      audioElement.play()
-        .then(() => {
-          setIsAudioPlaying(true); 
-        })
-        .catch(error => {
-          console.warn("Muted autoplay was prevented on load:", error);
-          setIsAudioPlaying(false);
-        });
-    }
-  }, []);
-
-  // Effect to control play/pause based on isAudioPlaying state
-  useEffect(() => {
-    const audioElement = audioRef.current;
-    if (audioElement) {
-      if (isAudioPlaying) {
-        audioElement.play().catch(error => console.warn("Audio play command failed:", error));
-      } else {
-        audioElement.pause();
-      }
-    }
-  }, [isAudioPlaying]);
-
-  // Effect to control mute based on isAudioMuted state
-  useEffect(() => {
-    const audioElement = audioRef.current;
-    if (audioElement) {
-      audioElement.muted = isAudioMuted;
-    }
-  }, [isAudioMuted]);
-
-
-  const togglePlayPause = () => {
-    setIsAudioPlaying(prev => !prev);
-    // If it was muted and we are trying to play, unmute it.
-    if (!isAudioPlaying && isAudioMuted) {
-        setIsAudioMuted(false);
-    }
-  };
-
-  const toggleMute = () => {
-    setIsAudioMuted(prev => !prev);
-  };
+  // All audio-related state, refs, and functions have been removed.
+  // The useEffect hook for audio playback has been removed.
+  // The misplaced Music Controls div has been removed.
+  // The <audio> tag has been removed.
+  // The onLoginSuccess prop from <LoginForm /> has been removed.
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background relative">
-      {/* 
-        Audio Element: 
-        Please create a folder named 'audio' inside your 'public' directory.
-        Then, place your desired login music file (e.g., 'login-music.mp3') into 'public/audio/'.
-        If you use a different filename or path, update the src attribute below accordingly.
-      */}
-      <audio ref={audioRef} src="public\audio\Name The Time And Place - Telecasted.mp3" preload="auto" />
-
-      {/* Music Controls */}
-      <div className="absolute bottom-4 right-4 sm:bottom-8 sm:right-8 flex gap-2 z-10">
-        <Button variant="ghost" size="icon" onClick={togglePlayPause} className="text-primary hover:bg-primary/10" aria-label={isAudioPlaying ? 'Pausar música' : 'Tocar música'}>
-          {isAudioPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-        </Button>
-        <Button variant="ghost" size="icon" onClick={toggleMute} className="text-primary hover:bg-primary/10" aria-label={isAudioMuted ? 'Ativar som' : 'Desativar som'}>
-          {isAudioMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-        </Button>
-      </div>
+      {/* Audio Element has been removed */}
+      {/* Misplaced Music Controls div has been removed */}
 
       <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <Logo />
@@ -96,7 +33,7 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <LoginForm />
+            <LoginForm /> {/* onLoginSuccess prop related to audio has been removed */}
           </CardContent>
         </Card>
       </div>
