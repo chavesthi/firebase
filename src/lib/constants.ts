@@ -73,11 +73,14 @@ export const COUPON_CODE_PREFIX = "FERVO";
 
 // Stripe API Keys - Replace with your actual keys in .env
 export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_live_51RMuSWL8kxrPyagwUXEKGuW3XUbY2Rt98Ff7kqfqM8t3A65teTG0VADs1n863vV3SFdXxvUXtp25olh92tlIDNyW00g4g9ou7f";
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "YOUR_STRIPE_SECRET_KEY";
-export const STRIPE_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "YOUR_FERVO_PLAN_PRICE_ID"; // e.g., price_xxxxxxxxxxxxxx
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "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";
+// IMPORTANT: The ID below is a PRODUCT ID. Stripe Checkout/Subscription APIs typically require a PRICE ID (e.g., price_xxxxxxxxxxxxxx).
+// Please ensure you create a Price associated with this Product in your Stripe Dashboard and use that Price ID here.
+export const STRIPE_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "prod_SIMUUs67RhC80g"; 
 
 // App URL
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
 
 // PagBank Pre-approval Code (if still used as an alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
+//A584618E-1414-7284-4406-7FA92A607421
