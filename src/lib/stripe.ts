@@ -1,8 +1,9 @@
+
 import Stripe from 'stripe';
 import { STRIPE_SECRET_KEY } from './constants';
 
-if (!STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
+if (!STRIPE_SECRET_KEY || STRIPE_SECRET_KEY === "YOUR_STRIPE_SECRET_KEY") {
+  throw new Error('STRIPE_SECRET_KEY is not set or is a placeholder in environment variables.');
 }
 
 export const stripe = new Stripe(STRIPE_SECRET_KEY, {

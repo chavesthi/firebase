@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -21,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { STRIPE_PUBLIC_KEY, APP_URL } from "@/lib/constants";
+import { STRIPE_PUBLIC_KEY, APP_URL, PAGBANK_PRE_APPROVAL_CODE } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -210,7 +211,7 @@ export default function PartnerSettingsPage() {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
     }
-    if (!STRIPE_PUBLIC_KEY) {
+    if (!STRIPE_PUBLIC_KEY || STRIPE_PUBLIC_KEY === "YOUR_STRIPE_PUBLISHABLE_KEY") {
       toast({ title: "Erro de Configuração", description: "Chave pública do Stripe não configurada.", variant: "destructive" });
       setIsSubmittingCheckout(false);
       return;
@@ -237,17 +238,12 @@ export default function PartnerSettingsPage() {
         throw new Error("Stripe.js não carregou.");
       }
 
-      // When the customer clicks on the button, redirect them to Checkout.
-      // Returns a Prome that resolves when checkout is completed.
       const { error } = await stripe.redirectToCheckout({ sessionId: session.url }); 
 
       if (error) {
         console.error("Stripe redirect error:", error);
         toast({ title: "Erro no Checkout", description: error.message || "Não foi possível redirecionar para o pagamento.", variant: "destructive" });
       }
-      // If `redirectToCheckout` fails due to a browser issue (e.g., popup blocker),
-      // customer will be redirected to the success_url or cancel_url already.
-      // So, no explicit redirection here if error occurs.
     } catch (error: any) {
       console.error("Checkout error:", error);
       toast({
@@ -262,7 +258,6 @@ export default function PartnerSettingsPage() {
 
 
   useEffect(() => {
-    // Check to see if this is a redirect back from Checkout
     const queryParams = new URLSearchParams(window.location.search);
     if (queryParams.get("session_id")) {
       toast({
@@ -271,7 +266,6 @@ export default function PartnerSettingsPage() {
         variant: "default",
         duration: 7000,
       });
-      // Remove query params from URL
       router.replace('/partner/settings', { scroll: false });
     }
      if (queryParams.get("canceled")) {
@@ -301,7 +295,6 @@ export default function PartnerSettingsPage() {
 
       const partnerIdToDelete = currentUser.uid;
 
-      // --- FervoCoin Redistribution Logic ---
       const usersCollectionRef = collection(firestore, "users");
       const usersSnapshot = await getDocs(usersCollectionRef);
       const coinBatch = writeBatch(firestore);
@@ -326,9 +319,7 @@ export default function PartnerSettingsPage() {
       });
       await coinBatch.commit();
       toast({ title: "Redistribuição de Moedas Concluída", description: "Moedas de usuários foram reatribuídas.", duration: 4000 });
-      // --- End FervoCoin Redistribution Logic ---
 
-      // --- Notification Cleanup Logic ---
       const notificationCleanupBatch = writeBatch(firestore);
       const allUsersSnapshotForNotifications = await getDocs(query(collection(firestore, "users"))); 
 
@@ -347,7 +338,6 @@ export default function PartnerSettingsPage() {
       });
       await notificationCleanupBatch.commit();
       toast({ title: "Limpeza de Notificações", description: "Notificações relacionadas ao local foram removidas dos usuários.", duration: 4000 });
-      // --- End Notification Cleanup Logic ---
 
       const partnerDocRef = doc(firestore, "users", currentUser.uid);
       await deleteFirestoreDoc(partnerDocRef);
@@ -396,7 +386,6 @@ export default function PartnerSettingsPage() {
           <CardDescription className="text-sm sm:text-base">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
         
-        {/* Settings Form */}
         <form onSubmit={handleSubmit(onSettingsSubmit)}>
           <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
             <div className="flex flex-col items-center space-y-2">
@@ -412,7 +401,6 @@ export default function PartnerSettingsPage() {
                <p className="text-xs sm:text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
             </div>
 
-            {/* Basic Info Section */}
             <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="contactName" className="text-primary/90">Nome do Contato</Label>
@@ -467,7 +455,6 @@ export default function PartnerSettingsPage() {
                  {errors.notificationsEnabled && <p className="mt-1 text-sm text-destructive">{errors.notificationsEnabled.message}</p>}
             </div>
             
-            {/* Coupon Report Password Section */}
             <div className="space-y-4">
                 <h3 className="text-lg font-medium text-primary">Senha para Limpar Relatório de Cupons</h3>
                 <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
@@ -540,11 +527,9 @@ export default function PartnerSettingsPage() {
           </CardFooter>
         </form>
 
-        {/* Subscription and Deletion Sections (Outside the main form) */}
         <CardContent className="space-y-6 p-4 sm:p-6">
             <Separator className="border-primary/20" />
 
-            {/* Subscription Plans Section */}
              <div className="space-y-4">
                 <h3 className="text-lg font-medium text-primary flex items-center">
                     <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
@@ -564,15 +549,14 @@ export default function PartnerSettingsPage() {
                         <Button
                             onClick={handleStripeCheckout}
                             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                            disabled={isSubmittingCheckout || isSubmitting}
+                            disabled={isSubmittingCheckout || isSubmitting || isDeletingAccount}
                             type="button" 
                         >
                             {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                             Assinar Plano Fervo (Cartão)
                         </Button>
-                        {/* PagBank Button Form - Keep this if PagBank is still an option */}
                         <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full">
-                          <input type="hidden" name="code" value="A584618E1414728444067FA92A607421" />
+                          <input type="hidden" name="code" value={PAGBANK_PRE_APPROVAL_CODE} />
                           <input type="hidden" name="iot" value="button" />
                           <input type="image" src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" name="submit" alt="Pague com PagBank - É rápido, grátis e seguro!" width="209" height="48" className="mx-auto" />
                         </form>
@@ -582,7 +566,6 @@ export default function PartnerSettingsPage() {
 
             <Separator className="border-primary/20" />
 
-            {/* Account Deletion Section */}
             <div className="space-y-2">
                 <h3 className="text-lg font-medium text-destructive">Excluir Conta</h3>
                 <p className="text-sm text-muted-foreground">
@@ -591,7 +574,7 @@ export default function PartnerSettingsPage() {
                 </p>
                 <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" className="w-full sm:w-auto">
+                        <Button variant="destructive" className="w-full sm:w-auto" disabled={isSubmitting || isSubmittingCheckout || isDeletingAccount}>
                             <Trash2 className="w-4 h-4 mr-2" /> Excluir Minha Conta de Parceiro
                         </Button>
                     </AlertDialogTrigger>

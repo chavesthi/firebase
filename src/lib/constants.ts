@@ -46,7 +46,7 @@ export const MUSIC_STYLE_OPTIONS = [
   { value: MusicStyle.FUNK_RAP, label: 'Funk/Rap' },
   { value: MusicStyle.POP, label: 'Pop' },
   { value: MusicStyle.METAL, label: 'Metal' },
-  { value: MusicStyle.BLUES_JAZZ, label: 'Blues/Jazz' },
+  { value: MusicStyle.BLUES_JAZZ, label: 'Blues_Jazz' },
   { value: MusicStyle.OTHER, label: 'Outros' },
 ];
 
@@ -71,14 +71,14 @@ export const FERVO_COINS_FOR_COUPON = 20; // Coins needed *per venue*
 export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 350ml";
 export const COUPON_CODE_PREFIX = "FERVO";
 
-// Stripe API Keys
-export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_live_51RMuSWL8kxrPyagwUXEKGuW3XUbY2Rt98Ff7kqfqM8t3A65teTG0VADs1n863vV3SFdXxvUXtp25olh92tlIDNyW00g4g9ou7f";
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "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";
-export const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || "price_1OxxnmDjJH8lSkGuEjHJo6me"; // Default Fervo App Price ID (R$ 2,00)
+// Stripe API Keys - Replace with your actual keys in .env
+export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "YOUR_STRIPE_PUBLISHABLE_KEY";
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "YOUR_STRIPE_SECRET_KEY";
+export const STRIPE_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "YOUR_FERVO_PLAN_PRICE_ID"; // e.g., price_xxxxxxxxxxxxxx
 
 // App URL
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
 
 // PagBank Pre-approval Code (if still used as an alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
-//A584618E-1414-7284-4406-7FA92A607421
+
