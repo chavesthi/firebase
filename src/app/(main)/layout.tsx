@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -16,7 +17,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'; 
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp, orderBy, runTransaction } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
@@ -59,6 +60,10 @@ interface AppUser {
   favoriteVenueIds?: string[];
   favoriteVenueNotificationSettings?: FavoriteVenueNotificationSettings; // Added for favorite venue notifications
   venueName?: string; // For partner role, to show in greeting
+  address?: { // For location-based new partner notifications
+    city?: string;
+    state?: string;
+  };
 }
 
 // Keep track of active listeners to avoid duplicates and for cleanup
@@ -95,6 +100,7 @@ const useAuthAndUserSubscription = () => {
               favoriteVenueIds: userData.favoriteVenueIds || [],
               favoriteVenueNotificationSettings: userData.favoriteVenueNotificationSettings || {},
               venueName: userData.venueName, // For partner role
+              address: userData.address, // For location-based notifications
             });
           } else {
             // If user doc doesn't exist, create a default AppUser structure
@@ -110,6 +116,7 @@ const useAuthAndUserSubscription = () => {
               favoriteVenueIds: [],
               favoriteVenueNotificationSettings: {}, 
               venueName: undefined,
+              address: undefined,
             });
           }
           setLoading(false);
@@ -276,17 +283,22 @@ export default function MainAppLayout({
         if (isPartnerConsideredNew) {
           const typeMatch = appUser.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
           const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => appUser.preferredMusicStyles?.includes(style));
-          // TODO: Future enhancement: Add city/state matching if user preferences for location are collected
-          // const cityMatch = appUser.city === partnerData.address?.city;
-          // const stateMatch = appUser.state === partnerData.address?.state;
-          // if ((typeMatch || styleMatch) && cityMatch && stateMatch) { ... }
+          
+          const userCity = appUser.address?.city;
+          const userState = appUser.address?.state;
+          const partnerCity = partnerData.address?.city;
+          const partnerState = partnerData.address?.state;
 
-          if (typeMatch || styleMatch) {
+          const locationMatch = userCity && userState && partnerCity && partnerState &&
+                                userCity.toLowerCase() === partnerCity.toLowerCase() &&
+                                userState.toLowerCase() === partnerState.toLowerCase();
+
+          if ((typeMatch || styleMatch) && locationMatch) {
             potentialNewNotifications.push({
               id: `partner_${partnerId}_${partnerProfileCompletedAt.getTime()}`, 
               partnerId: partnerId,
               venueName: partnerData.venueName,
-              message: `Novo Fervo que combina com você: ${partnerData.venueName}!`,
+              message: `Novo Fervo em ${partnerData.address?.city || 'sua região'} que combina com você: ${partnerData.venueName}!`,
               createdAt: partnerData.questionnaireCompletedAt as FirebaseTimestamp,
               read: false,
               venueType: partnerData.venueType as VenueType,
@@ -309,7 +321,19 @@ export default function MainAppLayout({
             const finalNotifications = [...freshExistingNotificationsFromDB, ...notificationsActuallyToAdd]
                 .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
                 .slice(0, 20); // Keep max 20 notifications
-            await updateDoc(userDocRef, { notifications: finalNotifications });
+            
+            let maxCreatedAt: FirebaseTimestamp | undefined = appUser.lastNotificationCheckTimestamp;
+            notificationsActuallyToAdd.forEach(n => {
+                if (!maxCreatedAt || n.createdAt.toMillis() > maxCreatedAt.toMillis()) {
+                    maxCreatedAt = n.createdAt;
+                }
+            });
+            
+            const updatePayload:any = { notifications: finalNotifications };
+            if (maxCreatedAt && (!appUser.lastNotificationCheckTimestamp || maxCreatedAt.toMillis() > appUser.lastNotificationCheckTimestamp.toMillis())) {
+                updatePayload.lastNotificationCheckTimestamp = maxCreatedAt;
+            }
+            await updateDoc(userDocRef, updatePayload);
         }
       }
     }, (error) => {
@@ -317,7 +341,9 @@ export default function MainAppLayout({
     });
 
     return () => unsubscribe();
-  }, [appUser, loading]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUser?.uid, appUser?.questionnaireCompleted, appUser?.role, appUser?.preferredVenueTypes, appUser?.preferredMusicStyles, appUser?.address, appUser?.lastNotificationCheckTimestamp, loading]);
+
 
   // Effect for new/updated event notifications from favorited venues
   useEffect(() => {
@@ -358,7 +384,6 @@ export default function MainAppLayout({
             const eventEndDateTime = eventData.endDateTime as FirebaseTimestamp;
             const lastUserCheck = appUser.lastNotificationCheckTimestamp?.toMillis() || 0;
 
-            // Prevent notifications for events that have already ended
             if (eventEndDateTime && eventEndDateTime.toDate() < new Date()) {
               return; 
             }
@@ -393,7 +418,7 @@ export default function MainAppLayout({
           });
 
           if (notificationsToAddThisCycle.length > 0) {
-            const currentUserDocSnap = await getDoc(userDocRefToUpdate); // Fresh read
+            const currentUserDocSnap = await getDoc(userDocRefToUpdate); 
             const freshExistingUserNotifications: Notification[] = currentUserDocSnap.data()?.notifications || [];
 
             const notificationsActuallyToAdd = notificationsToAddThisCycle.filter(newNotif => 
@@ -404,7 +429,19 @@ export default function MainAppLayout({
                 const allNotifications = [...freshExistingUserNotifications, ...notificationsActuallyToAdd]
                   .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
                   .slice(0, 20); 
-                await updateDoc(userDocRefToUpdate, { notifications: allNotifications });
+                
+                let maxCreatedAtOfNew: FirebaseTimestamp | null = null; 
+                notificationsActuallyToAdd.forEach(n => {
+                    if (!maxCreatedAtOfNew || n.createdAt.toMillis() > maxCreatedAtOfNew.toMillis()) {
+                        maxCreatedAtOfNew = n.createdAt;
+                    }
+                });
+                
+                const updatePayload: any = { notifications: allNotifications };
+                if (maxCreatedAtOfNew && (!appUser.lastNotificationCheckTimestamp || maxCreatedAtOfNew.toMillis() > appUser.lastNotificationCheckTimestamp.toMillis())) {
+                    updatePayload.lastNotificationCheckTimestamp = maxCreatedAtOfNew;
+                }
+                await updateDoc(userDocRefToUpdate, updatePayload);
             }
           }
         }, (error) => {
@@ -417,7 +454,6 @@ export default function MainAppLayout({
       }
     });
   
-    // Clean up listeners for venues no longer favorited
     Object.keys(activeEventNotificationListeners).forEach(venueId => {
       if (!currentFavorites.includes(venueId)) {
         if (activeEventNotificationListeners[venueId]) {
@@ -483,7 +519,6 @@ export default function MainAppLayout({
     
     const originalNotifications = appUser.notifications ? [...appUser.notifications] : [];
 
-    // Optimistic UI Update
     if (setAppUser && appUser.notifications) {
       const updatedLocalNotifications = appUser.notifications.filter(n => n.id !== notificationId);
       setAppUser(prev => prev ? {...prev, notifications: updatedLocalNotifications} : null);
@@ -492,25 +527,24 @@ export default function MainAppLayout({
     try {
         const userDocRef = doc(firestore, "users", appUser.uid);
         
-        const userSnap = await getDoc(userDocRef);
-        if (!userSnap.exists()) {
-            console.error("User document not found for dismissing notification.");
-            if (setAppUser) setAppUser(prev => prev ? {...prev, notifications: originalNotifications} : null); 
-            toast({ title: "Erro ao Remover", description: "Usuário não encontrado.", variant: "destructive" });
-            return;
-        }
-
-        const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
-        const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
-        
-        await updateDoc(userDocRef, { notifications: updatedDbNotifications });
+        await runTransaction(firestore, async (transaction) => {
+            const userSnap = await transaction.get(userDocRef);
+            if (!userSnap.exists()) {
+                throw new Error("User document not found for dismissing notification.");
+            }
+            const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
+            const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
+            transaction.update(userDocRef, { notifications: updatedDbNotifications });
+        });
         
         toast({ title: "Notificação Removida", description: "A notificação foi removida permanentemente.", variant: "default" });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error dismissing notification from Firestore:", error);
-        if (setAppUser) setAppUser(prev => prev ? {...prev, notifications: originalNotifications} : null); 
-        toast({ title: "Erro ao Remover", description:"Não foi possível remover a notificação do sistema.", variant: "destructive" });
+        if (setAppUser) { 
+            setAppUser(prev => prev ? {...prev, notifications: originalNotifications} : null); 
+        }
+        toast({ title: "Erro ao Remover", description: error.message || "Não foi possível remover a notificação do sistema.", variant: "destructive" });
     }
   };
 
@@ -556,8 +590,6 @@ export default function MainAppLayout({
       if (appUser.questionnaireCompleted) {
         renderChildrenContent = true;
       } else {
-        // User exists but questionnaire not done, and not on an allowed page.
-        // useEffect will handle redirect. Show a specific loader.
         return (
           <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
             <Loader2 className="w-10 h-10 animate-spin text-primary" />
@@ -566,8 +598,6 @@ export default function MainAppLayout({
         );
       }
     } else {
-      // No appUser, and not on an allowed public/auth page.
-      // useEffect will handle redirect. Show a specific loader.
       return (
         <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
@@ -787,3 +817,6 @@ export default function MainAppLayout({
     </div>
   );
 }
+
+
+    
