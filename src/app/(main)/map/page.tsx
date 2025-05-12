@@ -2,7 +2,7 @@
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, type ReactElement } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff } from 'lucide-react';
@@ -518,9 +518,9 @@ const MapContentAndLogic = () => {
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const eventsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
+        const eventsData = snapshot.docs.map(docSnap => ({ // Renamed doc to docSnap
+          id: docSnap.id,
+          ...docSnap.data(),
         } as VenueEvent)); 
 
         setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
@@ -562,7 +562,7 @@ const MapContentAndLogic = () => {
 
   const toggleMusicStyleFilter = useCallback((style: MusicStyle) => {
     setActiveMusicStyleFilters(prev =>
-      prev.includes(style) ? prev.filter(s => s !== style) : [...prev, s]
+      prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]
     );
   }, []);
 
