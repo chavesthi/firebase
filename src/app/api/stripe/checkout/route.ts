@@ -32,10 +32,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "User email not found." }, { status: 400 });
     }
 
-    if (!STRIPE_PRICE_ID || STRIPE_PRICE_ID === "YOUR_FERVO_PLAN_PRICE_ID") {
+    if (!STRIPE_PRICE_ID || STRIPE_PRICE_ID === "price_YOUR_FERVO_PLAN_PRICE_ID") {
         console.error("Stripe Price ID is not configured. Please set NEXT_PUBLIC_STRIPE_PRICE_ID in your .env file.");
-        return NextResponse.json({ message: "Stripe Price ID not configured on the server." }, { status: 500 });
+        return NextResponse.json({ message: "Stripe Price ID not configured on the server. Ensure it's a Price ID (starts with 'price_')." }, { status: 500 });
     }
+    if (!STRIPE_PRICE_ID.startsWith("price_")) {
+        console.error(`Invalid Stripe Price ID configured: ${STRIPE_PRICE_ID}. It should start with 'price_'.`);
+        return NextResponse.json({ message: `Invalid Stripe Price ID. Ensure it's a Price ID (starts with 'price_'), not a Product ID.` }, { status: 500 });
+    }
+
 
     const stripeSession = await stripe.checkout.sessions.create({
       success_url: `${APP_URL}/partner/settings?session_id={CHECKOUT_SESSION_ID}`, // Redirect back to settings page on success

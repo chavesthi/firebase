@@ -74,9 +74,10 @@ export const COUPON_CODE_PREFIX = "FERVO";
 // Stripe API Keys - Replace with your actual keys in .env
 export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_live_51RMuSWL8kxrPyagwUXEKGuW3XUbY2Rt98Ff7kqfqM8t3A65teTG0VADs1n863vV3SFdXxvUXtp25olh92tlIDNyW00g4g9ou7f";
 export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "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";
-// IMPORTANT: The ID below is a PRODUCT ID. Stripe Checkout/Subscription APIs typically require a PRICE ID (e.g., price_xxxxxxxxxxxxxx).
-// Please ensure you create a Price associated with this Product in your Stripe Dashboard and use that Price ID here.
-export const STRIPE_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "prod_SIMUUs67RhC80g"; 
+
+// IMPORTANT: This MUST be a Stripe PRICE ID (e.g., price_xxxxxxxxxxxxxx), NOT a Product ID.
+// Create a Product in Stripe (e.g., "Fervo Partner Plan") and then create a Price for that product.
+export const STRIPE_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_YOUR_FERVO_PLAN_PRICE_ID"; 
 
 // App URL
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
