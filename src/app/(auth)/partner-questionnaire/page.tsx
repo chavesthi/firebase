@@ -27,7 +27,8 @@ import { geocodeAddress, type Location } from '@/services/geocoding';
 import { MapPin, Save, ArrowLeft } from 'lucide-react';
 
 const cepRegex = /^\d{5}-?\d{3}$/;
-const phoneRegex = /^\+?[0-9\s\(\)\-]{9,20}$/;
+// Updated phoneRegex to be more specific for Brazilian format, allowing optional country code
+const phoneRegex = /^(\+?\d{1,3}\s?)?\(?[1-9]{2}\)?\s?9?\d{4,5}-?\d{4}$/;
 
 
 const partnerQuestionnaireSchema = z.object({
@@ -49,7 +50,7 @@ const partnerQuestionnaireSchema = z.object({
   instagramUrl: z.string().url({ message: 'URL do Instagram inválida.' }).optional().or(z.literal('')),
   facebookUrl: z.string().url({ message: 'URL do Facebook inválida.' }).optional().or(z.literal('')),
   youtubeUrl: z.string().url({ message: 'URL do YouTube inválida.' }).optional().or(z.literal('')),
-  whatsappPhone: z.string().regex(phoneRegex, { message: 'Número do WhatsApp inválido. Inclua código do país se necessário (Ex: +55 DD XXXXX-XXXX).' }).optional().or(z.literal('')),
+  whatsappPhone: z.string().regex(phoneRegex, { message: 'Número do WhatsApp inválido. Formato esperado: (XX) 9XXXX-XXXX ou (XX) XXXX-XXXX.' }).optional().or(z.literal('')),
 });
 
 type PartnerQuestionnaireFormInputs = z.infer<typeof partnerQuestionnaireSchema>;
@@ -203,24 +204,18 @@ const PartnerQuestionnairePage: NextPage = () => {
 
       let dataToUpdate: any = {
         questionnaireCompleted: true,
+        venueType: data.venueType, 
+        musicStyles: data.musicStyles || [], 
+        instagramUrl: data.instagramUrl,
+        facebookUrl: data.facebookUrl,
+        youtubeUrl: data.youtubeUrl,
+        whatsappPhone: data.whatsappPhone,
       };
 
-      if (isProfileLocked) {
-        dataToUpdate = {
-          ...dataToUpdate,
-          venueType: data.venueType, // Allow editing venueType
-          musicStyles: data.musicStyles || [], // Allow editing musicStyles
-          instagramUrl: data.instagramUrl,
-          facebookUrl: data.facebookUrl,
-          youtubeUrl: data.youtubeUrl,
-          whatsappPhone: data.whatsappPhone,
-        };
-      } else {
+      if (!isProfileLocked) {
         dataToUpdate = {
           ...dataToUpdate,
           venueName: data.venueName,
-          venueType: data.venueType,
-          musicStyles: data.musicStyles || [],
           phone: data.phone,
           address: {
             street: data.street,
@@ -231,10 +226,6 @@ const PartnerQuestionnairePage: NextPage = () => {
             country: data.country,
           },
           location: currentVenueLocation,
-          instagramUrl: data.instagramUrl,
-          facebookUrl: data.facebookUrl,
-          youtubeUrl: data.youtubeUrl,
-          whatsappPhone: data.whatsappPhone,
           averageVenueRating: 0,
           venueRatingCount: 0,
         };
@@ -242,6 +233,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             dataToUpdate.questionnaireCompletedAt = serverTimestamp();
         }
       }
+
 
       ['phone', 'instagramUrl', 'facebookUrl', 'youtubeUrl', 'whatsappPhone'].forEach(key => {
         if (dataToUpdate[key] === '') {
@@ -461,14 +453,14 @@ const PartnerQuestionnairePage: NextPage = () => {
                             <Input
                                 id="whatsappPhone"
                                 type="tel"
-                                placeholder="Ex: +5511987654321"
+                                placeholder="Ex: (11) 98765-4321"
                                 {...field}
                                 className={errors.whatsappPhone ? 'border-destructive focus-visible:ring-destructive' : ''}
                             />
                         }
                     />
                     {errors.whatsappPhone && <p className="mt-1 text-sm text-destructive">{errors.whatsappPhone.message}</p>}
-                    <p className="mt-1 text-xs text-muted-foreground">Inclua código do país para melhor alcance (Ex: +55 para Brasil).</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Formato: (DDD) Número. Ex: (11) 98765-4321 ou (11) 3456-7890. Código do país é opcional (Ex: +55).</p>
                   </div>
                  <div>
                     <Label htmlFor="instagramUrl" className="text-foreground">Instagram URL</Label>
