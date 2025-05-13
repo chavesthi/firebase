@@ -1,9 +1,10 @@
 
+
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState, use } from 'react'; // Import use from react
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react'; 
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { doc, getDoc, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
@@ -27,13 +28,17 @@ interface PartnerDetails {
   venueName: string;
 }
 
-const SharedEventPage: NextPage = () => {
-  const rawParams = useParams();
-  // Unwrap params using React.use as suggested by Next.js error.
-  const routeParams = use(rawParams as any);
+interface SharedEventPageProps {
+  params: {
+    partnerId: string;
+    eventId: string;
+  };
+}
+
+const SharedEventPage: NextPage<SharedEventPageProps> = ({ params }) => {
   const router = useRouter();
   const { toast } = useToast();
-  const { partnerId: partnerIdParam, eventId: eventIdParam } = routeParams;
+  const { partnerId: partnerIdParam, eventId: eventIdParam } = params;
 
   const partnerId = typeof partnerIdParam === 'string' ? partnerIdParam : null;
   const eventId = typeof eventIdParam === 'string' ? eventIdParam : null;
@@ -185,3 +190,4 @@ const SharedEventPage: NextPage = () => {
 };
 
 export default SharedEventPage;
+
