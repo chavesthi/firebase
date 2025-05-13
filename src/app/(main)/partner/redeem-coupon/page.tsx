@@ -287,14 +287,14 @@ const PartnerRedeemCouponPage: NextPage = () => {
                 {isRedeeming ? 'Verificando...' : 'Resgatar Cupom'}
               </Button>
 
-              <div className="mt-4 p-3 bg-accent/10 border border-accent/30 rounded-md text-accent-foreground">
+              <div className="mt-4 p-3 bg-accent/10 border border-accent/30 rounded-md">
                   <div className="flex items-start">
                       <AlertTriangle className="h-5 w-5 mr-2 mt-0.5 text-accent" />
                       <div>
-                          <h4 className="font-semibold text-sm text-accent-foreground">Importante:</h4>
-                          <p className="text-xs text-accent-foreground/80">
+                          <h4 className="font-semibold text-sm text-foreground">Importante:</h4>
+                          <p className="text-xs text-foreground/80">
                               Ao resgatar, o cupom será marcado como utilizado e não poderá ser usado novamente.
-                              Certifique-se de que o usuário está presente, o cupom é válido <span className="font-semibold">neste local</span>, e a recompensa está sendo entregue.
+                              Certifique-se de que o usuário está presente, o cupom é válido <span className="font-semibold text-foreground">neste local</span>, e a recompensa está sendo entregue.
                           </p>
                       </div>
                   </div>
@@ -367,3 +367,4 @@ const PartnerRedeemCouponPage: NextPage = () => {
 };
 
 export default PartnerRedeemCouponPage;
+
