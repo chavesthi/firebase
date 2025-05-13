@@ -29,9 +29,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  } from "@/components/ui/alert-dialog";
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
-import { AlertDialogTrigger } from "@radix-ui/react-alert-dialog";
+
 
 const redeemCouponSchema = z.object({
   couponCode: z.string().min(6, { message: 'Código do cupom deve ter pelo menos 6 caracteres.' }).regex(/^[A-Z0-9-]+$/, { message: 'Código do cupom inválido (somente letras maiúsculas, números e hífens).'})
@@ -264,7 +265,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
 
     if (partnerClearPassword && deleteCouponPasswordInput !== partnerClearPassword) {
       toast({ title: "Senha Incorreta", description: "A senha para apagar o relatório de cupons está incorreta.", variant: "destructive" });
-      setIsDeletingCoupon(false);
+      setIsDeletingCoupon(false); // Keep dialog open if password wrong
       return;
     }
     setIsDeletingCoupon(true);
@@ -274,7 +275,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
       const couponDocRef = doc(firestore, `users/${couponToDelete.userId}/coupons/${couponToDelete.id}`);
       await deleteDoc(couponDocRef);
       toast({ title: "Cupom Apagado", description: `O cupom ${couponToDelete.couponCode} foi apagado do histórico.`, variant: "default" });
-      setShowDeleteCouponDialog(false);
+      setShowDeleteCouponDialog(false); // Close dialog on success
       setCouponToDelete(null);
       setDeleteCouponPasswordInput(''); // Clear password input
     } catch (error: any) {
@@ -328,14 +329,14 @@ const PartnerRedeemCouponPage: NextPage = () => {
                       {...field}
                       value={field.value.toUpperCase()}
                       onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                      className={errors.couponCode ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                      className={errors.couponCode ? 'border-destructive focus-visible:ring-destructive' : ''}
                       autoComplete="off"
                     />
                   )}
                 />
                 {errors.couponCode && <p className="mt-1 text-sm text-destructive">{errors.couponCode.message}</p>}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  O código é sensível a maiúsculas/minúsculas (insira como exibido pelo usuário).
+                  O código é sensível a maiúsculas/minúsculas (insira como exibido pelo usuário, mas será convertido para maiúsculas para busca).
                 </p>
               </div>
 
@@ -393,6 +394,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
                                     setCouponToDelete(null);
                                     setShowDeleteCouponDialog(false);
                                     setDeleteCouponPasswordInput('');
+                                    setShowDeletePasswordInput(false); // Reset password visibility
                                 }
                             }}>
                                 <AlertDialogTrigger asChild>
@@ -407,13 +409,13 @@ const PartnerRedeemCouponPage: NextPage = () => {
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
-                                        <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                        <AlertDialogTitle>Confirmar Exclusão do Histórico</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                            Tem certeza que deseja apagar o cupom "{coupon.couponCode}" ({coupon.description}) do histórico? Esta ação não pode ser desfeita.
+                                            Tem certeza que deseja apagar o cupom "{coupon.couponCode}" ({coupon.description}) do histórico de resgates? Esta ação não pode ser desfeita.
                                         </AlertDialogDescription>
                                         {partnerClearPassword && (
                                             <div className="pt-2 space-y-1">
-                                                <Label htmlFor="deleteCouponPass" className="text-xs">Senha para Apagar Relatório</Label>
+                                                <Label htmlFor="deleteCouponPass" className="text-xs">Senha para Apagar do Relatório</Label>
                                                 <div className="relative">
                                                     <Input
                                                         id="deleteCouponPass"
@@ -437,14 +439,14 @@ const PartnerRedeemCouponPage: NextPage = () => {
                                         )}
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                        <AlertDialogCancel onClick={() => {setShowDeleteCouponDialog(false); setCouponToDelete(null); setDeleteCouponPasswordInput('');}}>Cancelar</AlertDialogCancel>
+                                        <AlertDialogCancel onClick={() => {setShowDeleteCouponDialog(false); setCouponToDelete(null); setDeleteCouponPasswordInput(''); setShowDeletePasswordInput(false);}}>Cancelar</AlertDialogCancel>
                                         <AlertDialogAction
                                             onClick={handleDeleteSingleCoupon}
                                             disabled={isDeletingCoupon || (!!partnerClearPassword && deleteCouponPasswordInput.length < 1)}
                                             className="bg-destructive hover:bg-destructive/90"
                                         >
                                             {isDeletingCoupon ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                                            Confirmar Exclusão
+                                            Confirmar Exclusão do Histórico
                                         </AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
@@ -479,7 +481,6 @@ const PartnerRedeemCouponPage: NextPage = () => {
               </ScrollArea>
             )}
           </CardContent>
-           {/* TODO: Add "Clear Report" button and functionality later if password for clearing is implemented */}
         </Card>
       </div>
     </div>
