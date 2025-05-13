@@ -5,7 +5,7 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback, type ReactElement } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,7 +13,7 @@ import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX } from '@/lib/constants';
+import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
 import {
   IconBar,
@@ -726,7 +726,7 @@ const MapContentAndLogic = () => {
         return;
     }
 
-    const shareUrl = `${window.location.origin}/shared-event/${partnerId}/${eventId}`;
+    const shareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}`;
     let sharedSuccessfully = false;
 
     if (navigator.share) {
@@ -1225,6 +1225,24 @@ const MapContentAndLogic = () => {
                                 </p>
                               )}
                               {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
+
+                              {event.pricingType !== PricingType.FREE && !eventHasEnded && (
+                                <Button
+                                  className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                                  size="sm"
+                                  onClick={() => {
+                                    toast({
+                                      title: "Compra de Ingressos",
+                                      description: "Em breve você poderá comprar ingressos diretamente por aqui ou ser redirecionado para a página de vendas do local!",
+                                      variant: "default",
+                                      duration: 5000,
+                                    });
+                                  }}
+                                >
+                                  <Ticket className="w-3.5 h-3.5 mr-1.5" />
+                                  Compre Aqui o Seu Ingresso Saia Na frente!!!
+                                </Button>
+                              )}
 
                               {currentUser && userHasCheckedIn && !userHasRated && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
