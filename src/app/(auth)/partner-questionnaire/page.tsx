@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -519,4 +518,3 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
-

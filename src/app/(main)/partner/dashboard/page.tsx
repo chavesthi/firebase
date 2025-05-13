@@ -469,7 +469,7 @@ export default function PartnerDashboardPage() {
                   <p className="text-sm font-medium text-muted-foreground">Avaliação Geral do Local:</p>
                   {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 ? (
                       <div className="flex items-center gap-2">
-                          <StarRating rating={venueData.averageVenueRating} readOnly size={20}/>
+                          <StarRating rating={venueData.averageVenueRating} readOnly size={20} />
                           <span className="text-sm text-foreground">({venueData.averageVenueRating.toFixed(1)})</span>
                       </div>
                   ) : (

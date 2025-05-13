@@ -1365,7 +1365,7 @@ const MapContentAndLogic = () => {
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
 
-  if (!apiKey || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { 
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE" || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { 
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
