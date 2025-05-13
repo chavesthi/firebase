@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -9,18 +8,30 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, collectionGroup, getDoc, orderBy, type Timestamp as FirebaseTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, collectionGroup, getDoc, orderBy, type Timestamp as FirebaseTimestamp, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { ArrowLeft, Loader2, TicketCheck, AlertTriangle, History, User as UserIcon, CalendarClock, ScrollText } from 'lucide-react'; 
+import { ArrowLeft, Loader2, TicketCheck, AlertTriangle, History, User as UserIcon, CalendarClock, ScrollText, Trash2, Eye, EyeOff } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  } from "@/components/ui/alert-dialog";
+import { cn } from '@/lib/utils';
+import { AlertDialogTrigger } from "@radix-ui/react-alert-dialog";
 
 const redeemCouponSchema = z.object({
   couponCode: z.string().min(6, { message: 'Código do cupom deve ter pelo menos 6 caracteres.' }).regex(/^[A-Z0-9-]+$/, { message: 'Código do cupom inválido (somente letras maiúsculas, números e hífens).'})
@@ -35,17 +46,18 @@ interface CouponToRedeem {
   couponCode: string;
   userName?: string;
   validAtPartnerId: string;
-  eventName?: string; 
+  eventName?: string;
 }
 
 interface RedeemedCouponInfo {
-  id: string;
+  id: string; // Document ID of the coupon in the user's subcollection
+  userId: string; // ID of the user who owned the coupon
   couponCode: string;
   description: string;
   userName?: string;
-  partnerVenueName?: string; 
+  partnerVenueName?: string;
   redeemedAt: FirebaseTimestamp;
-  eventName?: string; 
+  eventName?: string;
 }
 
 
@@ -58,6 +70,13 @@ const PartnerRedeemCouponPage: NextPage = () => {
   const [redeemedCoupons, setRedeemedCoupons] = useState<RedeemedCouponInfo[]>([]);
   const [isLoadingRedeemedCoupons, setIsLoadingRedeemedCoupons] = useState(true);
 
+  const [couponToDelete, setCouponToDelete] = useState<RedeemedCouponInfo | null>(null);
+  const [showDeleteCouponDialog, setShowDeleteCouponDialog] = useState(false);
+  const [deleteCouponPasswordInput, setDeleteCouponPasswordInput] = useState('');
+  const [isDeletingCoupon, setIsDeletingCoupon] = useState(false);
+  const [partnerClearPassword, setPartnerClearPassword] = useState<string | null>(null);
+  const [showDeletePasswordInput, setShowDeletePasswordInput] = useState(false);
+
 
   const { control, handleSubmit, formState: { errors }, reset } = useForm<RedeemCouponFormInputs>({
     resolver: zodResolver(redeemCouponSchema),
@@ -67,9 +86,15 @@ const PartnerRedeemCouponPage: NextPage = () => {
   });
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
+        // Fetch partner's clear password setting
+        const partnerDocRef = doc(firestore, 'users', user.uid);
+        const partnerDocSnap = await getDoc(partnerDocRef);
+        if (partnerDocSnap.exists()) {
+          setPartnerClearPassword(partnerDocSnap.data()?.couponReportClearPassword || null);
+        }
       } else {
         router.push('/login');
       }
@@ -97,10 +122,11 @@ const PartnerRedeemCouponPage: NextPage = () => {
       const fetchedCoupons: RedeemedCouponInfo[] = [];
       for (const couponDoc of snapshot.docs) {
         const data = couponDoc.data();
+        const userId = couponDoc.ref.parent.parent?.id; // Correctly get the user ID
         let userName = 'Usuário Desconhecido';
-        if (data.userId) {
+        if (userId) {
           try {
-            const userDocRef = doc(firestore, 'users', data.userId);
+            const userDocRef = doc(firestore, 'users', userId);
             const userDocSnap = await getDoc(userDocRef);
             if (userDocSnap.exists()) {
               userName = userDocSnap.data()?.name || userName;
@@ -111,12 +137,13 @@ const PartnerRedeemCouponPage: NextPage = () => {
         }
         fetchedCoupons.push({
           id: couponDoc.id,
+          userId: userId || 'unknown_user', // Store userId
           couponCode: data.couponCode,
           description: data.description,
           userName: userName,
           partnerVenueName: data.partnerVenueName,
           redeemedAt: data.redeemedAt as FirebaseTimestamp,
-          eventName: data.eventName, // Populate eventName
+          eventName: data.eventName,
         });
       }
       setRedeemedCoupons(fetchedCoupons);
@@ -150,19 +177,19 @@ const PartnerRedeemCouponPage: NextPage = () => {
 
       const couponSnapshot = await getDocs(q);
       let foundCoupon: CouponToRedeem | null = null;
-      let couponDocPath: string | null = null; 
+      let couponDocPath: string | null = null;
 
       if (!couponSnapshot.empty) {
         const couponDoc = couponSnapshot.docs[0];
-        couponDocPath = couponDoc.ref.path; 
+        couponDocPath = couponDoc.ref.path;
         const couponData = couponDoc.data();
-        const userId = couponDoc.ref.parent.parent?.id; 
+        const userId = couponDoc.ref.parent.parent?.id;
 
         if (userId && couponData.validAtPartnerId) {
            let userName = 'Usuário Desconhecido';
             try {
               const userDocRef = doc(firestore, 'users', userId);
-              const userDocSnap = await getDoc(userDocRef); // Corrected getDoc usage
+              const userDocSnap = await getDoc(userDocRef);
               if (userDocSnap.exists()) {
                 userName = userDocSnap.data().name || userName;
               }
@@ -171,13 +198,13 @@ const PartnerRedeemCouponPage: NextPage = () => {
             }
 
             foundCoupon = {
-              id: couponDoc.id, 
+              id: couponDoc.id,
               userId: userId,
               description: couponData.description,
               couponCode: couponData.couponCode,
               userName: userName,
               validAtPartnerId: couponData.validAtPartnerId,
-              eventName: couponData.eventName, // Get eventName
+              eventName: couponData.eventName,
             };
         }
       }
@@ -199,18 +226,18 @@ const PartnerRedeemCouponPage: NextPage = () => {
           return;
       }
 
-      if (!couponDocPath) { 
+      if (!couponDocPath) {
         throw new Error("Caminho do documento do cupom não encontrado.");
       }
-      
-      const userCouponDocRef = doc(firestore, couponDocPath); 
+
+      const userCouponDocRef = doc(firestore, couponDocPath);
 
       await updateDoc(userCouponDocRef, {
         status: 'redeemed',
         redeemedAt: serverTimestamp(),
         redeemedByPartnerId: currentUser.uid,
-        partnerVenueName: (await getDoc(doc(firestore, 'users', currentUser.uid))).data()?.venueName || 'Local Desconhecido', 
-        eventName: foundCoupon.eventName, // Persist eventName on redemption
+        partnerVenueName: (await getDoc(doc(firestore, 'users', currentUser.uid))).data()?.venueName || 'Local Desconhecido',
+        eventName: foundCoupon.eventName,
       });
 
       toast({
@@ -228,6 +255,36 @@ const PartnerRedeemCouponPage: NextPage = () => {
       setIsRedeeming(false);
     }
   };
+
+  const handleDeleteSingleCoupon = async () => {
+    if (!currentUser || !couponToDelete) {
+      toast({ title: "Erro", description: "Não foi possível identificar o cupom para exclusão.", variant: "destructive" });
+      return;
+    }
+
+    if (partnerClearPassword && deleteCouponPasswordInput !== partnerClearPassword) {
+      toast({ title: "Senha Incorreta", description: "A senha para apagar o relatório de cupons está incorreta.", variant: "destructive" });
+      setIsDeletingCoupon(false);
+      return;
+    }
+    setIsDeletingCoupon(true);
+
+    try {
+      // The coupon document lives in the user's subcollection: users/{userId}/coupons/{couponId}
+      const couponDocRef = doc(firestore, `users/${couponToDelete.userId}/coupons/${couponToDelete.id}`);
+      await deleteDoc(couponDocRef);
+      toast({ title: "Cupom Apagado", description: `O cupom ${couponToDelete.couponCode} foi apagado do histórico.`, variant: "default" });
+      setShowDeleteCouponDialog(false);
+      setCouponToDelete(null);
+      setDeleteCouponPasswordInput(''); // Clear password input
+    } catch (error: any) {
+      console.error("Error deleting coupon:", error);
+      toast({ title: "Erro ao Apagar", description: error.message || "Não foi possível apagar o cupom.", variant: "destructive" });
+    } finally {
+      setIsDeletingCoupon(false);
+    }
+  };
+
 
   if (isLoadingUser) {
     return (
@@ -253,7 +310,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
               <TicketCheck className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
               Resgatar Cupom de Usuário
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
+            <CardDescription className="text-xs sm:text-sm text-muted-foreground">
               Insira o código do cupom fornecido pelo usuário para validá-lo e marcá-lo como utilizado neste estabelecimento.
             </CardDescription>
           </CardHeader>
@@ -287,7 +344,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
                 {isRedeeming ? 'Verificando...' : 'Resgatar Cupom'}
               </Button>
 
-              <div className="mt-4 p-3 bg-accent/10 border border-accent/30 rounded-md">
+              <div className="mt-4 p-3 bg-background/80 border border-border/50 rounded-md">
                   <div className="flex items-start">
                       <AlertTriangle className="h-5 w-5 mr-2 mt-0.5 text-accent" />
                       <div>
@@ -309,7 +366,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
               <History className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
               Relatório de Cupons Resgatados
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
+            <CardDescription className="text-xs sm:text-sm text-muted-foreground">
               Histórico de todos os cupons validados neste estabelecimento.
             </CardDescription>
           </CardHeader>
@@ -329,12 +386,75 @@ const PartnerRedeemCouponPage: NextPage = () => {
                   {redeemedCoupons.map((coupon) => (
                     <Card key={coupon.id} className="bg-card/80 border-border/50 shadow-sm">
                       <CardContent className="p-3 sm:p-4 space-y-1.5">
-                        <p className="text-sm font-semibold text-foreground">{coupon.description}</p>
+                        <div className="flex justify-between items-start">
+                            <p className="text-sm font-semibold text-foreground flex-1 mr-2">{coupon.description}</p>
+                            <AlertDialog open={couponToDelete?.id === coupon.id && showDeleteCouponDialog} onOpenChange={(open) => {
+                                if (!open) {
+                                    setCouponToDelete(null);
+                                    setShowDeleteCouponDialog(false);
+                                    setDeleteCouponPasswordInput('');
+                                }
+                            }}>
+                                <AlertDialogTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-destructive hover:bg-destructive/10 h-7 w-7 flex-shrink-0"
+                                        onClick={() => { setCouponToDelete(coupon); setShowDeleteCouponDialog(true);}}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Tem certeza que deseja apagar o cupom "{coupon.couponCode}" ({coupon.description}) do histórico? Esta ação não pode ser desfeita.
+                                        </AlertDialogDescription>
+                                        {partnerClearPassword && (
+                                            <div className="pt-2 space-y-1">
+                                                <Label htmlFor="deleteCouponPass" className="text-xs">Senha para Apagar Relatório</Label>
+                                                <div className="relative">
+                                                    <Input
+                                                        id="deleteCouponPass"
+                                                        type={showDeletePasswordInput ? "text" : "password"}
+                                                        value={deleteCouponPasswordInput}
+                                                        onChange={(e) => setDeleteCouponPasswordInput(e.target.value)}
+                                                        placeholder="Senha configurada"
+                                                        className="text-sm"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowDeletePasswordInput(!showDeletePasswordInput)}
+                                                    >
+                                                        {showDeletePasswordInput ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel onClick={() => {setShowDeleteCouponDialog(false); setCouponToDelete(null); setDeleteCouponPasswordInput('');}}>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction
+                                            onClick={handleDeleteSingleCoupon}
+                                            disabled={isDeletingCoupon || (!!partnerClearPassword && deleteCouponPasswordInput.length < 1)}
+                                            className="bg-destructive hover:bg-destructive/90"
+                                        >
+                                            {isDeletingCoupon ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                            Confirmar Exclusão
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           <span className="font-medium text-foreground/80">Código:</span> {coupon.couponCode}
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center">
-                          <UserIcon className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" /> 
+                          <UserIcon className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
                           <span className="font-medium text-foreground/80">Usuário:</span> {coupon.userName}
                         </p>
                         {coupon.eventName && (
@@ -344,7 +464,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
                             </p>
                         )}
                         <p className="text-xs text-muted-foreground flex items-center">
-                           <CalendarClock className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" /> 
+                           <CalendarClock className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
                            <span className="font-medium text-foreground/80">Validado em:</span> {format(coupon.redeemedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </p>
                          {coupon.partnerVenueName && (
@@ -367,4 +487,3 @@ const PartnerRedeemCouponPage: NextPage = () => {
 };
 
 export default PartnerRedeemCouponPage;
-
