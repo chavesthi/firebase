@@ -311,8 +311,8 @@ export default function PartnerDashboardPage() {
   if (loading || !currentUser || !venueData) {
     return (
       <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-foreground animate-spin mb-4" />
-        <p className="text-lg text-foreground">Carregando dados do parceiro...</p>
+        <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+        <p className="text-lg text-primary">Carregando dados do parceiro...</p>
       </div>
     );
   }
@@ -324,7 +324,7 @@ export default function PartnerDashboardPage() {
       <div className="mb-6 sm:mb-8">
         <Card className="border-secondary/50 shadow-lg shadow-secondary/15">
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-xl text-foreground flex items-center">
+            <CardTitle className="text-xl text-primary flex items-center">
               <Eye className="w-6 h-6 mr-3" />
               Preview do Local
             </CardTitle>
@@ -427,7 +427,7 @@ export default function PartnerDashboardPage() {
 
       <div className="space-y-6 sm:space-y-8">
         <header className="mb-2 text-center lg:text-left">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{venueData.venueName}</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-primary">{venueData.venueName}</h1>
           <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center lg:justify-start px-2">
               <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-primary/70 shrink-0"/>
               <span className="truncate">{fullAddress}</span>
@@ -440,7 +440,7 @@ export default function PartnerDashboardPage() {
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Gerenciar Eventos
               </CardTitle>
@@ -458,7 +458,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Estatísticas Gerais
               </CardTitle>
@@ -470,7 +470,7 @@ export default function PartnerDashboardPage() {
                   {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 ? (
                       <div className="flex items-center gap-2">
                           <StarRating rating={venueData.averageVenueRating} readOnly size={20} />
-                          <span className="text-sm text-foreground">({venueData.averageVenueRating.toFixed(1)})</span>
+                          <span className="text-sm text-primary">({venueData.averageVenueRating.toFixed(1)})</span>
                       </div>
                   ) : (
                       <p className="text-sm text-muted-foreground italic">Nenhuma avaliação de evento registrada ainda.</p>
@@ -524,8 +524,8 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
-                <TicketCheck className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" /> {/* Changed icon */}
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+                <TicketCheck className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" /> 
                 Autenticação dos Meus Ingressos
               </CardTitle>
               <CardDescription className="text-xs sm:text-sm">Valide ingressos de usuários aqui.</CardDescription>
@@ -543,26 +543,26 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                       <ScrollText className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-                      Relatório de Cupons
+                      Relatório de Ingressos Validados
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">Visualize os cupons que você resgatou.</CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">Visualize os ingressos que foram validados.</CardDescription>
               </CardHeader>
               <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
                   <Button
                   variant="outline"
                   className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
-                  onClick={() => router.push('/partner/coupon-report')}
+                  onClick={() => router.push('/partner/coupon-report')} 
                   >
-                  Ver Relatório
+                  Ver Relatório de Validações
                   </Button>
               </CardContent>
           </Card>
           
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <Brain className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Análise de Feedback (IA)
               </CardTitle>
@@ -583,7 +583,7 @@ export default function PartnerDashboardPage() {
               {aiAnalysisResult && !isAnalyzingFeedback && (
                 <Accordion type="single" collapsible className="w-full">
                   <AccordionItem value="summary">
-                    <AccordionTrigger className="text-foreground hover:text-primary">Resumo Geral ({aiAnalysisResult.overallSentiment})</AccordionTrigger>
+                    <AccordionTrigger className="text-primary hover:text-primary/80">Resumo Geral ({aiAnalysisResult.overallSentiment})</AccordionTrigger>
                     <AccordionContent className="text-sm text-foreground/80">
                       <p className="mb-2"><strong>Média de Notas:</strong> {aiAnalysisResult.averageRatingCalculated?.toFixed(1) || 'N/A'} de 5 estrelas ({aiAnalysisResult.totalFeedbackItems} feedbacks)</p>
                       {aiAnalysisResult.summary}
@@ -630,7 +630,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Configurações da Conta e Pagamentos
               </CardTitle>
@@ -649,7 +649,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                       <QrCode className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                       QR Codes de Eventos
                   </CardTitle>

@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -7,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 // Ensure all necessary Firestore functions are imported
-import { collectionGroup, query, where, orderBy, Timestamp as FirebaseTimestamp, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp as FirebaseTimestamp, onSnapshot, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -32,23 +30,22 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-interface RedeemedCoupon {
-  id: string; // coupon document id
+interface ValidatedTicketEntry {
+  id: string; // ticket document id in purchasedTickets collection
   userId: string;
   userName: string;
-  couponCode: string;
-  description: string;
-  redeemedAt: FirebaseTimestamp;
-  docPath: string; // Full path to the coupon document for deletion
+  eventName: string;
+  validatedAt: FirebaseTimestamp;
+  docPath: string; // Full path to the ticket document for deletion
 }
 
-const PartnerCouponReportPage: NextPage = () => {
+const PartnerTicketValidationReportPage: NextPage = () => {
   const router = useRouter();
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true); // For auth loading
-  const [isLoadingData, setIsLoadingData] = useState(true); // For coupon data loading
-  const [redeemedCoupons, setRedeemedCoupons] = useState<RedeemedCoupon[]>([]);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [validatedTickets, setValidatedTickets] = useState<ValidatedTicketEntry[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [password, setPassword] = useState('');
   const [isClearing, setIsClearing] = useState(false);
@@ -67,68 +64,51 @@ const PartnerCouponReportPage: NextPage = () => {
 
   useEffect(() => {
     if (isLoadingUser || !currentUser) {
-      if (!isLoadingUser) setIsLoadingData(false); // If auth is done but no user, stop data loading
+      if (!isLoadingUser) setIsLoadingData(false);
       return;
     }
 
     setIsLoadingData(true);
-    const couponsRef = collectionGroup(firestore, 'coupons');
+    const ticketsRef = collection(firestore, 'purchasedTickets');
     const q = query(
-      couponsRef,
-      where('status', '==', 'redeemed'),
-      where('redeemedByPartnerId', '==', currentUser.uid),
-      orderBy('redeemedAt', 'desc')
+      ticketsRef,
+      where('status', '==', 'validated'),
+      where('validatedByPartnerId', '==', currentUser.uid),
+      orderBy('validatedAt', 'desc')
     );
 
-    const unsubscribeCoupons = onSnapshot(q, async (snapshot) => {
-      const fetchedCoupons: RedeemedCoupon[] = [];
-      for (const docSnap of snapshot.docs) {
+    const unsubscribeTickets = onSnapshot(q, (snapshot) => {
+      const fetchedTickets: ValidatedTicketEntry[] = [];
+      snapshot.forEach(docSnap => {
         const data = docSnap.data();
-        let userName = 'Usuário Desconhecido';
-        const userId = data.userId;
         const docPath = docSnap.ref.path;
 
-        if (userId && typeof userId === 'string') {
-            try {
-              const userDocRef = doc(firestore, 'users', userId);
-              const userDoc = await getDoc(userDocRef);
-              if (userDoc.exists()) {
-                userName = userDoc.data().name || userName;
-              }
-            } catch (error) {
-              console.error(`Failed to fetch user name for userId ${userId}:`, error);
-            }
-        } else {
-             console.warn(`Missing or invalid userId for coupon ${docSnap.id}`);
-        }
-
-        if (data.userId && data.couponCode && data.description && data.redeemedAt) {
-          fetchedCoupons.push({
+        if (data.userId && data.userName && data.eventName && data.validatedAt) {
+          fetchedTickets.push({
             id: docSnap.id,
             userId: data.userId,
-            userName: userName,
-            couponCode: data.couponCode,
-            description: data.description,
-            redeemedAt: data.redeemedAt as FirebaseTimestamp,
+            userName: data.userName,
+            eventName: data.eventName,
+            validatedAt: data.validatedAt as FirebaseTimestamp,
             docPath: docPath,
           });
         } else {
-           console.warn(`Incomplete coupon data for ${docSnap.id}, skipping.`);
+           console.warn(`Incomplete ticket data for ${docSnap.id}, skipping.`);
         }
-      }
-      setRedeemedCoupons(fetchedCoupons);
+      });
+      setValidatedTickets(fetchedTickets);
       setIsLoadingData(false);
     }, (error) => {
-      console.error("Error fetching redeemed coupons:", error);
-      toast({ title: "Erro ao Carregar Relatório", description: "Não foi possível buscar os cupons resgatados.", variant: "destructive" });
+      console.error("Error fetching validated tickets:", error);
+      toast({ title: "Erro ao Carregar Relatório", description: "Não foi possível buscar os ingressos validados.", variant: "destructive" });
       setIsLoadingData(false);
     });
 
-    return () => unsubscribeCoupons();
+    return () => unsubscribeTickets();
   }, [currentUser, isLoadingUser, toast]);
 
   const handleClearReport = async () => {
-      if (!currentUser || redeemedCoupons.length === 0) return;
+      if (!currentUser || validatedTickets.length === 0) return;
       setIsClearing(true);
 
       try {
@@ -139,7 +119,7 @@ const PartnerCouponReportPage: NextPage = () => {
               throw new Error("Dados do parceiro não encontrados.");
           }
           const partnerData = partnerDocSnap.data();
-          const storedPassword = partnerData.couponReportClearPassword;
+          const storedPassword = partnerData.couponReportClearPassword; // Using the same password field for now
 
           if (!storedPassword) {
               toast({ title: "Senha Não Definida", description: "Defina uma senha nas configurações da conta para limpar o relatório.", variant: "destructive", duration: 5000 });
@@ -156,18 +136,18 @@ const PartnerCouponReportPage: NextPage = () => {
           }
 
           const batch = writeBatch(firestore);
-          redeemedCoupons.forEach(coupon => {
-              const couponDocRef = doc(firestore, coupon.docPath);
-              batch.delete(couponDocRef);
+          validatedTickets.forEach(ticket => {
+              const ticketDocRef = doc(firestore, ticket.docPath); // docPath is now 'purchasedTickets/{ticketId}'
+              batch.delete(ticketDocRef);
           });
           await batch.commit();
 
-          toast({ title: "Relatório Limpo!", description: "Todos os cupons resgatados foram removidos deste relatório.", variant: "default" });
-          setRedeemedCoupons([]);
+          toast({ title: "Relatório Limpo!", description: "Todos os ingressos validados foram removidos deste relatório e do sistema.", variant: "default" });
+          setValidatedTickets([]);
           setShowClearConfirm(false);
           setPassword('');
       } catch (error: any) {
-          console.error("Error clearing coupon report:", error);
+          console.error("Error clearing ticket validation report:", error);
           toast({ title: "Erro ao Limpar", description: error.message || "Não foi possível limpar o relatório.", variant: "destructive" });
       } finally {
           setIsClearing(false);
@@ -177,7 +157,7 @@ const PartnerCouponReportPage: NextPage = () => {
   if (isLoadingUser) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-foreground animate-spin" />
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
       </div>
     );
   }
@@ -192,12 +172,12 @@ const PartnerCouponReportPage: NextPage = () => {
       </div>
       <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
+          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
             <ScrollText className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
-            Relatório de Cupons Resgatados
+            Relatório de Ingressos Validados
           </CardTitle>
           <CardDescription className="text-xs sm:text-sm">
-            Aqui está o histórico de cupons de usuários que foram resgatados no seu estabelecimento.
+            Histórico de ingressos de usuários validados no seu estabelecimento.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -205,27 +185,25 @@ const PartnerCouponReportPage: NextPage = () => {
             <div className="flex justify-center items-center h-60">
               <Loader2 className="w-10 h-10 text-primary animate-spin" />
             </div>
-          ) : redeemedCoupons.length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground">Nenhum cupom foi resgatado ainda.</p>
+          ) : validatedTickets.length === 0 ? (
+            <p className="p-6 text-center text-muted-foreground">Nenhum ingresso foi validado ainda.</p>
           ) : (
             <ScrollArea className="h-[calc(100vh-22rem)] sm:h-[calc(100vh-24rem)]">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-foreground/90">Usuário</TableHead>
-                    <TableHead className="text-foreground/90">Cupom</TableHead>
-                    <TableHead className="text-foreground/90">Descrição</TableHead>
-                    <TableHead className="text-foreground/90 text-right">Data Resgate</TableHead>
+                    <TableHead className="text-primary/90">Usuário</TableHead>
+                    <TableHead className="text-primary/90">Evento</TableHead>
+                    <TableHead className="text-primary/90 text-right">Data Validação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {redeemedCoupons.map((coupon) => (
-                    <TableRow key={coupon.id}>
-                      <TableCell className="font-medium">{coupon.userName}</TableCell>
-                      <TableCell>{coupon.couponCode}</TableCell>
-                      <TableCell>{coupon.description}</TableCell>
+                  {validatedTickets.map((ticket) => (
+                    <TableRow key={ticket.id}>
+                      <TableCell className="font-medium">{ticket.userName}</TableCell>
+                      <TableCell>{ticket.eventName}</TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">
-                        {format(coupon.redeemedAt.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })}
+                        {format(ticket.validatedAt.toDate(), "dd/MM/yy HH:mm", { locale: ptBR })}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -234,7 +212,7 @@ const PartnerCouponReportPage: NextPage = () => {
             </ScrollArea>
           )}
         </CardContent>
-        {redeemedCoupons.length > 0 && (
+        {validatedTickets.length > 0 && (
           <CardFooter className="p-4 sm:p-6 border-t border-primary/20 justify-end">
              <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
                <AlertDialogTrigger asChild>
@@ -246,7 +224,7 @@ const PartnerCouponReportPage: NextPage = () => {
                  <AlertDialogHeader>
                    <AlertDialogTitle>Confirmar Limpeza do Relatório</AlertDialogTitle>
                    <AlertDialogDescription>
-                     Esta ação <span className="font-bold">excluirá permanentemente</span> todos os registros de cupons resgatados deste relatório. Esta ação não pode ser desfeita. Por favor, insira sua senha para confirmar.
+                     Esta ação <span className="font-bold">excluirá permanentemente</span> todos os registros de ingressos validados deste relatório e do sistema. Esta ação não pode ser desfeita. Por favor, insira sua senha para confirmar.
                    </AlertDialogDescription>
                  </AlertDialogHeader>
                  <div className="space-y-2">
@@ -257,13 +235,14 @@ const PartnerCouponReportPage: NextPage = () => {
                      value={password}
                      onChange={(e) => setPassword(e.target.value)}
                      placeholder="Senha definida nas configurações"
+                     className={password && password.length < 6 ? "border-destructive" : ""}
                    />
                  </div>
                  <AlertDialogFooter>
                    <AlertDialogCancel onClick={() => {setPassword(''); setShowClearConfirm(false)}}>Cancelar</AlertDialogCancel>
                    <AlertDialogAction
                      onClick={handleClearReport}
-                     disabled={!password || isClearing}
+                     disabled={!password || password.length < 6 || isClearing}
                      className="bg-destructive hover:bg-destructive/90"
                    >
                      {isClearing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -279,6 +258,4 @@ const PartnerCouponReportPage: NextPage = () => {
   );
 };
 
-export default PartnerCouponReportPage;
-
-    
+export default PartnerTicketValidationReportPage;
