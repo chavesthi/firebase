@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { ArrowLeft, Loader2, TicketCheck, AlertTriangle, History, User as UserIcon, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Loader2, TicketCheck, AlertTriangle, History, User as UserIcon, CalendarClock, ScrollText } from 'lucide-react'; 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -35,6 +35,7 @@ interface CouponToRedeem {
   couponCode: string;
   userName?: string;
   validAtPartnerId: string;
+  eventName?: string; 
 }
 
 interface RedeemedCouponInfo {
@@ -42,8 +43,9 @@ interface RedeemedCouponInfo {
   couponCode: string;
   description: string;
   userName?: string;
-  partnerVenueName?: string; // Added to display which venue the coupon was for
+  partnerVenueName?: string; 
   redeemedAt: FirebaseTimestamp;
+  eventName?: string; 
 }
 
 
@@ -114,6 +116,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
           userName: userName,
           partnerVenueName: data.partnerVenueName,
           redeemedAt: data.redeemedAt as FirebaseTimestamp,
+          eventName: data.eventName, // Populate eventName
         });
       }
       setRedeemedCoupons(fetchedCoupons);
@@ -147,33 +150,34 @@ const PartnerRedeemCouponPage: NextPage = () => {
 
       const couponSnapshot = await getDocs(q);
       let foundCoupon: CouponToRedeem | null = null;
-      let couponDocPath: string | null = null; // Store the full path to the coupon document
+      let couponDocPath: string | null = null; 
 
       if (!couponSnapshot.empty) {
         const couponDoc = couponSnapshot.docs[0];
-        couponDocPath = couponDoc.ref.path; // Get the full path
+        couponDocPath = couponDoc.ref.path; 
         const couponData = couponDoc.data();
-        const userId = couponDoc.ref.parent.parent?.id; // Correctly get userId from parent path
+        const userId = couponDoc.ref.parent.parent?.id; 
 
         if (userId && couponData.validAtPartnerId) {
            let userName = 'Usuário Desconhecido';
             try {
               const userDocRef = doc(firestore, 'users', userId);
-              const userDoc = await getDoc(userDocRef);
-              if (userDoc.exists()) {
-                userName = userDoc.data().name || userName;
+              const userDocSnap = await getDoc(userDocRef); // Corrected getDoc usage
+              if (userDocSnap.exists()) {
+                userName = userDocSnap.data().name || userName;
               }
             } catch (error) {
               console.error(`Failed to fetch user name for userId ${userId}:`, error);
             }
 
             foundCoupon = {
-              id: couponDoc.id, // This is the coupon's document ID within its subcollection
+              id: couponDoc.id, 
               userId: userId,
               description: couponData.description,
               couponCode: couponData.couponCode,
               userName: userName,
               validAtPartnerId: couponData.validAtPartnerId,
+              eventName: couponData.eventName, // Get eventName
             };
         }
       }
@@ -195,22 +199,23 @@ const PartnerRedeemCouponPage: NextPage = () => {
           return;
       }
 
-      if (!couponDocPath) { // Should not happen if foundCoupon is true, but as a safeguard
+      if (!couponDocPath) { 
         throw new Error("Caminho do documento do cupom não encontrado.");
       }
       
-      const userCouponDocRef = doc(firestore, couponDocPath); // Use the full path to reference the coupon
+      const userCouponDocRef = doc(firestore, couponDocPath); 
 
       await updateDoc(userCouponDocRef, {
         status: 'redeemed',
         redeemedAt: serverTimestamp(),
         redeemedByPartnerId: currentUser.uid,
-        partnerVenueName: (await getDoc(doc(firestore, 'users', currentUser.uid))).data()?.venueName || 'Local Desconhecido', // Store partner venue name
+        partnerVenueName: (await getDoc(doc(firestore, 'users', currentUser.uid))).data()?.venueName || 'Local Desconhecido', 
+        eventName: foundCoupon.eventName, // Persist eventName on redemption
       });
 
       toast({
         title: "Cupom Resgatado!",
-        description: `Cupom "${foundCoupon.couponCode}" (${foundCoupon.description}) de ${foundCoupon.userName} foi resgatado com sucesso.`,
+        description: `Cupom "${foundCoupon.couponCode}" (${foundCoupon.description}) de ${foundCoupon.userName} para o evento "${foundCoupon.eventName || 'Não especificado'}" foi resgatado com sucesso.`,
         variant: "default",
         duration: 7000,
       });
@@ -332,6 +337,12 @@ const PartnerRedeemCouponPage: NextPage = () => {
                           <UserIcon className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" /> 
                           <span className="font-medium text-foreground/80">Usuário:</span> {coupon.userName}
                         </p>
+                        {coupon.eventName && (
+                            <p className="text-xs text-muted-foreground flex items-center">
+                                <ScrollText className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
+                                <span className="font-medium text-foreground/80">Evento:</span> {coupon.eventName}
+                            </p>
+                        )}
                         <p className="text-xs text-muted-foreground flex items-center">
                            <CalendarClock className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" /> 
                            <span className="font-medium text-foreground/80">Validado em:</span> {format(coupon.redeemedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
@@ -356,4 +367,3 @@ const PartnerRedeemCouponPage: NextPage = () => {
 };
 
 export default PartnerRedeemCouponPage;
-

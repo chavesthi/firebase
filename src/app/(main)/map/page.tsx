@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -684,7 +683,7 @@ const MapContentAndLogic = () => {
       return;
     }
 
-    if (eventEndDateTime.toDate() < new Date()) {
+    if (isEventPast(eventEndDateTime)) { // Use the helper function
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
         return;
     }
@@ -782,6 +781,7 @@ const MapContentAndLogic = () => {
               userId: currentUser.uid,
               couponCode: couponCode,
               description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
+              eventName: eventDataForShare.eventName, // Store the event name with the coupon
               createdAt: serverTimestamp(),
               status: 'active',
               validAtPartnerId: partnerId,
@@ -880,7 +880,7 @@ const MapContentAndLogic = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
-  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
@@ -963,7 +963,7 @@ const MapContentAndLogic = () => {
             )}
         </div>
         
-        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
+        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && mapsApi && (
             <GoogleMap
                 defaultCenter={userLocation}
                 defaultZoom={15}
@@ -1002,7 +1002,7 @@ const MapContentAndLogic = () => {
                 })}
             </GoogleMap>
         )}
-        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE") && (
+        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
              <div className="flex items-center justify-center h-full bg-background text-destructive">
                 API Key do Google Maps não configurada ou inválida.
             </div>
@@ -1385,12 +1385,9 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  // If GOOGLE_MAPS_API_KEY is the actual key the user wants to use,
-  // then checking against it as a "knownPlaceholder" will prevent the map from loading.
-  // const knownPlaceholder = "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0"; // This was the issue
   const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; // A truly generic placeholder string
 
-  if (!apiKey || apiKey === genericPlaceholder) { 
+  if (!apiKey || apiKey === genericPlaceholder || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" /* Check against known placeholder */) { 
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.
@@ -1406,4 +1403,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
