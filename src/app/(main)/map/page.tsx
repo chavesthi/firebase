@@ -880,7 +880,7 @@ const MapContentAndLogic = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
   }
 
-  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
@@ -963,7 +963,7 @@ const MapContentAndLogic = () => {
             )}
         </div>
         
-        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && mapsApi && (
+        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && mapsApi && (
             <GoogleMap
                 defaultCenter={userLocation}
                 defaultZoom={15}
@@ -1002,7 +1002,7 @@ const MapContentAndLogic = () => {
                 })}
             </GoogleMap>
         )}
-        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE") && (
+        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
              <div className="flex items-center justify-center h-full bg-background text-destructive">
                 API Key do Google Maps não configurada ou inválida.
             </div>
@@ -1385,9 +1385,9 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const knownPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; 
+  const knownPlaceholder = "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0"; 
 
-  if (!apiKey || apiKey === knownPlaceholder || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { 
+  if (!apiKey || apiKey === knownPlaceholder) { 
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.

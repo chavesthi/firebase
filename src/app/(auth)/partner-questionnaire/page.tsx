@@ -106,17 +106,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           setInitialQuestionnaireCompletedState(userData.questionnaireCompleted || false);
-          if (userData.questionnaireCompleted) {
-            setIsProfileLocked(true);
-            toast({
-              title: "Modo de Edição",
-              description: "Você pode editar o tipo de local, estilos musicais, contatos e mídias. Para outras alterações de dados cadastrais (nome, endereço), contate o suporte.",
-              variant: "default",
-              duration: 7000,
-            });
-          } else {
-            setIsProfileLocked(false);
-          }
+          
           reset({
             venueName: userData.venueName || '',
             venueType: userData.venueType as VenueType,
@@ -133,6 +123,17 @@ const PartnerQuestionnairePage: NextPage = () => {
             youtubeUrl: userData.youtubeUrl || '',
             whatsappPhone: userData.whatsappPhone || '',
           });
+          
+          setIsProfileLocked(userData.questionnaireCompleted || false); // Profile is locked if questionnaireCompleted is true
+          if (userData.questionnaireCompleted) {
+            toast({
+              title: "Modo de Edição",
+              description: "Você pode editar suas informações. Algumas alterações podem requerer contato com o suporte.",
+              variant: "default",
+              duration: 7000,
+            });
+          }
+
           if (userData.location) {
             setVenueLocation(userData.location);
           }
@@ -149,10 +150,8 @@ const PartnerQuestionnairePage: NextPage = () => {
   }, [router, reset, toast]);
 
   const handleGeocode = async () => {
-    if (isProfileLocked) {
-      toast({ title: "Endereço Bloqueado", description: "O endereço não pode ser alterado após a configuração inicial.", variant: "destructive" });
-      return;
-    }
+    // Geocoding is allowed even if profile is locked, for viewing purposes or if address fields become editable later
+    // However, saving the new location would be restricted if profile is locked for address changes.
     const { street, number, city, state: formState, cep, country } = getValues();
     if (!street || !number || !city || !formState || !cep || !country) {
       toast({ title: "Endereço Incompleto", description: "Preencha todos os campos de endereço para localizar.", variant: "destructive" });
@@ -181,7 +180,9 @@ const PartnerQuestionnairePage: NextPage = () => {
 
     let currentVenueLocation = venueLocation;
 
-    if (!isProfileLocked && !currentVenueLocation && (data.street && data.number && data.city && data.state && data.cep && data.country)) {
+    // Attempt geocoding if address fields are filled and no location is set yet, even if profile is "locked" for other fields.
+    // The actual restriction on saving this location would happen based on isProfileLocked *for address data*.
+    if (!currentVenueLocation && (data.street && data.number && data.city && data.state && data.cep && data.country)) {
         setIsGeocoding(true);
         try {
             currentVenueLocation = await geocodeAddress(`${data.street}, ${data.number}, ${data.city}, ${data.state}, ${data.cep}, ${data.country}`);
@@ -194,7 +195,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         setIsGeocoding(false);
     }
 
-    if (!isProfileLocked && !currentVenueLocation) {
+    if (!currentVenueLocation && !isProfileLocked) { // Only block saving if it's the initial setup and no location
         toast({ title: "Localização Pendente", description: "Por favor, forneça um endereço válido e localize-o no mapa.", variant: "destructive" });
         return;
     }
@@ -202,21 +203,23 @@ const PartnerQuestionnairePage: NextPage = () => {
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
 
+      // Data that can always be updated
       let dataToUpdate: any = {
-        questionnaireCompleted: true,
+        venueName: data.venueName, // Now always editable
         venueType: data.venueType, 
         musicStyles: data.musicStyles || [], 
         instagramUrl: data.instagramUrl,
         facebookUrl: data.facebookUrl,
         youtubeUrl: data.youtubeUrl,
         whatsappPhone: data.whatsappPhone,
+        phone: data.phone, // Now always editable
       };
 
-      if (!isProfileLocked) {
+      // Data that is only set/updated if the profile isn't locked (i.e., first time setup)
+      // OR if we decide some fields remain editable even if "locked"
+      if (!isProfileLocked) { // This implies initialQuestionnaireCompletedState is false
         dataToUpdate = {
           ...dataToUpdate,
-          venueName: data.venueName,
-          phone: data.phone,
           address: {
             street: data.street,
             number: data.number,
@@ -228,10 +231,23 @@ const PartnerQuestionnairePage: NextPage = () => {
           location: currentVenueLocation,
           averageVenueRating: 0,
           venueRatingCount: 0,
+          questionnaireCompleted: true, // Mark as completed
+          questionnaireCompletedAt: serverTimestamp(), // Timestamp for first completion
         };
-        if (!initialQuestionnaireCompletedState) {
-            dataToUpdate.questionnaireCompletedAt = serverTimestamp();
-        }
+      } else {
+        // If profile is locked, but we allow address editing, update address here.
+        // For now, assuming address is locked after initial setup.
+        // If address becomes editable later, this logic needs to adjust.
+        // For example, if we add a specific "edit address" flow.
+        dataToUpdate.address = { // Example if address could be edited by a partner
+            street: data.street,
+            number: data.number,
+            city: data.city,
+            state: data.state,
+            cep: data.cep.replace(/\D/g, ''),
+            country: data.country,
+        };
+        dataToUpdate.location = currentVenueLocation;
       }
 
 
@@ -241,18 +257,18 @@ const PartnerQuestionnairePage: NextPage = () => {
         }
       });
 
-      await updateDoc(userDocRef, dataToUpdate);
+      await updateDoc(userDocRef, dataToUpdate, { merge: true }); // Use merge:true to avoid overwriting existing fields unintentionally
 
       toast({
-        title: isProfileLocked ? "Informações do Local Salvas!" : "Perfil do Local Salvo!",
-        description: isProfileLocked ? "Suas informações foram atualizadas." : "Seu estabelecimento foi configurado com sucesso.",
+        title: "Informações do Local Salvas!",
+        description: "Suas informações foram atualizadas com sucesso.",
         variant: "default",
       });
 
-      if (!isProfileLocked) {
-        setIsProfileLocked(true);
+      if (!isProfileLocked) { // If it was the first completion
+        setIsProfileLocked(true); 
         setInitialQuestionnaireCompletedState(true); 
-         router.push('/partner/dashboard');
+        router.push('/partner/dashboard');
       }
     } catch (error) {
       console.error("Error saving partner questionnaire:", error);
@@ -295,7 +311,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             </CardTitle>
             <CardDescription className="text-muted-foreground text-sm sm:text-base">
               {isProfileLocked
-                ? "Atualize o tipo do seu local, estilos musicais, contatos e mídias."
+                ? "Atualize as informações do seu local."
                 : "Detalhes do seu estabelecimento para os usuários do Fervo App."}
             </CardDescription>
           </CardHeader>
@@ -306,7 +322,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="venueName" className="text-foreground">Nome do Local</Label>
-                    <Controller name="venueName" control={control} render={({ field }) => <Input id="venueName" placeholder="Ex: Balada FervoTop" {...field} className={errors.venueName ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
+                    <Controller name="venueName" control={control} render={({ field }) => <Input id="venueName" placeholder="Ex: Balada FervoTop" {...field} className={errors.venueName ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
                     {errors.venueName && <p className="mt-1 text-sm text-destructive">{errors.venueName.message}</p>}
                   </div>
 
@@ -372,17 +388,17 @@ const PartnerQuestionnairePage: NextPage = () => {
 
                   <div>
                     <Label htmlFor="phone" className="text-foreground">Telefone Fixo (Opcional)</Label>
-                    <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXX-XXXX" {...field} className={errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
+                    <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXX-XXXX" {...field} className={errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
                     {errors.phone && <p className="mt-1 text-sm text-destructive">{errors.phone.message}</p>}
                   </div>
                   <div>
                     <Label htmlFor="country" className="text-foreground">País</Label>
-                    <Controller name="country" control={control} render={({ field }) => <Input id="country" placeholder="Brasil" {...field} className={errors.country ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
+                    <Controller name="country" control={control} render={({ field }) => <Input id="country" placeholder="Brasil" {...field} className={errors.country ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
                     {errors.country && <p className="mt-1 text-sm text-destructive">{errors.country.message}</p>}
                   </div>
                    <div>
                     <Label htmlFor="cep" className="text-foreground">CEP</Label>
-                    <Controller name="cep" control={control} render={({ field }) => <Input id="cep" placeholder="XXXXX-XXX" {...field} className={errors.cep ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked} />} />
+                    <Controller name="cep" control={control} render={({ field }) => <Input id="cep" placeholder="XXXXX-XXX" {...field} className={errors.cep ? 'border-destructive focus-visible:ring-destructive' : ''} />} />
                     {errors.cep && <p className="mt-1 text-sm text-destructive">{errors.cep.message}</p>}
                   </div>
                 </div>
@@ -392,33 +408,33 @@ const PartnerQuestionnairePage: NextPage = () => {
 
                   <div>
                     <Label htmlFor="state" className="text-foreground">Estado</Label>
-                    <Controller name="state" control={control} render={({ field }) => <Input id="state" placeholder="Ex: São Paulo" {...field} className={errors.state ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
+                    <Controller name="state" control={control} render={({ field }) => <Input id="state" placeholder="Ex: São Paulo" {...field} className={errors.state ? 'border-destructive focus-visible:ring-destructive' : ''} /> } />
                     {errors.state && <p className="mt-1 text-sm text-destructive">{errors.state.message}</p>}
                   </div>
 
                   <div>
                     <Label htmlFor="city" className="text-foreground">Cidade</Label>
-                    <Controller name="city" control={control} render={({ field }) => <Input id="city" placeholder="Ex: São Paulo" {...field} className={errors.city ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
+                    <Controller name="city" control={control} render={({ field }) => <Input id="city" placeholder="Ex: São Paulo" {...field} className={errors.city ? 'border-destructive focus-visible:ring-destructive' : ''} /> } />
                     {errors.city && <p className="mt-1 text-sm text-destructive">{errors.city.message}</p>}
                   </div>
 
                   <div>
                     <Label htmlFor="street" className="text-foreground">Rua</Label>
-                    <Controller name="street" control={control} render={({ field }) => <Input id="street" placeholder="Ex: Av. Paulista" {...field} className={errors.street ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
+                    <Controller name="street" control={control} render={({ field }) => <Input id="street" placeholder="Ex: Av. Paulista" {...field} className={errors.street ? 'border-destructive focus-visible:ring-destructive' : ''} /> } />
                     {errors.street && <p className="mt-1 text-sm text-destructive">{errors.street.message}</p>}
                   </div>
 
                   <div>
                     <Label htmlFor="number" className="text-foreground">Número</Label>
-                    <Controller name="number" control={control} render={({ field }) => <Input id="number" placeholder="Ex: 1000 ou S/N" {...field} className={errors.number ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}/>} />
+                    <Controller name="number" control={control} render={({ field }) => <Input id="number" placeholder="Ex: 1000 ou S/N" {...field} className={errors.number ? 'border-destructive focus-visible:ring-destructive' : ''} /> } />
                     {errors.number && <p className="mt-1 text-sm text-destructive">{errors.number.message}</p>}
                   </div>
 
-                  <Button type="button" onClick={handleGeocode} disabled={isProfileLocked || isGeocoding || !addressFields.every(f => f && f.length > 0)} className="w-full bg-primary/80 hover:bg-primary text-primary-foreground">
+                  <Button type="button" onClick={handleGeocode} disabled={isGeocoding || !addressFields.every(f => f && f.length > 0)} className="w-full bg-primary/80 hover:bg-primary text-primary-foreground">
                     <MapPin className="w-4 h-4 mr-2"/> {isGeocoding ? 'Localizando...' : 'Localizar Endereço no Mapa'}
                   </Button>
 
-                  {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE" && (
+                  {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && (
                     <div className="h-40 sm:h-48 mt-2 overflow-hidden border rounded-md border-input">
                         <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
                             <GoogleMap
@@ -435,7 +451,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                         </APIProvider>
                     </div>
                   )}
-                  {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE") && (
+                  {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
                     <p className="text-sm text-muted-foreground">Preview do mapa indisponível (API Key não configurada).</p>
                   )}
                 </div>
