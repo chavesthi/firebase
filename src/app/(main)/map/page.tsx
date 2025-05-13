@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -1212,8 +1213,8 @@ const MapContentAndLogic = () => {
                                           size="icon"
                                           className="text-primary hover:text-primary/80 -mr-2 -mt-1"
                                           onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
-                                          title={eventHasEnded ? "Evento encerrado" : "Ativar notificação para este evento"}
-                                          disabled={eventHasEnded}
+                                          title={eventHasEnded || event.startDateTime.toDate() < new Date() ? "Evento já começou ou encerrou" : "Ativar notificação para este evento"}
+                                          disabled={eventHasEnded || event.startDateTime.toDate() < new Date()}
                                       >
                                           <Bell className="w-5 h-5" />
                                       </Button>
@@ -1398,7 +1399,7 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; // A truly generic placeholder string
+  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; 
 
   if (!apiKey || apiKey === genericPlaceholder ) {
     return (
@@ -1416,3 +1417,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
