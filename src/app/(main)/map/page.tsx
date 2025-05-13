@@ -1,3 +1,4 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -10,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription as UICardDescription } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle if it was conflicting
+import { Card, CardContent, CardHeader, CardTitle as UICardTitle, CardDescription as UICardDescription } from '@/components/ui/card'; 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -56,6 +57,7 @@ interface VenueEvent {
   ratingCount?: number;
   shareRewardsEnabled?: boolean; 
   description?: string; 
+  ticketPurchaseUrl?: string;
 }
 
 interface Venue {
@@ -859,6 +861,11 @@ const MapContentAndLogic = () => {
 
   const openPurchaseTicketModal = (event: VenueEvent) => {
     if (!selectedVenue) return;
+    if (event.ticketPurchaseUrl) { // If there's an external URL, open it
+        window.open(event.ticketPurchaseUrl, '_blank', 'noopener,noreferrer');
+        return;
+    }
+    // Otherwise, open the internal modal
     setTicketPurchaseDetails({
         eventId: event.id,
         eventName: event.eventName,
@@ -886,7 +893,7 @@ const MapContentAndLogic = () => {
     );
   }
 
-
+  // Check for parsing error before this return
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
       <Card
@@ -896,7 +903,7 @@ const MapContentAndLogic = () => {
         )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
+          <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
             <X className="w-5 h-5" />
           </Button>
@@ -1169,7 +1176,7 @@ const MapContentAndLogic = () => {
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
                                   <div className="flex-1">
-                                    <CardTitle className="text-md text-secondary mb-1">{event.eventName}</CardTitle>
+                                    <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
                                     {isHappening && (
                                       <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                                         <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
@@ -1222,16 +1229,30 @@ const MapContentAndLogic = () => {
                               )}
                               {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
 
-                              {currentUser && currentAppUser?.role === UserRole.USER && event.pricingType !== PricingType.FREE && !eventHasEnded && (
-                                <Button
-                                  className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
-                                  size="sm"
-                                  onClick={() => openPurchaseTicketModal(event)}
-                                >
-                                  <Ticket className="w-3.5 h-3.5 mr-1.5" />
-                                  Compre Aqui o Seu Ingresso Saia Na frente!!!
-                                </Button>
+                              {currentUser && currentAppUser?.role === UserRole.USER && !eventHasEnded && (
+                                event.ticketPurchaseUrl ? (
+                                  <Button
+                                    asChild
+                                    className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                                    size="sm"
+                                  >
+                                    <a href={event.ticketPurchaseUrl} target="_blank" rel="noopener noreferrer">
+                                      <Ticket className="w-3.5 h-3.5 mr-1.5" />
+                                      Compre Aqui o Seu Ingresso Saia Na frente!!!
+                                    </a>
+                                  </Button>
+                                ) : event.pricingType !== PricingType.FREE ? (
+                                  <Button
+                                    className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                                    size="sm"
+                                    onClick={() => openPurchaseTicketModal(event)}
+                                  >
+                                    <Ticket className="w-3.5 h-3.5 mr-1.5" />
+                                    Compre Aqui o Seu Ingresso Saia Na frente!!!
+                                  </Button>
+                                ) : null
                               )}
+
 
                               {currentUser && userHasCheckedIn && !userHasRated && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
@@ -1364,15 +1385,13 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const knownPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; // The specific placeholder string used in constants/geocoding if env var is not set
+  const knownPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; 
 
-  // Check if the API key is not configured or is still the placeholder
-  if (!apiKey || apiKey === knownPlaceholder) { 
+  if (!apiKey || apiKey === knownPlaceholder || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { 
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.
             Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no seu arquivo .env ou as configurações do seu projeto Firebase).
-            O valor atual é: {apiKey ? `"${apiKey}" (Este pode ser o placeholder ou um valor inválido)` : "Não Definida"}
         </div>
     );
   }

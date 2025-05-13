@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -27,7 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS, APP_URL } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode, Loader2, Share2, Trash } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode, Loader2, Share2, Trash, Ticket } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -58,6 +56,7 @@ const eventFormSchema = z.object({
   description: z.string().max(500, { message: 'Descrição muito longa (máx. 500 caracteres).' }).optional(),
   visibility: z.boolean().default(true),
   shareRewardsEnabled: z.boolean().default(true),
+  ticketPurchaseUrl: z.string().url({ message: "URL de compra de ingresso inválida." }).optional().or(z.literal('')),
 }).refine(data => {
     if (data.pricingType !== PricingType.FREE && (data.pricingValue === undefined || data.pricingValue <= 0)) {
         return false;
@@ -97,6 +96,7 @@ interface EventDocument extends EventFormInputs {
   averageRating?: number; 
   ratingCount?: number;
   shareRewardsEnabled: boolean;
+  ticketPurchaseUrl?: string | null;
 }
 
 const isEventHappeningNow = (startDateTime: Timestamp, endDateTime: Timestamp): boolean => {
@@ -136,6 +136,7 @@ const ManageEventsPage: NextPage = () => {
       description: '',
       visibility: true,
       shareRewardsEnabled: true,
+      ticketPurchaseUrl: '',
     },
   });
 
@@ -165,7 +166,7 @@ const ManageEventsPage: NextPage = () => {
         }
 
         unsubscribeEvents = onSnapshot(q, (snapshot) => {
-          const eventsData = snapshot.docs.map(docSnap => ({ // Renamed doc to docSnap to avoid conflict
+          const eventsData = snapshot.docs.map(docSnap => ({ 
             id: docSnap.id,
             ...docSnap.data(),
           } as EventDocument));
@@ -232,6 +233,7 @@ const ManageEventsPage: NextPage = () => {
       description: data.description || '',
       visibility: data.visibility,
       shareRewardsEnabled: data.shareRewardsEnabled,
+      ticketPurchaseUrl: data.ticketPurchaseUrl || null,
       checkInToken: existingEvent?.checkInToken || (doc(collection(firestore, `users/${currentUser.uid}/events`)).id.slice(0,10).toUpperCase()),
       averageRating: existingEvent?.averageRating ?? 0,
       ratingCount: existingEvent?.ratingCount ?? 0,
@@ -271,7 +273,8 @@ const ManageEventsPage: NextPage = () => {
       pricingValue: event.pricingValue ?? undefined,
       description: event.description,
       visibility: event.visibility,
-      shareRewardsEnabled: event.shareRewardsEnabled ?? true, 
+      shareRewardsEnabled: event.shareRewardsEnabled ?? true,
+      ticketPurchaseUrl: event.ticketPurchaseUrl || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -517,6 +520,14 @@ const ManageEventsPage: NextPage = () => {
                   {errors.pricingValue && <p className="mt-1 text-sm text-destructive">{errors.pricingValue.message}</p>}
                 </div>
               )}
+              
+              <div className="md:col-span-2">
+                <Label htmlFor="ticketPurchaseUrl" className="text-primary/90">Link para Compra de Ingressos (Opcional)</Label>
+                <Controller name="ticketPurchaseUrl" control={control} render={({ field }) => <Input id="ticketPurchaseUrl" type="url" placeholder="https://exemplo.com/ingressos" {...field} className={errors.ticketPurchaseUrl ? 'border-destructive' : ''} />} />
+                {errors.ticketPurchaseUrl && <p className="mt-1 text-sm text-destructive">{errors.ticketPurchaseUrl.message}</p>}
+                <p className="mt-1 text-xs text-muted-foreground">Se fornecido, este link será usado para a venda de ingressos. Caso contrário, o sistema interno de ingressos (RG) será usado se o evento não for gratuito.</p>
+              </div>
+
 
               <div className="md:col-span-2">
                 <Label htmlFor="description" className="text-primary/90">Descrição do Evento (Opcional)</Label>
@@ -627,6 +638,11 @@ const ManageEventsPage: NextPage = () => {
                             Preço: {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
                             {event.pricingType !== PricingType.FREE && event.pricingValue ? ` (R$ ${Number(event.pricingValue).toFixed(2)})` : ''}
                         </p>
+                         {event.ticketPurchaseUrl && (
+                           <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                             Link de Venda: <a href={event.ticketPurchaseUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{event.ticketPurchaseUrl}</a>
+                           </p>
+                         )}
                       </div>
                       <div className="flex items-center space-x-0.5 sm:space-x-1 flex-shrink-0">
                         <Button variant="ghost" size="icon" onClick={() => toggleEventVisibility(event)} title={event.visibility ? "Ocultar evento" : "Tornar evento visível"}>
@@ -695,4 +711,3 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
-

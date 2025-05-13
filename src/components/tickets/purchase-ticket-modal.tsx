@@ -45,7 +45,7 @@ export function PurchaseTicketModal({
   currentUser,
 }: PurchaseTicketModalProps) {
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false); // Renamed to avoid conflict
   const [hasPurchased, setHasPurchased] = useState(false);
 
   const { control, handleSubmit, formState: { errors }, reset, setValue } = useForm<PurchaseTicketFormInputs>({
@@ -96,7 +96,7 @@ export function PurchaseTicketModal({
       return;
     }
 
-    setIsSubmitting(true);
+    setIsSubmittingTicket(true);
     try {
       const ticketId = doc(collection(firestore, 'purchasedTickets')).id; // Generate a new ID
       const ticketDocRef = doc(firestore, 'purchasedTickets', ticketId);
@@ -128,7 +128,7 @@ export function PurchaseTicketModal({
         variant: "destructive",
       });
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingTicket(false);
     }
   };
 
@@ -170,8 +170,8 @@ export function PurchaseTicketModal({
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancelar</Button>
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            <Button type="submit" disabled={isSubmittingTicket} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              {isSubmittingTicket ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Adquirir Ingresso
             </Button>
           </DialogFooter>
