@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, Timestamp as FirebaseTimestamp, setDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -122,6 +122,26 @@ const PartnerValidateTicketPage: NextPage = () => {
         validatedAt: serverTimestamp(),
         validatedByPartnerId: currentUser.uid,
       });
+
+      // Create check-in record for the partner
+      const partnerCheckInDocRef = doc(firestore, `users/${foundTicket.partnerId}/events/${foundTicket.eventId}/checkIns/${foundTicket.userId}`);
+      await setDoc(partnerCheckInDocRef, {
+        userId: foundTicket.userId,
+        checkedInAt: serverTimestamp(), // Or use foundTicket.validatedAt from above once it's set
+        eventId: foundTicket.eventId,
+        partnerId: foundTicket.partnerId,
+        eventName: foundTicket.eventName,
+      });
+
+      // Create check-in record for the user (this allows them to rate the event)
+      const userCheckedInEventRef = doc(firestore, `users/${foundTicket.userId}/checkedInEvents/${foundTicket.eventId}`);
+      await setDoc(userCheckedInEventRef, {
+          eventId: foundTicket.eventId,
+          partnerId: foundTicket.partnerId,
+          eventName: foundTicket.eventName,
+          checkedInAt: serverTimestamp(), // Or use foundTicket.validatedAt
+          hasRated: false,
+      });
       
       const validationTime = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
       setLastValidatedTicket({
@@ -131,7 +151,7 @@ const PartnerValidateTicketPage: NextPage = () => {
       });
       toast({
         title: "Ingresso Validado!",
-        description: `Ingresso de ${foundTicket.userName} para "${foundTicket.eventName}" validado com sucesso.`,
+        description: `Ingresso de ${foundTicket.userName} para "${foundTicket.eventName}" validado com sucesso. O usuário agora pode avaliar este evento.`,
         variant: "default",
         duration: 7000,
       });
