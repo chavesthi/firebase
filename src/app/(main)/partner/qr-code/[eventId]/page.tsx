@@ -1,9 +1,8 @@
 
-
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react'; 
+import { useEffect, useState, use, useRef } from 'react'; // Added use
 import { useRouter } from 'next/navigation'; 
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { firestore, auth } from '@/lib/firebase';
@@ -29,9 +28,10 @@ interface EventQrCodePageProps {
 }
 
 const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
+  const resolvedParams = use(params as any); // Use React.use to unwrap params if it's a Promise
   const router = useRouter();
   const { toast } = useToast();
-  const eventIdParam = params.eventId;
+  const eventIdParam = resolvedParams.eventId;
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
