@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -15,7 +16,7 @@ import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { ArrowLeft, Loader2, TicketCheck, AlertTriangle, CheckCircle, XCircle, Search } from 'lucide-react';
