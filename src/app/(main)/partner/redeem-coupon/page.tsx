@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -8,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, collectionGroup, getDoc, orderBy, type Timestamp as FirebaseTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, collectionGroup, getDoc, orderBy, type Timestamp as FirebaseTimestamp, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -355,3 +356,4 @@ const PartnerRedeemCouponPage: NextPage = () => {
 };
 
 export default PartnerRedeemCouponPage;
+
