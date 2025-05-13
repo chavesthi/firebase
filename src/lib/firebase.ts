@@ -1,3 +1,4 @@
+
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics";
@@ -7,20 +8,19 @@ import { getFirestore, type Firestore } from "firebase/firestore";
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBeWIuua2ILzwVdJpw7bf5uYGpCVCt549o",
-  authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
-  databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
-  projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.firebasestorage.app", // Updated as per user request
-  messagingSenderId: "762698655248",
-  appId: "1:762698655248:web:ef79742c8b4e53eccb0c95",
-  measurementId: "G-GXSK4Y4P7V"
+  apiKey: "AIzaSyAfQZt7CSmW1abKH_wS3Z86-Sibutu19Oc",
+  authDomain: "fervofinder.firebaseapp.com",
+  projectId: "fervofinder",
+  storageBucket: "fervofinder.appspot.com", // Corrected storageBucket format
+  messagingSenderId: "260397392453",
+  appId: "1:260397392453:web:0c1a11dc41b3dcf9ae392c"
+  // measurementId is optional and not provided in the new config, so it's omitted.
 };
 
+
 // Informational Note on Google OAuth Client ID and 'auth/unauthorized-domain' errors:
-// The Google OAuth Web Client ID, such as "762698655248-6fep3lu3lumf7hsqirrecqussr08578t.apps.googleusercontent.com",
+// The Google OAuth Web Client ID, such as "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
 // is configured within your Firebase project settings in the Firebase Console.
 // Navigate to: Firebase Console > Your Project > Authentication > Sign-in method > Google.
 // Ensure Google Sign-In is enabled and correctly configured there.
@@ -40,32 +40,26 @@ let googleAuthProvider: GoogleAuthProvider;
 
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  firestore = getFirestore(app);
-  googleAuthProvider = new GoogleAuthProvider();
-  if (typeof window !== 'undefined') {
-    // Initialize Analytics only on the client side
-    try {
-      analytics = getAnalytics(app);
-    } catch (e) {
-      console.warn("Firebase Analytics could not be initialized:", e);
-    }
-  }
 } else {
   app = getApps()[0];
-  auth = getAuth(app);
-  firestore = getFirestore(app);
-  googleAuthProvider = new GoogleAuthProvider();
-  if (typeof window !== 'undefined') {
-     // Get Analytics instance if already initialized (e.g. HMR)
-    try {
+}
+
+auth = getAuth(app);
+firestore = getFirestore(app);
+googleAuthProvider = new GoogleAuthProvider();
+
+if (typeof window !== 'undefined') {
+  // Initialize Analytics only on the client side
+  try {
+    // Check if firebaseConfig has measurementId before initializing analytics
+    if (firebaseConfig.projectId) { // Check if projectId exists as a proxy for full config
       analytics = getAnalytics(app);
-    } catch (e) {
-      console.warn("Firebase Analytics could not be re-initialized:", e);
+    } else {
+      console.warn("Firebase measurementId not found in config, Analytics not initialized.");
     }
+  } catch (e) {
+    console.warn("Firebase Analytics could not be initialized:", e);
   }
 }
 
-
 export { app, auth, firestore, analytics, googleAuthProvider };
-
