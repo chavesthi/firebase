@@ -1,5 +1,4 @@
 
-
 export const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0";
 
 export enum UserRole {
@@ -78,7 +77,8 @@ export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMu
 
 
 // IMPORTANT: This MUST be a Stripe PRICE ID (e.g., price_xxxxxxxxxxxxxx), NOT a Product ID.
-// Create a Product in Stripe (e.g., "Fervo Partner Plan") and then create a Price for that product.
+// To use your product (e.g., prod_SIMUUs67RhC80g), create a Price for it in your Stripe Dashboard
+// and set NEXT_PUBLIC_STRIPE_PRICE_ID in your .env file to that Price ID.
 export const STRIPE_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_YOUR_FERVO_PLAN_PRICE_ID"; 
 
 // App URL
@@ -86,6 +86,7 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 
 // PagBank Pre-approval Code (if still used as an alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
+
 
 
 
