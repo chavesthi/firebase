@@ -206,8 +206,8 @@ const PartnerQuestionnairePage: NextPage = () => {
       // Data that can always be updated
       let dataToUpdate: any = {
         venueName: data.venueName, // Now always editable
-        venueType: data.venueType, 
-        musicStyles: data.musicStyles || [], 
+        venueType: data.venueType,
+        musicStyles: data.musicStyles || [],
         instagramUrl: data.instagramUrl,
         facebookUrl: data.facebookUrl,
         youtubeUrl: data.youtubeUrl,
@@ -266,8 +266,8 @@ const PartnerQuestionnairePage: NextPage = () => {
       });
 
       if (!isProfileLocked) { // If it was the first completion
-        setIsProfileLocked(true); 
-        setInitialQuestionnaireCompletedState(true); 
+        setIsProfileLocked(true);
+        setInitialQuestionnaireCompletedState(true);
         router.push('/partner/dashboard');
       }
     } catch (error) {
@@ -289,7 +289,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       </div>
     );
   }
-
+  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE";
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4 bg-background">
       <div className="absolute top-4 sm:top-8 left-4 sm:left-8">
@@ -434,7 +434,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                     <MapPin className="w-4 h-4 mr-2"/> {isGeocoding ? 'Localizando...' : 'Localizar Endereço no Mapa'}
                   </Button>
 
-                  {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && (
+                  {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== genericPlaceholder && (
                     <div className="h-40 sm:h-48 mt-2 overflow-hidden border rounded-md border-input">
                         <APIProvider apiKey={GOOGLE_MAPS_API_KEY}>
                             <GoogleMap
@@ -451,7 +451,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                         </APIProvider>
                     </div>
                   )}
-                  {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
+                  {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === genericPlaceholder) && (
                     <p className="text-sm text-muted-foreground">Preview do mapa indisponível (API Key não configurada).</p>
                   )}
                 </div>
@@ -524,4 +524,3 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
-

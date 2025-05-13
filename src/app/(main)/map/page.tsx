@@ -1,3 +1,4 @@
+
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -10,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle as UICardTitle, CardDescription as UICardDescription } from '@/components/ui/card'; 
+import { Card, CardContent, CardHeader, CardTitle as UICardTitle, CardDescription as UICardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -54,8 +55,8 @@ interface VenueEvent {
   visibility: boolean;
   averageRating?: number;
   ratingCount?: number;
-  shareRewardsEnabled?: boolean; 
-  description?: string; 
+  shareRewardsEnabled?: boolean;
+  description?: string;
   ticketPurchaseUrl?: string;
 }
 
@@ -81,7 +82,7 @@ interface UserRatingData {
   comment?: string;
   createdAt: FirebaseTimestamp;
   userName: string;
-  eventName?: string; 
+  eventName?: string;
 }
 
 interface UserVenueCoins {
@@ -92,7 +93,7 @@ interface MapPageAppUser {
     uid: string;
     name: string;
     favoriteVenueIds?: string[];
-    role: UserRole; 
+    role: UserRole;
 }
 
 
@@ -119,13 +120,13 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', 
+  [VenueType.STAND_UP]: '#FACC15',
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
-  [VenueType.LGBT]: '#F97316', 
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
+  [VenueType.LGBT]: '#F97316',
 };
 
-const MapUpdater = ({ center }: { center: Location | null }) => { 
+const MapUpdater = ({ center }: { center: Location | null }) => {
   const map = useMap();
   useEffect(() => {
     if (map && center) {
@@ -147,15 +148,15 @@ const VenueCustomMapMarker = ({
   hasActiveEvent?: boolean
 }) => {
   const IconComponent = venueTypeIcons[type];
-  const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
+  const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = '#FACC15'; 
+  let effectiveBlinkHighlightColor = '#FACC15';
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : normalizeHex(basePinColor);
 
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor)) {
-    effectiveBlinkHighlightColor = 'white'; 
+    effectiveBlinkHighlightColor = 'white';
   }
 
   const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -183,7 +184,7 @@ const VenueCustomMapMarker = ({
         <div
           className={cn(
             "flex items-center justify-center w-10 h-10 rounded-full z-10",
-            isFilterActive ? 'shadow-xl' : 'shadow-lg', 
+            isFilterActive ? 'shadow-xl' : 'shadow-lg',
           )}
           style={{
             backgroundColor: basePinColor,
@@ -205,7 +206,7 @@ const UserCustomMapMarker = () => {
   return (
     <div className="flex flex-col items-center" title="Sua Localização" style={{ transform: 'translate(-50%, -100%)' }}>
       <div
-        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" 
+        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md"
       >
         <UserIconLucide className="w-5 h-5 text-white" />
       </div>
@@ -283,7 +284,7 @@ const updatePartnerOverallRating = async (partnerId: string) => {
 
 const MapContentAndLogic = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null); 
+  const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null);
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [actualUserLocation, setActualUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
@@ -303,7 +304,7 @@ const MapContentAndLogic = () => {
 
 
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
-  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({}); 
+  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({});
 
   const [currentRating, setCurrentRating] = useState(0);
   const [currentComment, setCurrentComment] = useState('');
@@ -311,7 +312,7 @@ const MapContentAndLogic = () => {
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
 
-  const mapsApi = useMapsLibrary('maps'); 
+  const mapsApi = useMapsLibrary('maps');
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
@@ -325,18 +326,18 @@ const MapContentAndLogic = () => {
                 uid: user.uid,
                 name: userData.name || (userData.role === UserRole.PARTNER ? "Parceiro Fervo" : "Usuário Fervo"),
                 favoriteVenueIds: userData.favoriteVenueIds || [],
-                role: userData.role as UserRole || UserRole.USER, 
+                role: userData.role as UserRole || UserRole.USER,
               });
             } else {
               setCurrentAppUser({ uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER });
             }
         });
-        return () => unsubscribeUser(); 
+        return () => unsubscribeUser();
       } else {
         setCurrentAppUser(null);
       }
     });
-    return () => unsubscribeAuth(); 
+    return () => unsubscribeAuth();
   }, []);
 
 
@@ -375,7 +376,7 @@ const MapContentAndLogic = () => {
               comment: data.comment,
               createdAt: data.createdAt as FirebaseTimestamp,
               userName: data.userName,
-              eventName: data.eventName, 
+              eventName: data.eventName,
             };
           }
         } catch (error) {
@@ -421,7 +422,7 @@ const MapContentAndLogic = () => {
     const qPartners = query(
       usersCollectionRef,
       where('role', '==', UserRole.PARTNER),
-      where('questionnaireCompleted', '==', true) 
+      where('questionnaireCompleted', '==', true)
     );
 
     const unsubscribeVenues = onSnapshot(qPartners, async (partnersSnapshot) => {
@@ -432,7 +433,7 @@ const MapContentAndLogic = () => {
 
         const eventsCollectionRef = collection(firestore, 'users', partnerDoc.id, 'events');
         const eventsQuery = query(eventsCollectionRef, where('visibility', '==', true));
-        const eventsSnapshot = await getDocs(eventsQuery); 
+        const eventsSnapshot = await getDocs(eventsQuery);
 
         if (!eventsSnapshot.empty) {
           for (const eventDoc of eventsSnapshot.docs) {
@@ -441,7 +442,7 @@ const MapContentAndLogic = () => {
                 isEventHappeningNow(eventData.startDateTime as FirebaseTimestamp, eventData.endDateTime as FirebaseTimestamp)) {
               hasActiveEvent = true;
               activeEventName = eventData.eventName as string;
-              break; 
+              break;
             }
           }
         }
@@ -456,8 +457,8 @@ const MapContentAndLogic = () => {
           instagramUrl: partnerData.instagramUrl,
           facebookUrl: partnerData.facebookUrl,
           whatsappPhone: partnerData.whatsappPhone,
-          averageVenueRating: partnerData.averageVenueRating, 
-          venueRatingCount: partnerData.venueRatingCount, 
+          averageVenueRating: partnerData.averageVenueRating,
+          venueRatingCount: partnerData.venueRatingCount,
           hasActiveEvent,
           activeEventName,
         };
@@ -474,7 +475,7 @@ const MapContentAndLogic = () => {
       setIsLoadingVenues(false);
     });
 
-    return () => unsubscribeVenues(); 
+    return () => unsubscribeVenues();
   }, [toast]);
 
    useEffect(() => {
@@ -485,7 +486,7 @@ const MapContentAndLogic = () => {
         if (venueToSelect) {
           setSelectedVenue(venueToSelect);
           if (venueToSelect.location) {
-            setUserLocation(venueToSelect.location); 
+            setUserLocation(venueToSelect.location);
           }
         } else {
           if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
@@ -505,10 +506,10 @@ const MapContentAndLogic = () => {
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const eventsData = snapshot.docs.map(docSnap => ({ 
+        const eventsData = snapshot.docs.map(docSnap => ({
           id: docSnap.id,
           ...docSnap.data(),
-        } as VenueEvent)); 
+        } as VenueEvent));
 
         setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
         setIsLoadingEvents(false);
@@ -517,7 +518,7 @@ const MapContentAndLogic = () => {
         toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
         setIsLoadingEvents(false);
       });
-      return unsubscribe; 
+      return unsubscribe;
     } catch (error) {
       console.error("Error fetching venue events:", error);
       toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
@@ -527,7 +528,7 @@ const MapContentAndLogic = () => {
 
   useEffect(() => {
     let unsubscribeEvents: (() => void) | undefined;
-    if (selectedVenue && !selectedVenue.events) { 
+    if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
       setCurrentlyRatingEventId(null);
@@ -538,7 +539,7 @@ const MapContentAndLogic = () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVenue]); 
+  }, [selectedVenue]);
 
 
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
@@ -556,7 +557,7 @@ const MapContentAndLogic = () => {
   const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
 
   const filteredVenuesForBlinking = useMemo(() => {
-    if (!isAnyFilterActive) return []; 
+    if (!isAnyFilterActive) return [];
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
       const musicStyleMatch = activeMusicStyleFilters.length === 0 ||
@@ -571,7 +572,7 @@ const MapContentAndLogic = () => {
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false; 
+      return false;
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
@@ -582,20 +583,20 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; 
+    let colorClass = "text-foreground";
 
     if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
     else if (type === VenueType.BAR) colorClass = "text-accent";
-    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400"; 
+    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
     else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
-    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500"; 
-    else if (type === VenueType.LGBT) colorClass = "text-orange-500"; 
+    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
+    else if (type === VenueType.LGBT) colorClass = "text-orange-500";
 
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
 
   const handleRateEvent = async (eventId: string, partnerId: string) => {
-    if (!currentUser || !currentAppUser?.name) { 
+    if (!currentUser || !currentAppUser?.name) {
         toast({ title: "Não Autenticado", description: "Você precisa estar logado para avaliar.", variant: "destructive" });
         return;
     }
@@ -604,7 +605,7 @@ const MapContentAndLogic = () => {
         return;
     }
     setIsSubmittingRating(true);
-    setCurrentlyRatingEventId(eventId); 
+    setCurrentlyRatingEventId(eventId);
 
     const eventNameForRating = selectedVenue?.events?.find(e => e.id === eventId)?.eventName || "Evento Desconhecido";
 
@@ -649,7 +650,7 @@ const MapContentAndLogic = () => {
                 rating: currentRating,
                 comment: currentComment || null,
                 createdAt: serverTimestamp(),
-                eventName: eventNameForRating, 
+                eventName: eventNameForRating,
             }, { merge: true });
 
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
@@ -752,7 +753,7 @@ const MapContentAndLogic = () => {
       }
     }
 
-    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true) && currentAppUser?.role === UserRole.USER) { 
+    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true) && currentAppUser?.role === UserRole.USER) {
       const userDocRef = doc(firestore, "users", currentUser.uid);
       const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
@@ -893,6 +894,18 @@ const MapContentAndLogic = () => {
     );
   }
 
+  const apiKey = GOOGLE_MAPS_API_KEY;
+  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE";
+
+  if (!apiKey || apiKey === genericPlaceholder) {
+    return (
+        <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
+            API Key do Google Maps não configurada corretamente.
+            Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no seu arquivo .env ou as configurações do seu projeto Firebase).
+        </div>
+    );
+  }
+
   // Check for parsing error before this return
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
@@ -945,7 +958,7 @@ const MapContentAndLogic = () => {
         </CardContent>
       </Card>
 
-      <div className="flex-1 h-full relative"> 
+      <div className="flex-1 h-full relative">
          <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
             {!filterSidebarOpen && (
             <Button
@@ -962,8 +975,8 @@ const MapContentAndLogic = () => {
                  <Logo iconClassName="text-primary h-8 w-auto" className="bg-background/80 p-1.5 rounded-md shadow-lg" />
             )}
         </div>
-        
-        {GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && mapsApi && (
+
+        {GOOGLE_MAPS_API_KEY && mapsApi && (
             <GoogleMap
                 defaultCenter={userLocation}
                 defaultZoom={15}
@@ -1002,7 +1015,7 @@ const MapContentAndLogic = () => {
                 })}
             </GoogleMap>
         )}
-        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
+        {(!GOOGLE_MAPS_API_KEY) && (
              <div className="flex items-center justify-center h-full bg-background text-destructive">
                 API Key do Google Maps não configurada ou inválida.
             </div>
@@ -1011,25 +1024,25 @@ const MapContentAndLogic = () => {
 
       {selectedVenue && (
         <Sheet open={!!selectedVenue} onOpenChange={(isOpen) => {
-            if (!isOpen) { 
+            if (!isOpen) {
                 const venueIdInParams = searchParams.get('venueId');
-                setSelectedVenue(null); 
+                setSelectedVenue(null);
 
                 if (isPreviewMode && venueIdInParams) {
-                    router.replace('/map', { scroll: false }); 
+                    router.replace('/map', { scroll: false });
                     if (actualUserLocation) {
                         setUserLocation(actualUserLocation);
                     } else {
-                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
+                        setUserLocation({ lat: -23.55052, lng: -46.633308 });
                     }
                 } else if (!isPreviewMode) {
                     if (actualUserLocation) {
                         setUserLocation(actualUserLocation);
                     } else {
-                        setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
+                        setUserLocation({ lat: -23.55052, lng: -46.633308 });
                     }
                     if (venueIdInParams) {
-                        router.replace('/map', { scroll: false }); 
+                        router.replace('/map', { scroll: false });
                     }
                 }
             }
@@ -1046,9 +1059,9 @@ const MapContentAndLogic = () => {
                     {selectedVenue.name}
                     </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
-                        <div className="flex items-center gap-2 mt-1"> 
+                        <div className="flex items-center gap-2 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="#FFD700" readOnly />
-                            <span className="text-sm text-foreground font-semibold"> 
+                            <span className="text-sm text-foreground font-semibold">
                                 {selectedVenue.averageVenueRating.toFixed(1)}
                             </span>
                         </div>
@@ -1387,7 +1400,7 @@ const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
   const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; // A truly generic placeholder string
 
-  if (!apiKey || apiKey === genericPlaceholder || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" /* Check against known placeholder */) { 
+  if (!apiKey || apiKey === genericPlaceholder ) {
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.
