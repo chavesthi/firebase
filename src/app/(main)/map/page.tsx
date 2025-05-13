@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription as UICardDescription } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle if it was conflicting
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -1364,9 +1364,17 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
+  const knownPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; // The specific placeholder string used in constants/geocoding if env var is not set
 
-  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE" || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { 
-    return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
+  // Check if the API key is not configured or is still the placeholder
+  if (!apiKey || apiKey === knownPlaceholder) { 
+    return (
+        <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
+            API Key do Google Maps não configurada corretamente.
+            Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no seu arquivo .env ou as configurações do seu projeto Firebase).
+            O valor atual é: {apiKey ? `"${apiKey}" (Este pode ser o placeholder ou um valor inválido)` : "Não Definida"}
+        </div>
+    );
   }
   return (
     <APIProvider apiKey={apiKey} solutionChannel="GMP_devsite_samples_v3_rgmbasic" libraries={['marker', 'maps']}>
