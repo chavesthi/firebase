@@ -1,4 +1,3 @@
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -41,6 +40,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from '@/components/shared/logo';
+import { PurchaseTicketModal } from '@/components/tickets/purchase-ticket-modal';
 
 
 interface VenueEvent {
@@ -54,8 +54,8 @@ interface VenueEvent {
   visibility: boolean;
   averageRating?: number;
   ratingCount?: number;
-  shareRewardsEnabled?: boolean; // Added for FervoCoin sharing rewards
-  description?: string; // Added for event description
+  shareRewardsEnabled?: boolean; 
+  description?: string; 
 }
 
 interface Venue {
@@ -80,20 +80,18 @@ interface UserRatingData {
   comment?: string;
   createdAt: FirebaseTimestamp;
   userName: string;
-  eventName?: string; // Added for denormalization
+  eventName?: string; 
 }
 
-// Data structure for venue-specific coins on user document
 interface UserVenueCoins {
     [partnerId: string]: number;
 }
 
-// This AppUser interface is specific to this page, might differ from MainAppLayout's one
 interface MapPageAppUser {
     uid: string;
     name: string;
     favoriteVenueIds?: string[];
-    role: UserRole; // Added role
+    role: UserRole; 
 }
 
 
@@ -120,13 +118,13 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', // Yellow-ish for standup
+  [VenueType.STAND_UP]: '#FACC15', 
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Pink for adult ent.
-  [VenueType.LGBT]: '#F97316', // Orange for LGBT
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
+  [VenueType.LGBT]: '#F97316', 
 };
 
-const MapUpdater = ({ center }: { center: Location | null }) => { // center can be null
+const MapUpdater = ({ center }: { center: Location | null }) => { 
   const map = useMap();
   useEffect(() => {
     if (map && center) {
@@ -148,20 +146,17 @@ const VenueCustomMapMarker = ({
   hasActiveEvent?: boolean
 }) => {
   const IconComponent = venueTypeIcons[type];
-  const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))'; // Default to primary if type unknown
+  const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))'; 
 
-  // Ensure blink highlight color is distinct from base pin color
-  let effectiveBlinkHighlightColor = '#FACC15'; // Default bright yellow
+  let effectiveBlinkHighlightColor = '#FACC15'; 
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : normalizeHex(basePinColor);
 
 
-  // If basePinColor is too similar to yellow, pick another highlight (e.g., white or a light primary shade)
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor)) {
-    effectiveBlinkHighlightColor = 'white'; // Or another contrasting color like 'hsl(var(--primary), 0.7)'
+    effectiveBlinkHighlightColor = 'white'; 
   }
 
-  // Create a unique animation name per type to avoid style conflicts if multiple types blink
   const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
   return (
@@ -187,7 +182,7 @@ const VenueCustomMapMarker = ({
         <div
           className={cn(
             "flex items-center justify-center w-10 h-10 rounded-full z-10",
-            isFilterActive ? 'shadow-xl' : 'shadow-lg', // Keep shadow subtle if not blinking
+            isFilterActive ? 'shadow-xl' : 'shadow-lg', 
           )}
           style={{
             backgroundColor: basePinColor,
@@ -209,7 +204,7 @@ const UserCustomMapMarker = () => {
   return (
     <div className="flex flex-col items-center" title="Sua Localização" style={{ transform: 'translate(-50%, -100%)' }}>
       <div
-        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" // Blue color for user marker
+        className="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full shadow-md" 
       >
         <UserIconLucide className="w-5 h-5 text-white" />
       </div>
@@ -229,12 +224,10 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
     if (urlObj.hostname === 'www.youtube.com' || urlObj.hostname === 'youtube.com') {
       videoId = urlObj.searchParams.get('v');
     } else if (urlObj.hostname === 'youtu.be') {
-      // For youtu.be links, the video ID is part of the pathname
       const pathParts = urlObj.pathname.substring(1).split('/');
       videoId = pathParts[0];
     }
   } catch (e) {
-    // Log error or handle gracefully if URL parsing fails
     console.warn("Could not parse YouTube URL for embed: ", url, e);
     return null;
   }
@@ -254,10 +247,8 @@ const isEventPast = (endDateTime: FirebaseTimestamp): boolean => {
 }
 
 
-// Function to update partner's overall rating based on their event ratings
 const updatePartnerOverallRating = async (partnerId: string) => {
     try {
-        // Query all ratings for this partner from the 'eventRatings' collection group
         const ratingsQuery = query(
             collectionGroup(firestore, 'eventRatings'),
             where('partnerId', '==', partnerId)
@@ -283,8 +274,6 @@ const updatePartnerOverallRating = async (partnerId: string) => {
             averageVenueRating: averageVenueRating,
             venueRatingCount: venueRatingCount,
         });
-
-        // console.log(`Partner ${partnerId} overall rating updated: ${averageVenueRating} from ${venueRatingCount} ratings.`);
     } catch (error) {
         console.error("Error updating partner overall rating:", error);
     }
@@ -293,7 +282,7 @@ const updatePartnerOverallRating = async (partnerId: string) => {
 
 const MapContentAndLogic = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null); // Store app user data including favorites and role
+  const [currentAppUser, setCurrentAppUser] = useState<MapPageAppUser | null>(null); 
   const [userLocation, setUserLocation] = useState<Location | null>(null);
   const [actualUserLocation, setActualUserLocation] = useState<Location | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
@@ -308,9 +297,12 @@ const MapContentAndLogic = () => {
   const searchParams = useSearchParams();
   const isPreviewMode = searchParams.get('isPreview') === 'true';
 
+  const [isPurchaseTicketModalOpen, setIsPurchaseTicketModalOpen] = useState(false);
+  const [ticketPurchaseDetails, setTicketPurchaseDetails] = useState<{ eventId: string; eventName: string; partnerId: string; partnerVenueName: string} | null>(null);
+
 
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
-  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({}); // Store user's own ratings: { eventId: UserRatingData }
+  const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({}); 
 
   const [currentRating, setCurrentRating] = useState(0);
   const [currentComment, setCurrentComment] = useState('');
@@ -318,14 +310,13 @@ const MapContentAndLogic = () => {
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
 
-  const mapsApi = useMapsLibrary('maps'); // Use the hook to get maps API
+  const mapsApi = useMapsLibrary('maps'); 
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
       if (user) {
         const userDocRef = doc(firestore, "users", user.uid);
-        // Use onSnapshot for real-time updates to favoriteVenueIds and role
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data();
@@ -333,25 +324,23 @@ const MapContentAndLogic = () => {
                 uid: user.uid,
                 name: userData.name || (userData.role === UserRole.PARTNER ? "Parceiro Fervo" : "Usuário Fervo"),
                 favoriteVenueIds: userData.favoriteVenueIds || [],
-                role: userData.role as UserRole || UserRole.USER, // Assign role
+                role: userData.role as UserRole || UserRole.USER, 
               });
             } else {
-              // Handle case where user document might not exist yet
               setCurrentAppUser({ uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER });
             }
         });
-        return () => unsubscribeUser(); // Cleanup user snapshot listener
+        return () => unsubscribeUser(); 
       } else {
         setCurrentAppUser(null);
       }
     });
-    return () => unsubscribeAuth(); // Cleanup auth listener
+    return () => unsubscribeAuth(); 
   }, []);
 
 
   useEffect(() => {
     if (currentUser) {
-      // Listener for user's checked-in events
       const checkInsRef = collection(firestore, `users/${currentUser.uid}/checkedInEvents`);
       const unsubscribeCheckIns = onSnapshot(checkInsRef, (snapshot) => {
         const checkInsData: Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }> = {};
@@ -367,7 +356,6 @@ const MapContentAndLogic = () => {
     }
   }, [currentUser]);
 
-  // New useEffect to fetch current user's ratings for the selected venue's events
   useEffect(() => {
     if (!currentUser || !selectedVenue || !selectedVenue.events || selectedVenue.events.length === 0) {
       return;
@@ -488,7 +476,6 @@ const MapContentAndLogic = () => {
     return () => unsubscribeVenues(); 
   }, [toast]);
 
-   // Effect to handle selecting venue from query parameter
    useEffect(() => {
     const venueIdFromQuery = searchParams.get('venueId');
     if (venueIdFromQuery && venues.length > 0) {
@@ -509,7 +496,6 @@ const MapContentAndLogic = () => {
   }, [searchParams, venues, router, selectedVenue?.id, toast, isPreviewMode]);
 
 
-  // Fetch events for a selected venue
   const fetchVenueEvents = async (venueId: string) => {
     if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return;
     setIsLoadingEvents(true);
@@ -518,7 +504,7 @@ const MapContentAndLogic = () => {
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const eventsData = snapshot.docs.map(docSnap => ({ // Renamed doc to docSnap
+        const eventsData = snapshot.docs.map(docSnap => ({ 
           id: docSnap.id,
           ...docSnap.data(),
         } as VenueEvent)); 
@@ -687,8 +673,8 @@ const MapContentAndLogic = () => {
 };
 
  const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp) => {
-    if (isPreviewMode) {
-        toast({ title: "Modo Preview", description: "Compartilhamento de eventos desabilitado no modo de preview.", variant: "default" });
+    if (isPreviewMode && currentAppUser?.role === UserRole.PARTNER) {
+        toast({ title: "Modo Preview", description: "Compartilhamento de eventos desabilitado para parceiros no modo de preview.", variant: "default" });
         return;
     }
     if (!currentUser) {
@@ -765,7 +751,7 @@ const MapContentAndLogic = () => {
       }
     }
 
-    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true)) { 
+    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true) && currentAppUser?.role === UserRole.USER) { 
       const userDocRef = doc(firestore, "users", currentUser.uid);
       const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
@@ -821,14 +807,14 @@ const MapContentAndLogic = () => {
           duration: 5000
         });
       }
-    } else if (sharedSuccessfully && currentUser && !(eventDataForShare.shareRewardsEnabled ?? true)) {
+    } else if (sharedSuccessfully && currentUser && !(eventDataForShare.shareRewardsEnabled ?? true) && currentAppUser?.role === UserRole.USER) {
         console.log(`Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
     }
   };
 
   const handleToggleFavorite = async (venueId: string, venueName: string) => {
-    if (isPreviewMode) {
-        toast({ title: "Modo Preview", description: "Ação de favoritar desabilitada no modo de preview.", variant: "default" });
+    if (isPreviewMode && currentAppUser?.role === UserRole.PARTNER) {
+        toast({ title: "Modo Preview", description: "Ação de favoritar desabilitada para parceiros no modo de preview.", variant: "default" });
         return;
     }
     if (!currentUser?.uid || !currentAppUser) {
@@ -869,6 +855,17 @@ const MapContentAndLogic = () => {
       console.error("Error toggling favorite:", error);
       toast({ title: "Erro ao Favoritar", description: error.message || "Não foi possível atualizar seus favoritos.", variant: "destructive" });
     }
+  };
+
+  const openPurchaseTicketModal = (event: VenueEvent) => {
+    if (!selectedVenue) return;
+    setTicketPurchaseDetails({
+        eventId: event.id,
+        eventName: event.eventName,
+        partnerId: selectedVenue.id,
+        partnerVenueName: selectedVenue.name,
+    });
+    setIsPurchaseTicketModalOpen(true);
   };
 
 
@@ -942,19 +939,18 @@ const MapContentAndLogic = () => {
       </Card>
 
       <div className="flex-1 h-full relative"> 
-         <div className="absolute top-4 left-4 z-20">
+         <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
             {!filterSidebarOpen && (
             <Button
                 variant="outline"
                 size="icon"
                 onClick={() => setFilterSidebarOpen(true)}
-                className="p-2 rounded-full text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg mr-2"
+                className="p-2 rounded-full text-primary border-primary bg-background/80 hover:bg-primary/10 shadow-lg"
                 aria-label="Abrir filtros"
             >
                 <Filter className="w-5 h-5" />
             </Button>
             )}
-             {/* Logo is now only shown when filter sidebar is closed for better space management */}
             {!filterSidebarOpen && (
                  <Logo iconClassName="text-primary h-8 w-auto" className="bg-background/80 p-1.5 rounded-md shadow-lg" />
             )}
@@ -1013,7 +1009,7 @@ const MapContentAndLogic = () => {
                 setSelectedVenue(null); 
 
                 if (isPreviewMode && venueIdInParams) {
-                    router.replace('/map', { scroll: false }); // Clear query params for preview mode
+                    router.replace('/map', { scroll: false }); 
                     if (actualUserLocation) {
                         setUserLocation(actualUserLocation);
                     } else {
@@ -1026,7 +1022,7 @@ const MapContentAndLogic = () => {
                         setUserLocation({ lat: -23.55052, lng: -46.633308 }); 
                     }
                     if (venueIdInParams) {
-                        router.replace('/map', { scroll: false }); // Clear query params for normal mode
+                        router.replace('/map', { scroll: false }); 
                     }
                 }
             }
@@ -1054,7 +1050,7 @@ const MapContentAndLogic = () => {
                     )}
                 </div>
                 <div className="flex items-center">
-                   {currentUser && currentAppUser && currentAppUser.role === UserRole.USER && !isPreviewMode && (
+                   {currentUser && currentAppUser && currentAppUser.role === UserRole.USER && (!isPreviewMode || (isPreviewMode && currentAppUser.role !== UserRole.PARTNER)) && (
                      <Button
                         variant={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "destructive" : "outline"}
                         size="icon"
@@ -1066,8 +1062,8 @@ const MapContentAndLogic = () => {
                              "animate-pulse"
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
-                        title={isPreviewMode ? "Favoritar desabilitado em modo preview" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
-                        disabled={isPreviewMode}
+                        title={(isPreviewMode && currentAppUser?.role === UserRole.PARTNER) ? "Ação desabilitada em modo preview para parceiros" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
+                        disabled={isPreviewMode && currentAppUser?.role === UserRole.PARTNER}
                       >
                         <Heart
                           className="w-4 h-4 sm:w-5 sm:w-5 fill-current"
@@ -1186,8 +1182,8 @@ const MapContentAndLogic = () => {
                                           size="icon"
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
                                           onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime)}
-                                          title={isPreviewMode ? "Compartilhamento desabilitado no modo de preview" : (eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!")}
-                                          disabled={!currentUser || eventHasEnded || isPreviewMode || (currentAppUser?.role === UserRole.PARTNER && isPreviewMode)}
+                                          title={(isPreviewMode && currentAppUser?.role === UserRole.PARTNER) ? "Compartilhamento desabilitado em modo preview para parceiros" : (eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!")}
+                                          disabled={eventHasEnded || (isPreviewMode && currentAppUser?.role === UserRole.PARTNER)}
                                       >
                                           <Share2 className="w-5 h-5" />
                                       </Button>
@@ -1226,18 +1222,11 @@ const MapContentAndLogic = () => {
                               )}
                               {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
 
-                              {event.pricingType !== PricingType.FREE && !eventHasEnded && (
+                              {currentUser && currentAppUser?.role === UserRole.USER && event.pricingType !== PricingType.FREE && !eventHasEnded && (
                                 <Button
                                   className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
                                   size="sm"
-                                  onClick={() => {
-                                    toast({
-                                      title: "Compra de Ingressos",
-                                      description: "Em breve você poderá comprar ingressos diretamente por aqui ou ser redirecionado para a página de vendas do local!",
-                                      variant: "default",
-                                      duration: 5000,
-                                    });
-                                  }}
+                                  onClick={() => openPurchaseTicketModal(event)}
                                 >
                                   <Ticket className="w-3.5 h-3.5 mr-1.5" />
                                   Compre Aqui o Seu Ingresso Saia Na frente!!!
@@ -1354,6 +1343,20 @@ const MapContentAndLogic = () => {
           </SheetContent>
         </Sheet>
       )}
+      {ticketPurchaseDetails && currentUser && (
+        <PurchaseTicketModal
+            isOpen={isPurchaseTicketModalOpen}
+            onClose={() => {
+                setIsPurchaseTicketModalOpen(false);
+                setTicketPurchaseDetails(null);
+            }}
+            eventId={ticketPurchaseDetails.eventId}
+            eventName={ticketPurchaseDetails.eventName}
+            partnerId={ticketPurchaseDetails.partnerId}
+            partnerVenueName={ticketPurchaseDetails.partnerVenueName}
+            currentUser={currentUser}
+        />
+      )}
     </div>
   );
 };
@@ -1362,7 +1365,7 @@ const MapContentAndLogic = () => {
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
 
-  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") { 
+  if (!apiKey || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { 
     return <div className="flex items-center justify-center h-screen bg-background text-destructive">API Key do Google Maps não configurada corretamente. Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).</div>;
   }
   return (
@@ -1373,4 +1376,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-

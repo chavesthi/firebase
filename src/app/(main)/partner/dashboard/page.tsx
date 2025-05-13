@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -9,7 +8,7 @@ import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { doc, onSnapshot, collection, getDocs, query, where, collectionGroup, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb, Brain, Eye, MessageSquare, Instagram, Facebook, Youtube, ExternalLink } from 'lucide-react';
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb, Brain, Eye, MessageSquare, Instagram, Facebook, Youtube, ExternalLink, TicketCheck } from 'lucide-react';
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { StarRating } from '@/components/ui/star-rating';
@@ -261,7 +260,6 @@ export default function PartnerDashboardPage() {
       const eventDetailsPromises = ratingsSnapshot.docs.map(async (ratingDoc) => {
         const ratingData = ratingDoc.data() as EventRatingData;
         let eventName = "Evento Desconhecido";
-        // Assuming eventId is stored on the rating document
         const eventId = ratingDoc.data().eventId; 
         if (eventId) {
           try {
@@ -277,7 +275,7 @@ export default function PartnerDashboardPage() {
         return {
           rating: ratingData.rating,
           comment: ratingData.comment,
-          eventName: eventName, // Use fetched or default eventName
+          eventName: eventName, 
         };
       });
       
@@ -323,7 +321,6 @@ export default function PartnerDashboardPage() {
 
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
-      {/* Preview Area at the top */}
       <div className="mb-6 sm:mb-8">
         <Card className="border-secondary/50 shadow-lg shadow-secondary/15">
           <CardHeader className="p-4 sm:p-6">
@@ -428,7 +425,6 @@ export default function PartnerDashboardPage() {
         </Card>
       </div>
 
-      {/* Main Content Area - Below preview */}
       <div className="space-y-6 sm:space-y-8">
         <header className="mb-2 text-center lg:text-left">
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{venueData.venueName}</h1>
@@ -529,18 +525,18 @@ export default function PartnerDashboardPage() {
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
               <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
-                <Gift className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-                Resgatar Cupons
+                <TicketCheck className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" /> {/* Changed icon */}
+                Autenticação dos Meus Ingressos
               </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">Valide cupons de usuários aqui.</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Valide ingressos de usuários aqui.</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center p-4 sm:p-6 pt-0 sm:pt-0">
               <Button
                   variant="outline"
                   className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
-                  onClick={() => router.push('/partner/redeem-coupon')}
+                  onClick={() => router.push('/partner/validate-ticket')}
               >
-                Resgatar Cupom
+                Autenticar Ingresso
               </Button>
             </CardContent>
           </Card>
