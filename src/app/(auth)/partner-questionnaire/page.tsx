@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -8,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // Added getDoc and serverTimestamp
+import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
 
 import { Button } from '@/components/ui/button';
@@ -26,8 +27,6 @@ import { geocodeAddress, type Location } from '@/services/geocoding';
 import { MapPin, Save, ArrowLeft } from 'lucide-react';
 
 const cepRegex = /^\d{5}-?\d{3}$/;
-// Basic regex for phone numbers, allows international and national with/without special chars.
-// For wa.me, it's best to instruct user to include country code.
 const phoneRegex = /^\+?[0-9\s\(\)\-]{9,20}$/;
 
 
@@ -109,10 +108,10 @@ const PartnerQuestionnairePage: NextPage = () => {
           if (userData.questionnaireCompleted) {
             setIsProfileLocked(true);
             toast({
-              title: "Modo de Edição Limitado",
-              description: "Você só pode editar contatos e mídias. Para outras alterações, contate o suporte.",
+              title: "Modo de Edição",
+              description: "Você pode editar o tipo de local, estilos musicais, contatos e mídias. Para outras alterações de dados cadastrais (nome, endereço), contate o suporte.",
               variant: "default",
-              duration: 5000,
+              duration: 7000,
             });
           } else {
             setIsProfileLocked(false);
@@ -203,12 +202,14 @@ const PartnerQuestionnairePage: NextPage = () => {
       const userDocRef = doc(firestore, "users", currentUser.uid);
 
       let dataToUpdate: any = {
-        questionnaireCompleted: true, // Always set this on successful submission
+        questionnaireCompleted: true,
       };
 
       if (isProfileLocked) {
         dataToUpdate = {
           ...dataToUpdate,
+          venueType: data.venueType, // Allow editing venueType
+          musicStyles: data.musicStyles || [], // Allow editing musicStyles
           instagramUrl: data.instagramUrl,
           facebookUrl: data.facebookUrl,
           youtubeUrl: data.youtubeUrl,
@@ -237,7 +238,6 @@ const PartnerQuestionnairePage: NextPage = () => {
           averageVenueRating: 0,
           venueRatingCount: 0,
         };
-        // Only set questionnaireCompletedAt if it's the first time completing
         if (!initialQuestionnaireCompletedState) {
             dataToUpdate.questionnaireCompletedAt = serverTimestamp();
         }
@@ -252,15 +252,14 @@ const PartnerQuestionnairePage: NextPage = () => {
       await updateDoc(userDocRef, dataToUpdate);
 
       toast({
-        title: isProfileLocked ? "Contatos e Mídias Salvos!" : "Perfil do Local Salvo!",
-        description: isProfileLocked ? "Suas URLs, vídeo e WhatsApp foram atualizados." : "Seu estabelecimento foi configurado com sucesso.",
+        title: isProfileLocked ? "Informações do Local Salvas!" : "Perfil do Local Salvo!",
+        description: isProfileLocked ? "Suas informações foram atualizadas." : "Seu estabelecimento foi configurado com sucesso.",
         variant: "default",
       });
 
       if (!isProfileLocked) {
         setIsProfileLocked(true);
-        setInitialQuestionnaireCompletedState(true); // Update local state to reflect completion
-        // Redirect to dashboard after initial setup
+        setInitialQuestionnaireCompletedState(true); 
          router.push('/partner/dashboard');
       }
     } catch (error) {
@@ -300,11 +299,11 @@ const PartnerQuestionnairePage: NextPage = () => {
         <Card className="w-full bg-card/95 backdrop-blur-sm">
           <CardHeader className="text-center px-4 sm:px-6">
             <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
-              {isProfileLocked ? "Editar Contatos e Mídia" : "Configure seu Local!"}
+              {isProfileLocked ? "Editar Informações do Local" : "Configure seu Local!"}
             </CardTitle>
             <CardDescription className="text-muted-foreground text-sm sm:text-base">
               {isProfileLocked
-                ? "Atualize seus links de contato, redes sociais e vídeo de apresentação."
+                ? "Atualize o tipo do seu local, estilos musicais, contatos e mídias."
                 : "Detalhes do seu estabelecimento para os usuários do Fervo App."}
             </CardDescription>
           </CardHeader>
@@ -325,8 +324,8 @@ const PartnerQuestionnairePage: NextPage = () => {
                       name="venueType"
                       control={control}
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value} disabled={isProfileLocked}>
-                          <SelectTrigger id="venueType" className={errors.venueType ? 'border-destructive focus-visible:ring-destructive' : ''} disabled={isProfileLocked}>
+                        <Select onValueChange={field.onChange} value={field.value} >
+                          <SelectTrigger id="venueType" className={errors.venueType ? 'border-destructive focus-visible:ring-destructive' : ''} >
                             <SelectValue placeholder="Selecione o tipo" />
                           </SelectTrigger>
                           <SelectContent>
@@ -354,7 +353,6 @@ const PartnerQuestionnairePage: NextPage = () => {
                                   id={`music-${option.value}`}
                                   checked={field.value?.includes(option.value)}
                                   onCheckedChange={(checked) => {
-                                    if (isProfileLocked) return false;
                                     const currentSelection = field.value || [];
                                     if (checked) {
                                       if (currentSelection.length < 4) {
@@ -368,11 +366,11 @@ const PartnerQuestionnairePage: NextPage = () => {
                                     }
                                     return checked;
                                   }}
-                                  disabled={isProfileLocked || (!field.value?.includes(option.value) && (field.value?.length ?? 0) >= 4)}
+                                  disabled={(!field.value?.includes(option.value) && (field.value?.length ?? 0) >= 4)}
                                 />
                               )}
                             />
-                            <Label htmlFor={`music-${option.value}`} className={`font-normal text-xs xs:text-sm ${isProfileLocked ? 'text-muted-foreground' : 'text-foreground/80'}`}>{option.label}</Label>
+                            <Label htmlFor={`music-${option.value}`} className="font-normal text-xs xs:text-sm text-foreground/80">{option.label}</Label>
                           </div>
                         ))}
                       </div>
@@ -493,7 +491,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">
               <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting || isGeocoding}>
                 <Save className="w-4 h-4 mr-2"/>
-                {isSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Contatos e Mídia' : 'Salvar e Continuar')}
+                {isSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Alterações' : 'Salvar e Continuar')}
               </Button>
             </CardFooter>
           </form>
