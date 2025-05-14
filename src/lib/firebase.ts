@@ -8,16 +8,14 @@ import { getFirestore, type Firestore } from "firebase/firestore";
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBeWIuua2ILzwVdJpw7bf5uYGpCVCt549o",
-  authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
-  databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
-  projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.appspot.com",
-  messagingSenderId: "762698655248",
-  appId: "1:762698655248:web:ef79742c8b4e53eccb0c95",
-  measurementId: "G-GXSK4Y4P7V"
+  apiKey: "AIzaSyAfQZt7CSmW1abKH_wS3Z86-Sibutu19Oc",
+  authDomain: "fervofinder.firebaseapp.com",
+  projectId: "fervofinder",
+  storageBucket: "fervofinder.appspot.com", // Corrected to .appspot.com
+  messagingSenderId: "260397392453",
+  appId: "1:260397392453:web:0c1a11dc41b3dcf9ae392c"
+  // measurementId is not present in the new config
 };
 
 
@@ -39,18 +37,18 @@ firestore = getFirestore(app);
 
 // Initialize GoogleAuthProvider
 googleAuthProvider = new GoogleAuthProvider();
-// Note: The Google Sign-In Web Client ID (e.g., 762698655248-6fep3lu3lumf7hsqirrecqussr08578t.apps.googleusercontent.com)
-// is configured in your Firebase project settings under 'Authentication' > 'Sign-in method' > 'Google'.
-// The Firebase SDK handles using this ID automatically when you use GoogleAuthProvider with Firebase Authentication.
+// Note: The Google Sign-In Web Client ID is configured in your Firebase project settings.
 
 if (typeof window !== 'undefined') {
   // Initialize Analytics only on the client side
   try {
     // Check if firebaseConfig has measurementId before initializing analytics
+    // @ts-ignore
     if (firebaseConfig.measurementId) { 
+      // @ts-ignore
       analytics = getAnalytics(app);
     } else {
-      console.warn("Firebase measurementId not found in config, Analytics not initialized.");
+      console.warn("Firebase measurementId not found in new config, Analytics not initialized.");
     }
   } catch (e) {
     console.warn("Firebase Analytics could not be initialized:", e);
