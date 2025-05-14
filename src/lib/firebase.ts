@@ -1,3 +1,4 @@
+
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics"; // Ensured getAnalytics and Analytics type are imported
@@ -9,13 +10,14 @@ import { getFirestore, type Firestore } from "firebase/firestore";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyAfQZt7CSmW1abKH_wS3Z86-Sibutu19Oc",
-  authDomain: "fervofinder.firebaseapp.com",
-  projectId: "fervofinder",
-  storageBucket: "fervofinder.firebasestorage.app",
-  messagingSenderId: "260397392453",
-  appId: "1:260397392453:web:0c1a11dc41b3dcf9ae392c",
-  measurementId: "G-J0GVFFEM7C"
+  apiKey: "AIzaSyBeWIuua2ILzwVdJpw7bf5uYGpCVCt549o",
+  authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
+  databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
+  projectId: "fervoappusuarioeparceiro",
+  storageBucket: "fervoappusuarioeparceiro.firebasestorage.app",
+  messagingSenderId: "762698655248",
+  appId: "1:762698655248:web:1a4a995fccd6bcf6cb0c95",
+  measurementId: "G-3QD4RQHSMQ"
 };
 
 // Initialize Firebase
