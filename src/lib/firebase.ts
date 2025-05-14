@@ -16,7 +16,7 @@ const firebaseConfig = {
   storageBucket: "fervofinder.firebasestorage.app",
   messagingSenderId: "260397392453",
   appId: "1:260397392453:web:0c1a11dc41b3dcf9ae392c",
-  measurementId: "G-J0GVFFEM7C" // Added measurementId
+  measurementId: "G-3QD4RQHSMQ" // Updated measurementId
 };
 
 // Initialize Firebase
