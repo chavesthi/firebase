@@ -6,7 +6,7 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback, type ReactElement } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -490,13 +490,17 @@ const MapContentAndLogic = () => {
             setUserLocation(venueToSelect.location);
           }
         } else {
-          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
+          // Only clear selection if it was previously set to this venueId
+          // This prevents clearing if another venue sheet is open and then a non-existent venueId is in URL
+          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); 
           router.replace('/map', { scroll: false });
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
       }
     }
-  }, [searchParams, venues, router, selectedVenue?.id, toast, isPreviewMode]);
+  // Do not add selectedVenue to dependencies here to avoid re-triggering when it's set by this effect
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, venues, router, toast, isPreviewMode]);
 
 
   const fetchVenueEvents = async (venueId: string) => {
@@ -532,6 +536,7 @@ const MapContentAndLogic = () => {
     if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
+      // Clear rating form when events are loaded for a new venue or sheet opens
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
@@ -1086,9 +1091,11 @@ const MapContentAndLogic = () => {
                         title={(isPreviewMode && currentAppUser?.role === UserRole.PARTNER) ? "Ação desabilitada em modo preview para parceiros" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
                         disabled={isPreviewMode && currentAppUser?.role === UserRole.PARTNER}
                       >
-                        <Heart
-                          className="w-4 h-4 sm:w-5 sm:w-5 fill-current"
-                        />
+                        {currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? (
+                            <HeartOff className="w-4 h-4 sm:w-5 sm:w-5 fill-current" />
+                        ) : (
+                            <Heart className="w-4 h-4 sm:w-5 sm:w-5 fill-current" />
+                        )}
                       </Button>
                    )}
                    <SheetClose asChild>
@@ -1417,4 +1424,5 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
 
