@@ -1,7 +1,7 @@
 
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAnalytics, type Analytics } from "firebase/analytics"; // Added getAnalytics
+import { getAnalytics, type Analytics } from "firebase/analytics";
 import { getAuth, type Auth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
@@ -10,14 +10,13 @@ import { getFirestore, type Firestore } from "firebase/firestore";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBeWIuua2ILzwVdJpw7bf5uYGpCVCt549o",
-  authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
-  databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
-  projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected storageBucket to appspot.com
-  messagingSenderId: "762698655248",
-  appId: "1:762698655248:web:ef79742c8b4e53eccb0c95",
-  measurementId: "G-GXSK4Y4P7V"
+  apiKey: "AIzaSyAfQZt7CSmW1abKH_wS3Z86-Sibutu19Oc",
+  authDomain: "fervofinder.firebaseapp.com",
+  projectId: "fervofinder",
+  storageBucket: "fervofinder.firebasestorage.app",
+  messagingSenderId: "260397392453",
+  appId: "1:260397392453:web:0c1a11dc41b3dcf9ae392c",
+  // measurementId: "G-XXXXXXXXXX" // Optional: Add if you have one for the new project
 };
 
 
@@ -54,14 +53,24 @@ if (typeof window !== 'undefined') {
   // Initialize Analytics only on the client side
   try {
     // Check if firebaseConfig has measurementId before initializing analytics
+    // If measurementId is not in your new config, getAnalytics might still work or you might not need it.
     if (firebaseConfig.measurementId) { 
       analytics = getAnalytics(app);
     } else {
-      console.warn("Firebase measurementId not found in config, Analytics not initialized.");
+      // Attempt to initialize analytics even without measurementId, getAnalytics might handle it
+      // or you might decide not to use Analytics if measurementId isn't present.
+      // For now, let's attempt and warn if it fails due to missing measurementId or other reasons.
+      try {
+        analytics = getAnalytics(app);
+        console.info("Firebase Analytics initialized (measurementId might be optional or handled by SDK).");
+      } catch (analyticsError) {
+        console.warn("Firebase Analytics could not be initialized (measurementId might be required or other issue):", analyticsError);
+      }
     }
   } catch (e) {
-    console.warn("Firebase Analytics could not be initialized:", e);
+    console.warn("Error during Firebase Analytics setup:", e);
   }
 }
 
 export { app, auth, firestore, analytics, googleAuthProvider };
+
