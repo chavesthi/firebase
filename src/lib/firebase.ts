@@ -14,7 +14,7 @@ const firebaseConfig = {
   authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
   databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
   projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.firebasestorage.app",
+  storageBucket: "fervoappusuarioeparceiro.appspot.com",
   messagingSenderId: "762698655248",
   appId: "1:762698655248:web:ef79742c8b4e53eccb0c95",
   measurementId: "G-GXSK4Y4P7V"
@@ -36,7 +36,12 @@ if (!getApps().length) {
 
 auth = getAuth(app);
 firestore = getFirestore(app);
-googleAuthProvider = new GoogleAuthProvider(); // Initialize GoogleAuthProvider
+
+// Initialize GoogleAuthProvider
+googleAuthProvider = new GoogleAuthProvider();
+// Note: The Google Sign-In Web Client ID (e.g., 762698655248-6fep3lu3lumf7hsqirrecqussr08578t.apps.googleusercontent.com)
+// is configured in your Firebase project settings under 'Authentication' > 'Sign-in method' > 'Google'.
+// The Firebase SDK handles using this ID automatically when you use GoogleAuthProvider with Firebase Authentication.
 
 if (typeof window !== 'undefined') {
   // Initialize Analytics only on the client side
@@ -53,4 +58,3 @@ if (typeof window !== 'undefined') {
 }
 
 export { app, auth, firestore, analytics, googleAuthProvider };
-
