@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -57,7 +58,7 @@ interface RedeemedCouponInfo {
   description: string;
   userName?: string;
   partnerVenueName?: string;
-  redeemedAt: FirebaseTimestamp;
+  redeemedAt: FirebaseTimestamp | null; // Can be null if not yet set by server
   eventName?: string;
 }
 
@@ -143,7 +144,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
           description: data.description,
           userName: userName,
           partnerVenueName: data.partnerVenueName,
-          redeemedAt: data.redeemedAt as FirebaseTimestamp,
+          redeemedAt: data.redeemedAt as FirebaseTimestamp || null,
           eventName: data.eventName,
         });
       }
@@ -467,7 +468,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
                         )}
                         <p className="text-xs text-muted-foreground flex items-center">
                            <CalendarClock className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
-                           <span className="font-medium text-foreground/80">Validado em:</span> {format(coupon.redeemedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                           <span className="font-medium text-foreground/80">Validado em:</span> {coupon.redeemedAt ? format(coupon.redeemedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}
                         </p>
                          {coupon.partnerVenueName && (
                             <p className="text-xs text-muted-foreground">
@@ -488,3 +489,4 @@ const PartnerRedeemCouponPage: NextPage = () => {
 };
 
 export default PartnerRedeemCouponPage;
+
