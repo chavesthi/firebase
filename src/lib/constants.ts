@@ -73,7 +73,7 @@ export const COUPON_CODE_PREFIX = "FERVO";
 
 // Stripe API Keys
 export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU";
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "rk_test_51RMuSWL8kxrPyagwo2Ns8YZauzX14m3YcDldrbJoX8Ya1ndy8zcDhyTuVUFhXdsSSym7ExcXutUCrfioXQLkFsdC00VYu5BHEL";
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9";
 
 
 // IMPORTANT: This MUST be a Stripe PRICE ID (e.g., price_xxxxxxxxxxxxxx), NOT a Product ID for direct use in checkout sessions.
@@ -87,6 +87,7 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 
 // PagBank Pre-approval Code (if still used as an alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
+
 
 
 
