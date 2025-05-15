@@ -4,7 +4,7 @@ import { STRIPE_SECRET_KEY } from './constants';
 
 const knownTestKey = "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9";
 const oldPlaceholderKey = "YOUR_STRIPE_SECRET_KEY";
-const oldLiveKeyPlaceholder = "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";
+const oldLiveKeyPlaceholder = "sk_live_YOUR_STRIPE_LIVE_SECRET_KEY"; // Example of an old live placeholder
 
 
 if (!STRIPE_SECRET_KEY || STRIPE_SECRET_KEY === oldPlaceholderKey || STRIPE_SECRET_KEY === oldLiveKeyPlaceholder) {
@@ -20,4 +20,3 @@ export const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2024-04-10', // Use the latest API version as per Stripe's recommendation
   typescript: true,
 });
-
