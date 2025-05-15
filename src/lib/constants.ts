@@ -72,14 +72,15 @@ export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 3
 export const COUPON_CODE_PREFIX = "FERVO";
 
 // Stripe API Keys
+// It's highly recommended to use environment variables for these keys in production.
+// Fallback keys here are for development/testing ONLY and should be test keys.
 export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU";
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9";
-
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9"; // Default to test key
 
 // IMPORTANT: This MUST be a Stripe PRICE ID (e.g., price_xxxxxxxxxxxxxx), NOT a Product ID for direct use in checkout sessions.
 export const STRIPE_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1PQA6FL8kxrPyagw1Bs3wD74";
-// Configured Stripe Product ID
-export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SJ0fky6Pd0Q5g1";
+// Configured Stripe Product ID (e.g., prod_xxxxxxxxxxxxxx) - useful for referencing the product itself.
+export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SIMUUs67RhC80g";
 
 
 // App URL
@@ -87,6 +88,7 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 
 // PagBank Pre-approval Code (if still used as an alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
+
 
 
 
