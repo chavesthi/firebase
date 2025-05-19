@@ -112,27 +112,24 @@ const useAuthAndUserSubscription = () => {
             };
 
             if (userData.role === UserRole.PARTNER) {
-                // The line below was causing the error and is not used, so it's removed.
-                // const customerDocRef = doc(firestore, `customers/${user.uid}/subscriptions`);
-                
                 const subscriptionsQuery = query(collection(firestore, `customers/${user.uid}/subscriptions`), where("status", "in", ["trialing", "active"]));
 
-                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc(); 
+                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc();
                 unsubscribeCustomerDoc = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
                     let isActive = false;
                     if (!subscriptionsSnap.empty) {
                         isActive = true;
                     }
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
-                    if (!loading) setLoading(false); 
+                    setLoading(false); // Ensure loading is set to false after appUser is updated
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
-                     if (!loading) setLoading(false);
+                    setLoading(false);
                 });
             } else {
                 setAppUser(baseAppUser);
-                 if (!loading) setLoading(false);
+                setLoading(false);
             }
 
 
@@ -154,7 +151,7 @@ const useAuthAndUserSubscription = () => {
               trialExpiredNotified: false,
               stripeSubscriptionActive: false,
             });
-             if (!loading) setLoading(false);
+            setLoading(false);
           }
         }, (error) => {
           console.error("Error fetching user document with onSnapshot:", error);
@@ -181,7 +178,7 @@ const useAuthAndUserSubscription = () => {
            delete activeEventNotificationListeners[key];
       }
     };
-  }, [pathname, toast, loading]); 
+  }, [pathname, toast]); // Removed loading from dependencies to prevent potential loops
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -863,3 +860,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
