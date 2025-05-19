@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -111,20 +112,19 @@ const useAuthAndUserSubscription = () => {
             };
 
             if (userData.role === UserRole.PARTNER) {
-                const customerDocRef = doc(firestore, `customers/${user.uid}/subscriptions`);
-                // This should listen to the specific active subscription document if ID is known
-                // For simplicity, listening to the collection and finding an active one
+                // The line below was causing the error and is not used, so it's removed.
+                // const customerDocRef = doc(firestore, `customers/${user.uid}/subscriptions`);
+                
                 const subscriptionsQuery = query(collection(firestore, `customers/${user.uid}/subscriptions`), where("status", "in", ["trialing", "active"]));
 
-                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc(); // Clean up previous listener
+                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc(); 
                 unsubscribeCustomerDoc = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
                     let isActive = false;
                     if (!subscriptionsSnap.empty) {
-                        // Assuming only one active/trialing subscription, or taking the first one.
                         isActive = true;
                     }
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
-                    if (!loading) setLoading(false); // Only set loading false after all async data might be fetched
+                    if (!loading) setLoading(false); 
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
@@ -156,7 +156,6 @@ const useAuthAndUserSubscription = () => {
             });
              if (!loading) setLoading(false);
           }
-          // setLoading(false); // Moved setLoading to inside listeners or after default path
         }, (error) => {
           console.error("Error fetching user document with onSnapshot:", error);
           setAppUser(null);
@@ -182,7 +181,7 @@ const useAuthAndUserSubscription = () => {
            delete activeEventNotificationListeners[key];
       }
     };
-  }, [pathname, toast, loading]); // Added loading to dependency array
+  }, [pathname, toast, loading]); 
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -202,7 +201,7 @@ export default function MainAppLayout({
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
-
+  
   const prevAppUserRef = useRef<AppUser | null>(null);
 
 
@@ -254,7 +253,7 @@ export default function MainAppLayout({
     if (!loading && prevAppUserRef.current === null && appUser !== null && appUser.questionnaireCompleted) {
       let trialExpiredRecentlyOrActiveSub = false;
       if (appUser.role === UserRole.PARTNER) {
-        if (appUser.stripeSubscriptionActive) { // If Stripe sub is active, don't show generic welcome
+        if (appUser.stripeSubscriptionActive) { 
             trialExpiredRecentlyOrActiveSub = true;
         } else if (appUser.createdAt && appUser.trialExpiredNotified === true) {
             const createdAtDate = appUser.createdAt.toDate();
