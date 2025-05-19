@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'stc.pagseguro.uol.com.br',
+        port: '',
+        pathname: '/**',
+      },
       // Add other image domains if needed, e.g., for user-uploaded content
     ],
   },
@@ -26,4 +32,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
