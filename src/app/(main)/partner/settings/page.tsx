@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -8,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup } from 'firebase/firestore';
-import { loadStripe } from "@stripe/stripe-js";
+// Removed: import { loadStripe } from "@stripe/stripe-js";
 
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -21,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { STRIPE_PUBLIC_KEY, APP_URL, PAGBANK_PRE_APPROVAL_CODE, STRIPE_PRICE_ID } from "@/lib/constants";
+import { PAGBANK_PRE_APPROVAL_CODE } from "@/lib/constants"; // Removed STRIPE constants
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,8 +68,7 @@ export default function PartnerSettingsPage() {
   const [initialEmail, setInitialEmail] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
-  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  // Removed Stripe related state: isSubmittingCheckout, hasActiveSubscription
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletePasswordInput, setDeletePasswordInput] = useState('');
@@ -109,7 +109,7 @@ export default function PartnerSettingsPage() {
               couponReportClearPassword: '',
               confirmCouponReportClearPassword: '',
             });
-            setHasActiveSubscription(userData.stripeSubscriptionActive || false);
+            // Removed: setHasActiveSubscription(userData.stripeSubscriptionActive || false);
           } else {
             reset({
               contactName: user.displayName || '',
@@ -205,83 +205,8 @@ export default function PartnerSettingsPage() {
     }
   };
   
-  const handleStripeCheckout = async () => {
-    if (!currentUser) {
-      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
-      return;
-    }
-    if (!STRIPE_PUBLIC_KEY || STRIPE_PUBLIC_KEY === "YOUR_STRIPE_PUBLISHABLE_KEY") {
-      toast({ title: "Erro de Configuração", description: "Chave pública do Stripe não configurada.", variant: "destructive" });
-      setIsSubmittingCheckout(false);
-      return;
-    }
-    if (!STRIPE_PRICE_ID || STRIPE_PRICE_ID === "YOUR_STRIPE_PRICE_ID_HERE" || !STRIPE_PRICE_ID.startsWith("price_")) {
-      toast({ title: "Erro de Configuração", description: "ID do Preço do Stripe não configurado corretamente (deve começar com 'price_').", variant: "destructive" });
-      setIsSubmittingCheckout(false);
-      return;
-    }
-
-    setIsSubmittingCheckout(true);
-    try {
-      const response = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: currentUser.uid }), 
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Falha ao criar sessão de checkout.' }));
-        throw new Error(errorData.message || 'Falha ao criar sessão de checkout.');
-      }
-
-      const session = await response.json();
-      const stripe = await loadStripe(STRIPE_PUBLIC_KEY);
-
-      if (!stripe) {
-        throw new Error("Stripe.js não carregou.");
-      }
-
-      const { error } = await stripe.redirectToCheckout({ sessionId: session.url }); 
-
-      if (error) {
-        console.error("Stripe redirect error:", error);
-        toast({ title: "Erro no Checkout", description: error.message || "Não foi possível redirecionar para o pagamento.", variant: "destructive" });
-      }
-    } catch (error: any) {
-      console.error("Checkout error:", error);
-      toast({
-        title: "Erro no Checkout",
-        description: error.message || "Não foi possível iniciar o checkout. Tente novamente.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmittingCheckout(false);
-    }
-  };
-
-
-  useEffect(() => {
-    const queryParams = new URLSearchParams(window.location.search);
-    if (queryParams.get("session_id")) {
-      toast({
-        title: "Pagamento Processado",
-        description: "Seu pagamento está sendo processado. O status da sua assinatura será atualizado em breve.",
-        variant: "default",
-        duration: 7000,
-      });
-      router.replace('/partner/settings', { scroll: false });
-    }
-     if (queryParams.get("canceled")) {
-      toast({
-        title: "Pagamento Cancelado",
-        description: "O processo de assinatura foi cancelado. Você pode tentar novamente quando desejar.",
-        variant: "default",
-      });
-       router.replace('/partner/settings', { scroll: false });
-    }
-  }, [router, toast]);
+  // Removed handleStripeCheckout function
+  // Removed useEffect for Stripe session/cancellation query params
 
   const handleDeleteAccount = async () => {
     if (!currentUser || !currentUser.email) {
@@ -330,12 +255,6 @@ export default function PartnerSettingsPage() {
       toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações e ingressos associados foram removidos.", duration: 4000 });
   
       // --- User Data Cleanup (Iterative - Best effort client-side, ideal for Cloud Function) ---
-      // This part can be slow and error-prone on the client for many users.
-      // A Cloud Function triggered on Auth user deletion is more robust.
-      
-      // 4a. VenueCoins redistribution (already implemented, should be robust)
-      // This logic might need to be re-verified if it was part of the batch or separate.
-      // For now, assuming it's handled. If not, it needs to be integrated here.
       const usersCollectionRef = collection(firestore, "users");
       const usersSnapshot = await getDocs(usersCollectionRef);
       const cleanupBatch = writeBatch(firestore);
@@ -346,7 +265,6 @@ export default function PartnerSettingsPage() {
         let userUpdateNeeded = false;
         const updates: { [key: string]: any } = {};
   
-        // VenueCoins (redistribution logic - simplified for this example)
         if (userData.venueCoins && typeof userData.venueCoins[partnerIdToDelete] === 'number') {
           const updatedVenueCoins = { ...userData.venueCoins };
           delete updatedVenueCoins[partnerIdToDelete];
@@ -354,32 +272,22 @@ export default function PartnerSettingsPage() {
           userUpdateNeeded = true;
         }
   
-        // FavoriteVenueIds
         if (userData.favoriteVenueIds && userData.favoriteVenueIds.includes(partnerIdToDelete)) {
           updates.favoriteVenueIds = userData.favoriteVenueIds.filter((id: string) => id !== partnerIdToDelete);
           userUpdateNeeded = true;
         }
-        // FavoriteVenueNotificationSettings
         if (userData.favoriteVenueNotificationSettings && userData.favoriteVenueNotificationSettings[partnerIdToDelete] !== undefined) {
           const updatedSettings = { ...userData.favoriteVenueNotificationSettings };
           delete updatedSettings[partnerIdToDelete];
           updates.favoriteVenueNotificationSettings = updatedSettings;
           userUpdateNeeded = true;
         }
-        // Notifications (basic cleanup)
         if (userData.notifications && Array.isArray(userData.notifications)) {
           updates.notifications = userData.notifications.filter((n: any) => n.partnerId !== partnerIdToDelete && (!n.eventId || !eventsSnapshot.docs.some(e => e.id === n.eventId)));
           if (updates.notifications.length < userData.notifications.length) {
             userUpdateNeeded = true;
           }
         }
-        // CheckedInEvents (from user's subcollection)
-        // This requires another subcollection query per user - very inefficient client-side.
-        // Skipping full implementation here, ideally a Cloud Function.
-  
-        // Coupons (from user's subcollection)
-        // Also requires subcollection query per user.
-        // Skipping full implementation here, ideally a Cloud Function.
   
         if (userUpdateNeeded) {
           cleanupBatch.update(doc(firestore, "users", userId), updates);
@@ -570,7 +478,7 @@ export default function PartnerSettingsPage() {
             </div>
           </CardContent>
           <CardFooter className="p-4 sm:p-6">
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isSubmitting || isSubmittingCheckout || isDeletingAccount}>
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isSubmitting || isDeletingAccount}>
                {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
             </Button>
           </CardFooter>
@@ -583,34 +491,22 @@ export default function PartnerSettingsPage() {
                 <h3 className="text-lg font-medium text-primary flex items-center">
                     <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
                 </h3>
-                {hasActiveSubscription ? (
-                    <div className="p-4 bg-green-100 dark:bg-green-900/30 border border-green-500 rounded-md">
-                        <p className="font-semibold text-green-700 dark:text-green-400">Você tem uma assinatura ativa!</p>
-                        <p className="text-sm text-muted-foreground">Detalhes da sua assinatura e opções de gerenciamento em breve.</p>
-                         {/* TODO: Add link to Stripe customer portal if available */}
-                    </div>
-                ) : (
-                    <>
-                        <CardDescription className="text-xs sm:text-sm">
-                            Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
-                            Valor mensal: R$ 2,00.
-                        </CardDescription>
-                        <Button
-                            onClick={handleStripeCheckout}
-                            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                            disabled={isSubmittingCheckout || isSubmitting || isDeletingAccount}
-                            type="button" 
-                        >
-                            {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            Assinar Plano Fervo (Cartão)
-                        </Button>
-                        <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full">
-                          <input type="hidden" name="code" value={PAGBANK_PRE_APPROVAL_CODE} />
-                          <input type="hidden" name="iot" value="button" />
-                          <input type="image" src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" name="submit" alt="Pague com PagBank - É rápido, grátis e seguro!" width="209" height="48" className="mx-auto" />
-                        </form>
-                    </>
-                )}
+                {/* Stripe related UI and logic removed */}
+                <CardDescription className="text-xs sm:text-sm">
+                    Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
+                </CardDescription>
+                {/* PagBank Button */}
+                <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full">
+                  <input type="hidden" name="code" value={PAGBANK_PRE_APPROVAL_CODE} />
+                  <input type="hidden" name="iot" value="button" />
+                  <Button type="submit" variant="outline" className="w-full border-amber-500 text-amber-600 hover:bg-amber-500/10"
+                          name="submit" value="" > 
+                    <Image src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" 
+                           alt="Pague com PagBank - É rápido, grátis e seguro!" 
+                           width={150} height={34} // Adjusted size
+                           className="mx-auto" /> 
+                  </Button>
+                </form>
             </div>
 
             <Separator className="border-primary/20" />
@@ -624,7 +520,7 @@ export default function PartnerSettingsPage() {
                 </p>
                 <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" className="w-full sm:w-auto" disabled={isSubmitting || isSubmittingCheckout || isDeletingAccount}>
+                        <Button variant="destructive" className="w-full sm:w-auto" disabled={isSubmitting || isDeletingAccount}>
                             <Trash2 className="w-4 h-4 mr-2" /> Excluir Minha Conta de Parceiro
                         </Button>
                     </AlertDialogTrigger>
