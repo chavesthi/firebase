@@ -112,30 +112,55 @@ export default function PartnerDashboardPage() {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setCurrentUser(user);
-        setLoading(true);
-        const userDocRef = doc(firestore, "users", user.uid);
+        // setLoading(true); // Initial loading state is true by default
 
+        const userDocRef = doc(firestore, "users", user.uid);
         unsubscribeSnapshot = onSnapshot(userDocRef, (userDocSnap) => {
           if (userDocSnap.exists()) {
-            const data = userDocSnap.data() as VenueData;
-            if (!data.questionnaireCompleted) {
+            const rawData = userDocSnap.data();
+            if (!rawData) {
+                toast({ title: "Erro", description: "Dados do parceiro não encontrados de forma inesperada.", variant: "destructive" });
+                router.push('/partner-questionnaire');
+                setLoading(false);
+                return;
+            }
+
+            if (!rawData.questionnaireCompleted) {
               toast({ title: "Questionário Pendente", description: "Complete seu perfil para acessar o painel.", variant: "destructive" });
               router.push('/partner-questionnaire');
               setLoading(false);
             } else {
+              // Validate critical data before setting venueData
+              if (!rawData.venueName || !rawData.venueType || !rawData.address || typeof rawData.address !== 'object' || 
+                  !rawData.address.street || !rawData.address.city || !rawData.address.state || !rawData.address.cep || !rawData.address.country ||
+                  !rawData.location || typeof rawData.location.lat !== 'number' || typeof rawData.location.lng !== 'number') {
+                console.error("Partner data is incomplete despite questionnaireCompleted=true. UID:", user.uid, "Data:", rawData);
+                toast({ title: "Dados Incompletos", description: "Seu perfil de parceiro parece estar inconsistente. Por favor, revise o questionário.", variant: "destructive", duration: 7000 });
+                router.push('/partner-questionnaire');
+                setLoading(false);
+                return;
+              }
+
               setVenueData({
-                venueName: data.venueName,
-                venueType: data.venueType,
-                musicStyles: data.musicStyles,
-                address: data.address,
-                location: data.location,
-                phone: data.phone,
-                instagramUrl: data.instagramUrl,
-                facebookUrl: data.facebookUrl,
-                youtubeUrl: data.youtubeUrl,
-                questionnaireCompleted: data.questionnaireCompleted,
-                averageVenueRating: data.averageVenueRating,
-                venueRatingCount: data.venueRatingCount,
+                venueName: rawData.venueName,
+                venueType: rawData.venueType as VenueType,
+                musicStyles: rawData.musicStyles || [],
+                address: {
+                    street: rawData.address.street,
+                    number: rawData.address.number || '', // Ensure number is at least an empty string
+                    city: rawData.address.city,
+                    state: rawData.address.state,
+                    cep: rawData.address.cep,
+                    country: rawData.address.country,
+                },
+                location: rawData.location as Location,
+                phone: rawData.phone || undefined,
+                instagramUrl: rawData.instagramUrl || undefined,
+                facebookUrl: rawData.facebookUrl || undefined,
+                youtubeUrl: rawData.youtubeUrl || undefined,
+                questionnaireCompleted: rawData.questionnaireCompleted,
+                averageVenueRating: rawData.averageVenueRating || 0,
+                venueRatingCount: rawData.venueRatingCount || 0,
               });
               setLoading(false);
             }
@@ -318,14 +343,14 @@ export default function PartnerDashboardPage() {
     );
   }
 
-  const fullAddress = `${venueData.address.street}, ${venueData.address.number}, ${venueData.address.city} - ${venueData.address.state}, ${venueData.address.cep}`;
+  const fullAddress = venueData.address ? `${venueData.address.street}, ${venueData.address.number || 'S/N'}, ${venueData.address.city} - ${venueData.address.state}, ${venueData.address.cep}` : 'Endereço não disponível';
 
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <div className="mb-6 sm:mb-8">
         <Card className="border-primary/50 shadow-lg shadow-primary/15">
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-xl text-foreground flex items-center">
+            <CardTitle className="text-xl text-primary flex items-center">
               <Eye className="w-6 h-6 mr-3" />
               Preview do Local
             </CardTitle>
@@ -441,7 +466,7 @@ export default function PartnerDashboardPage() {
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Gerenciar Eventos
               </CardTitle>
@@ -459,7 +484,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Estatísticas Gerais
               </CardTitle>
@@ -479,14 +504,14 @@ export default function PartnerDashboardPage() {
               </div>
               <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Total de Avaliações Recebidas:</p>
-                  <p className="text-lg font-semibold text-foreground">{venueData.venueRatingCount || 0}</p>
+                  <p className="text-lg font-semibold text-primary">{venueData.venueRatingCount || 0}</p>
               </div>
               <div className="space-y-1">
                   <p className="text-sm font-medium text-muted-foreground">Total de Check-ins no Local:</p>
                   {loadingCheckIns ? (
                       <Loader2 className="w-5 h-5 text-primary animate-spin" />
                   ) : (
-                      <p className="text-lg font-semibold text-foreground flex items-center">
+                      <p className="text-lg font-semibold text-primary flex items-center">
                           <Users className="w-5 h-5 mr-2"/>
                           {totalCheckIns ?? 0}
                       </p>
@@ -497,7 +522,7 @@ export default function PartnerDashboardPage() {
                   {loadingFavorites ? (
                       <Loader2 className="w-5 h-5 text-primary animate-spin" />
                   ) : (
-                      <p className="text-lg font-semibold text-foreground flex items-center">
+                      <p className="text-lg font-semibold text-primary flex items-center">
                           <Heart className="w-5 h-5 mr-2 text-destructive fill-destructive"/>
                           {totalFavorites ?? 0}
                       </p>
@@ -525,7 +550,7 @@ export default function PartnerDashboardPage() {
           
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <Brain className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Análise de Feedback (IA)
               </CardTitle>
@@ -593,7 +618,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Configurações da Conta e Pagamentos
               </CardTitle>
@@ -612,7 +637,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                       <QrCode className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                       QR Codes de Eventos
                   </CardTitle>
@@ -631,7 +656,7 @@ export default function PartnerDashboardPage() {
           
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
                       <Gift className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                       Resgatar Cupons
                   </CardTitle>
