@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore'; // Added orderBy
 import Image from 'next/image';
 
 
@@ -65,6 +65,7 @@ interface StripeSubscription {
     status: 'trialing' | 'active' | 'canceled' | 'incomplete' | 'past_due' | 'unpaid';
     trial_end?: Timestamp;
     current_period_end?: Timestamp;
+    created: Timestamp; // Ensure created is part of the interface for ordering
     // Add other relevant fields you sync from Stripe
 }
 
@@ -747,3 +748,4 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
