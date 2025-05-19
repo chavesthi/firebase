@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup } from 'firebase/firestore';
-// Removed: import { loadStripe } from "@stripe/stripe-js";
+import Image from 'next/image'; // Added this import
 
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { PAGBANK_PRE_APPROVAL_CODE } from "@/lib/constants"; // Removed STRIPE constants
+import { PAGBANK_PRE_APPROVAL_CODE } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,7 +68,9 @@ export default function PartnerSettingsPage() {
   const [initialEmail, setInitialEmail] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  // Removed Stripe related state: isSubmittingCheckout, hasActiveSubscription
+  const [isSubmittingStripe, setIsSubmittingStripe] = useState(false);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletePasswordInput, setDeletePasswordInput] = useState('');
@@ -109,7 +111,7 @@ export default function PartnerSettingsPage() {
               couponReportClearPassword: '',
               confirmCouponReportClearPassword: '',
             });
-            // Removed: setHasActiveSubscription(userData.stripeSubscriptionActive || false);
+            setHasActiveSubscription(userData.stripeSubscriptionActive || false);
           } else {
             reset({
               contactName: user.displayName || '',
@@ -205,8 +207,6 @@ export default function PartnerSettingsPage() {
     }
   };
   
-  // Removed handleStripeCheckout function
-  // Removed useEffect for Stripe session/cancellation query params
 
   const handleDeleteAccount = async () => {
     if (!currentUser || !currentUser.email) {
@@ -491,7 +491,6 @@ export default function PartnerSettingsPage() {
                 <h3 className="text-lg font-medium text-primary flex items-center">
                     <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
                 </h3>
-                {/* Stripe related UI and logic removed */}
                 <CardDescription className="text-xs sm:text-sm">
                     Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
                 </CardDescription>
@@ -579,3 +578,4 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
