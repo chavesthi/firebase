@@ -38,7 +38,6 @@ firestore = getFirestore(app);
 
 // Initialize GoogleAuthProvider
 googleAuthProvider = new GoogleAuthProvider();
-// Note: The Google Sign-In Web Client ID is configured in your Firebase project settings.
 
 if (typeof window !== 'undefined') {
   // Initialize Analytics only on the client side
