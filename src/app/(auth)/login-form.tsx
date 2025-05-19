@@ -119,32 +119,35 @@ export function LoginForm() {
 
       // Partner trial check
       if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt && userData.trialExpiredNotified !== true) {
-        const createdAtDate = (userData.createdAt as Timestamp).toDate();
-        const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days
-        const now = new Date();
+        // Check for active Stripe subscription before showing trial expired toast
+        const subscriptionsRef = collection(firestore, `customers/${user.uid}/subscriptions`);
+        const q = query(subscriptionsRef, where('status', 'in', ['trialing', 'active']));
+        const subscriptionSnap = await getDocs(q);
 
-        if (now > trialEndDate) {
-          toast({
-            title: "Período de Teste Expirado",
-            description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
-            duration: 10000, // Longer duration for this important toast
-            action: (
-              <Button variant="outline" size="sm" onClick={() => {
-                // Placeholder for future subscribe action
-                // For now, it could just dismiss the toast or navigate to a placeholder page
-                toast({ title: "Ação de Assinatura", description: "Funcionalidade de assinatura em breve!" });
-              }}>
-                Assinar Agora
-              </Button>
-            ),
-          });
-          await updateDoc(userDocRef, { trialExpiredNotified: true });
+        if (subscriptionSnap.empty) { // No active or trialing Stripe subscription
+            const createdAtDate = (userData.createdAt as Timestamp).toDate();
+            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days
+            const now = new Date();
+
+            if (now > trialEndDate) {
+            toast({
+                title: "Período de Teste Expirado",
+                description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
+                duration: 10000, 
+                action: (
+                <Button variant="outline" size="sm" onClick={() => router.push('/partner/settings')}>
+                    Assinar Agora
+                </Button>
+                ),
+            });
+            await updateDoc(userDocRef, { trialExpiredNotified: true });
+            }
         }
       }
 
 
       if (questionnaireCompletedForRedirect) {
-        // The greeting toast from layout.tsx will handle this.
+        // The greeting toast from layout.tsx will handle this for non-trial-expired partners.
       } else {
          toast({
             title: `Bem-vindo(a) de volta, ${userNameForGreeting}!`,
@@ -433,7 +436,4 @@ export function LoginForm() {
         .text-primary\\/80 { color: hsla(var(--primary), 0.8); }
         /* Keep destructive text color for actual errors */
         .text-destructive { color: hsl(var(--destructive)); }
-      `}</style>
-    </Tabs>
-  );
-}
+      

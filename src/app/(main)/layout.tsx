@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Logo } from '@/components/shared/logo';
@@ -17,7 +16,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp, orderBy, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp, orderBy, runTransaction, collectionGroup } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
@@ -66,6 +65,7 @@ interface AppUser {
   };
   createdAt?: FirebaseTimestamp; // For partner trial period
   trialExpiredNotified?: boolean; // For partner trial period
+  stripeSubscriptionActive?: boolean; // Added for Stripe Extension status
 }
 
 // Keep track of active listeners to avoid duplicates and for cleanup
@@ -80,6 +80,8 @@ const useAuthAndUserSubscription = () => {
 
   useEffect(() => {
     let unsubscribeUserDoc: (() => void) | undefined;
+    let unsubscribeCustomerDoc: (() => void) | undefined;
+
 
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       setFirebaseUser(user);
@@ -88,7 +90,7 @@ const useAuthAndUserSubscription = () => {
         unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
             const userData = docSnap.data();
-            setAppUser({
+            const baseAppUser: AppUser = {
               uid: user.uid,
               name: userData.name || user.displayName || (userData.role === UserRole.USER ? "Usuário Fervo" : "Parceiro Fervo"),
               email: user.email,
@@ -105,7 +107,35 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-            });
+              stripeSubscriptionActive: false, // Default to false, will be updated by customer listener
+            };
+
+            if (userData.role === UserRole.PARTNER) {
+                const customerDocRef = doc(firestore, `customers/${user.uid}/subscriptions`);
+                // This should listen to the specific active subscription document if ID is known
+                // For simplicity, listening to the collection and finding an active one
+                const subscriptionsQuery = query(collection(firestore, `customers/${user.uid}/subscriptions`), where("status", "in", ["trialing", "active"]));
+
+                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc(); // Clean up previous listener
+                unsubscribeCustomerDoc = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
+                    let isActive = false;
+                    if (!subscriptionsSnap.empty) {
+                        // Assuming only one active/trialing subscription, or taking the first one.
+                        isActive = true;
+                    }
+                    setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
+                    if (!loading) setLoading(false); // Only set loading false after all async data might be fetched
+                }, (error) => {
+                    console.error("Error fetching Stripe subscription status:", error);
+                    setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
+                     if (!loading) setLoading(false);
+                });
+            } else {
+                setAppUser(baseAppUser);
+                 if (!loading) setLoading(false);
+            }
+
+
           } else {
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
@@ -122,9 +152,11 @@ const useAuthAndUserSubscription = () => {
               address: undefined,
               createdAt: undefined,
               trialExpiredNotified: false,
+              stripeSubscriptionActive: false,
             });
+             if (!loading) setLoading(false);
           }
-          setLoading(false);
+          // setLoading(false); // Moved setLoading to inside listeners or after default path
         }, (error) => {
           console.error("Error fetching user document with onSnapshot:", error);
           setAppUser(null);
@@ -134,24 +166,23 @@ const useAuthAndUserSubscription = () => {
       } else {
         setAppUser(null);
         setLoading(false);
-        if (unsubscribeUserDoc) {
-          unsubscribeUserDoc();
-          unsubscribeUserDoc = undefined;
-        }
+        if (unsubscribeUserDoc) unsubscribeUserDoc();
+        if (unsubscribeCustomerDoc) unsubscribeCustomerDoc();
+        unsubscribeUserDoc = undefined;
+        unsubscribeCustomerDoc = undefined;
       }
     });
 
     return () => {
       unsubscribeAuth();
-      if (unsubscribeUserDoc) {
-        unsubscribeUserDoc();
-      }
-       Object.values(activeEventNotificationListeners).forEach(unsub => unsub());
-       for (const key in activeEventNotificationListeners) {
+      if (unsubscribeUserDoc) unsubscribeUserDoc();
+      if (unsubscribeCustomerDoc) unsubscribeCustomerDoc();
+      Object.values(activeEventNotificationListeners).forEach(unsub => unsub());
+      for (const key in activeEventNotificationListeners) {
            delete activeEventNotificationListeners[key];
-       }
+      }
     };
-  }, [pathname, toast]);
+  }, [pathname, toast, loading]); // Added loading to dependency array
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -221,26 +252,23 @@ export default function MainAppLayout({
 
   useEffect(() => {
     if (!loading && prevAppUserRef.current === null && appUser !== null && appUser.questionnaireCompleted) {
-      // Skip greeting toast if trial expiration toast was (or will be) shown
-      let trialExpiredRecently = false;
-      if (appUser.role === UserRole.PARTNER && appUser.createdAt && appUser.trialExpiredNotified === true) {
-        const createdAtDate = appUser.createdAt.toDate();
-        const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000);
-        const now = new Date();
-        // Check if trial expired recently (e.g., within the last few logins, or if notification was just set)
-        // This logic might need refinement if trialExpiredNotified is set async and might not be fresh in appUser here
-        if (now > trialEndDate) {
-            // Check if this is the first login *after* trialExpiredNotified became true
-            // This is tricky; for now, if trialExpiredNotified is true and trial is past, assume it was just shown.
-            // A more robust way would be to pass a flag from login form or use a temporary state.
-            // For simplicity, if trialExpiredNotified is true for a partner, we assume the trial toast handled it.
-            // This might mean the welcome toast sometimes doesn't show when it could.
-             trialExpiredRecently = true;
+      let trialExpiredRecentlyOrActiveSub = false;
+      if (appUser.role === UserRole.PARTNER) {
+        if (appUser.stripeSubscriptionActive) { // If Stripe sub is active, don't show generic welcome
+            trialExpiredRecentlyOrActiveSub = true;
+        } else if (appUser.createdAt && appUser.trialExpiredNotified === true) {
+            const createdAtDate = appUser.createdAt.toDate();
+            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000);
+            const now = new Date();
+            if (now > trialEndDate) {
+                 trialExpiredRecentlyOrActiveSub = true;
+            }
         }
       }
 
-      if (appUser.role === UserRole.PARTNER && trialExpiredRecently) {
-        // Do nothing, trial toast was handled by login form
+
+      if (appUser.role === UserRole.PARTNER && trialExpiredRecentlyOrActiveSub) {
+        // Do nothing if partner has active sub or trial just expired (toast handled by login form)
       } else {
         const now = new Date();
         const hour = now.getHours();

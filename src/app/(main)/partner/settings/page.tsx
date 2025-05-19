@@ -8,8 +8,8 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup } from 'firebase/firestore';
-import Image from 'next/image'; // Added this import
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp } from 'firebase/firestore';
+import Image from 'next/image';
 
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -17,12 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2 } from 'lucide-react';
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { PAGBANK_PRE_APPROVAL_CODE } from "@/lib/constants";
+import { PAGBANK_PRE_APPROVAL_CODE, STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +60,14 @@ const partnerSettingsSchema = z.object({
 
 type PartnerSettingsFormInputs = z.infer<typeof partnerSettingsSchema>;
 
+interface StripeSubscription {
+    id: string;
+    status: 'trialing' | 'active' | 'canceled' | 'incomplete' | 'past_due' | 'unpaid';
+    trial_end?: Timestamp;
+    current_period_end?: Timestamp;
+    // Add other relevant fields you sync from Stripe
+}
+
 export default function PartnerSettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -68,8 +76,9 @@ export default function PartnerSettingsPage() {
   const [initialEmail, setInitialEmail] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSubmittingStripe, setIsSubmittingStripe] = useState(false);
-  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
+  const [activeSubscription, setActiveSubscription] = useState<StripeSubscription | null>(null);
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
 
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -111,9 +120,9 @@ export default function PartnerSettingsPage() {
               couponReportClearPassword: '',
               confirmCouponReportClearPassword: '',
             });
-            setHasActiveSubscription(userData.stripeSubscriptionActive || false);
+            // Stripe subscription status will be fetched in another effect
           } else {
-            reset({
+            reset({ 
               contactName: user.displayName || '',
               companyName: '',
               email: user.email || '',
@@ -134,6 +143,120 @@ export default function PartnerSettingsPage() {
     });
     return () => unsubscribeAuth();
   }, [router, reset, toast]);
+
+  // Fetch/Listen to Stripe subscription status
+  useEffect(() => {
+    if (!currentUser) {
+        setLoadingSubscription(false);
+        return;
+    }
+    setLoadingSubscription(true);
+    const subscriptionsRef = collection(firestore, `customers/${currentUser.uid}/subscriptions`);
+    const q = query(subscriptionsRef, where('status', 'in', ['trialing', 'active', 'past_due', 'incomplete']), orderBy('created', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+            // Assuming the most recent one is the relevant one if multiple exist
+            const subData = snapshot.docs[0].data() as StripeSubscription;
+            setActiveSubscription(subData);
+        } else {
+            setActiveSubscription(null);
+        }
+        setLoadingSubscription(false);
+    }, (error) => {
+        console.error("Error fetching Stripe subscription:", error);
+        setActiveSubscription(null);
+        setLoadingSubscription(false);
+        toast({ title: "Erro ao buscar assinatura", description: "Não foi possível verificar o status da sua assinatura.", variant: "destructive"});
+    });
+
+    return () => unsubscribe();
+  }, [currentUser, toast]);
+
+
+  const handleStartSubscriptionCheckout = async () => {
+    if (!currentUser) {
+        toast({ title: "Login Necessário", description: "Faça login para gerenciar sua assinatura.", variant: "destructive" });
+        return;
+    }
+    setIsSubmittingCheckout(true);
+    try {
+        const checkoutSessionRef = collection(firestore, `customers/${currentUser.uid}/checkout_sessions`);
+        const newSessionDoc = await addDoc(checkoutSessionRef, {
+            client: 'web',
+            mode: 'subscription',
+            price: STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY, 
+            success_url: window.location.origin + '/partner/dashboard?subscription_checkout=success',
+            cancel_url: window.location.origin + '/partner/settings?subscription_checkout=cancelled',
+        });
+
+        const unsubscribe = onSnapshot(doc(firestore, `customers/${currentUser.uid}/checkout_sessions/${newSessionDoc.id}`), 
+            (snap) => {
+                const data = snap.data();
+                if (data?.url) {
+                    unsubscribe(); 
+                    window.location.assign(data.url);
+                } else if (data?.error) {
+                    unsubscribe(); 
+                    console.error("Stripe Checkout Session Error:", data.error);
+                    toast({ title: "Erro ao Iniciar Checkout", description: data.error.message || "Tente novamente.", variant: "destructive" });
+                    setIsSubmittingCheckout(false);
+                }
+            },
+            (error) => {
+                // It's important to call unsubscribe in the error callback of onSnapshot as well
+                // if (typeof unsubscribe === 'function') unsubscribe(); // Check if unsubscribe is a function before calling
+                // For this specific error, the listener itself might have failed to attach,
+                // but it's good practice to try to unsubscribe.
+                console.error("Error listening to checkout session:", error);
+                toast({ title: "Erro no Checkout", description: "Ocorreu um problema ao iniciar o pagamento.", variant: "destructive" });
+                setIsSubmittingCheckout(false);
+            }
+        );
+
+    } catch (error) {
+        console.error("Error creating checkout session document:", error);
+        toast({ title: "Erro ao Preparar Pagamento", description: "Não foi possível iniciar o processo de assinatura.", variant: "destructive" });
+        setIsSubmittingCheckout(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    if (!currentUser) return;
+    setIsSubmittingCheckout(true);
+    try {
+        const portalSessionRef = collection(firestore, `customers/${currentUser.uid}/portals`);
+        const newPortalDoc = await addDoc(portalSessionRef, {
+            return_url: window.location.href,
+        });
+
+        const unsubscribe = onSnapshot(doc(firestore, `customers/${currentUser.uid}/portals/${newPortalDoc.id}`),
+            (snap) => {
+                const data = snap.data();
+                if (data?.url) {
+                    unsubscribe();
+                    window.location.assign(data.url);
+                } else if (data?.error) {
+                    unsubscribe();
+                    console.error("Stripe Portal Session Error:", data.error);
+                    toast({ title: "Erro ao Abrir Portal", description: data.error.message || "Tente novamente.", variant: "destructive" });
+                    setIsSubmittingCheckout(false);
+                }
+            },
+            (error) => {
+                // Similar to above, attempt to unsubscribe in error case
+                // if (typeof unsubscribe === 'function') unsubscribe();
+                console.error("Error listening to portal session:", error);
+                toast({ title: "Erro no Portal", description: "Ocorreu um problema ao abrir o portal de gerenciamento.", variant: "destructive" });
+                setIsSubmittingCheckout(false);
+            }
+        );
+    } catch (error) {
+        console.error("Error creating portal session document:", error);
+        toast({ title: "Erro ao Abrir Portal", description: "Não foi possível abrir o portal de gerenciamento.", variant: "destructive" });
+        setIsSubmittingCheckout(false);
+    }
+  };
 
   // Handle form submission for settings
   const onSettingsSubmit: SubmitHandler<PartnerSettingsFormInputs> = async (data) => {
@@ -156,7 +279,7 @@ export default function PartnerSettingsPage() {
           dataToUpdate.couponReportClearPassword = data.couponReportClearPassword;
           toast({ title: "Senha do Relatório Definida", description: "Senha para limpar relatório de cupons foi definida/atualizada.", variant: "default" });
       } else if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
-         toast({ title: "Erro na Senha", description: "As senhas do relatório não coincidem ou estão incompletas.", variant: "destructive" });
+         toast({ title: "Erro na Senha", description: "As senhas do relatório não coincidem ou são muito curtas.", variant: "destructive" });
          return;
       }
 
@@ -250,16 +373,19 @@ export default function PartnerSettingsPage() {
       const partnerDocRef = doc(firestore, "users", partnerIdToDelete);
       batch.delete(partnerDocRef);
   
-      // Commit all Firestore deletions
+      // 5. Delete Stripe customer data (via extension, usually by deleting customers/{userId} doc)
+      const stripeCustomerDocRef = doc(firestore, `customers/${partnerIdToDelete}`);
+      batch.delete(stripeCustomerDocRef); // This should trigger extension's delete function
+
       await batch.commit();
       toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações e ingressos associados foram removidos.", duration: 4000 });
   
-      // --- User Data Cleanup (Iterative - Best effort client-side, ideal for Cloud Function) ---
+      // Cleanup references in other users' documents
       const usersCollectionRef = collection(firestore, "users");
-      const usersSnapshot = await getDocs(usersCollectionRef);
+      const usersSnapshotForCleanup = await getDocs(usersCollectionRef);
       const cleanupBatch = writeBatch(firestore);
   
-      usersSnapshot.forEach(userDocSnap => {
+      usersSnapshotForCleanup.forEach(userDocSnap => {
         const userData = userDocSnap.data();
         const userId = userDocSnap.id;
         let userUpdateNeeded = false;
@@ -296,7 +422,6 @@ export default function PartnerSettingsPage() {
       await cleanupBatch.commit();
       toast({ title: "Limpeza de Dados de Usuários Iniciada", description: "Tentando remover referências ao local dos dados dos usuários.", duration: 4000 });
   
-      // 5. Delete Firebase Auth user
       await deleteFirebaseAuthUser(currentUser);
   
       toast({ title: "Conta Excluída", description: "Sua conta de parceiro e dados associados foram excluídos. A limpeza completa de dados de outros usuários pode levar algum tempo ou requerer processos de backend.", variant: "default", duration: 9000 });
@@ -494,18 +619,62 @@ export default function PartnerSettingsPage() {
                 <CardDescription className="text-xs sm:text-sm">
                     Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
                 </CardDescription>
-                {/* PagBank Button */}
-                <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full">
-                  <input type="hidden" name="code" value={PAGBANK_PRE_APPROVAL_CODE} />
-                  <input type="hidden" name="iot" value="button" />
-                  <Button type="submit" variant="outline" className="w-full border-amber-500 text-amber-600 hover:bg-amber-500/10"
-                          name="submit" value="" > 
-                    <Image src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" 
-                           alt="Pague com PagBank - É rápido, grátis e seguro!" 
-                           width={150} height={34} // Adjusted size
-                           className="mx-auto" /> 
-                  </Button>
-                </form>
+                {loadingSubscription && (
+                    <div className="flex items-center justify-center p-4">
+                        <Loader2 className="w-6 h-6 mr-2 animate-spin text-primary" />
+                        <p className="text-muted-foreground">Verificando status da assinatura...</p>
+                    </div>
+                )}
+                {!loadingSubscription && activeSubscription && (activeSubscription.status === 'active' || activeSubscription.status === 'trialing') && (
+                    <div className="p-4 border rounded-md bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700">
+                        <p className="text-green-700 dark:text-green-400 font-semibold">
+                            Plano {activeSubscription.status === 'trialing' ? 'de Teste ' : ''}Ativo!
+                        </p>
+                        {activeSubscription.trial_end && activeSubscription.status === 'trialing' && (
+                            <p className="text-xs text-muted-foreground">Seu teste termina em: {new Date(activeSubscription.trial_end.seconds * 1000).toLocaleDateString()}</p>
+                        )}
+                        {activeSubscription.current_period_end && activeSubscription.status === 'active' && (
+                             <p className="text-xs text-muted-foreground">Próxima renovação em: {new Date(activeSubscription.current_period_end.seconds * 1000).toLocaleDateString()}</p>
+                        )}
+                        <Button 
+                            onClick={handleManageSubscription} 
+                            variant="outline" 
+                            className="w-full mt-3 border-primary text-primary hover:bg-primary/10"
+                            disabled={isSubmittingCheckout}
+                        >
+                            {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ExternalLink className="w-4 h-4 mr-2" />}
+                            Gerenciar Assinatura
+                        </Button>
+                    </div>
+                )}
+                 {!loadingSubscription && (!activeSubscription || (activeSubscription.status !== 'active' && activeSubscription.status !== 'trialing')) && (
+                    <Button 
+                        onClick={handleStartSubscriptionCheckout} 
+                        className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+                        disabled={isSubmittingCheckout}
+                    >
+                         {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
+                        Assinar Plano Fervo (R$2,00/mês)
+                    </Button>
+                )}
+                 <p className="text-xs text-center text-muted-foreground mt-2">
+                    Pagamentos processados de forma segura pelo Stripe.
+                </p>
+                <div className="pt-4">
+                  <h4 className="text-md font-medium text-primary mb-2">Outras Formas de Pagamento</h4>
+                  <p className="text-xs text-muted-foreground mb-3">Utilize o PagBank para assinar o plano Fervo Parceiro.</p>
+                  {/* PagBank Button Form */}
+                  <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full mt-2">
+                      <input type="hidden" name="code" value={PAGBANK_PRE_APPROVAL_CODE} />
+                      <input type="hidden" name="iot" value="button" />
+                      <Button type="submit" variant="outline" className="w-full border-amber-500 text-amber-600 hover:bg-amber-500/10" name="submit" value="" > 
+                          <Image src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" 
+                                 alt="Pague com PagBank - É rápido, grátis e seguro!" 
+                                 width={150} height={34} // Adjusted size
+                                 className="mx-auto" /> 
+                      </Button>
+                  </form>
+                </div>
             </div>
 
             <Separator className="border-primary/20" />
@@ -578,4 +747,3 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
-
