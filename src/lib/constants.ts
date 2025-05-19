@@ -76,11 +76,8 @@ export const COUPON_CODE_PREFIX = "FERVO";
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
 
 // Stripe Constants for Partner Subscription (using Firebase Extension "firestore-stripe-payments")
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY || "YOUR_STRIPE_MONTHLY_PRICE_ID"; // Replace with your actual Stripe Price ID
-// Note: Public key for Stripe.js is usually handled by the extension's configuration or Stripe's own JS library loading.
-// Secret key is only used server-side (in Firebase Functions deployed by the extension).
+// Replace with your actual Stripe Price ID for the Fervo Partner Monthly plan
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY || "YOUR_STRIPE_MONTHLY_PRICE_ID"; 
 
 // PagBank (kept for reference if PagBank button is still used as alternative, but Stripe is primary for extension)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
-
-```
