@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { NextPage } from 'next';
@@ -8,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy, type FieldValue, collectionGroup, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, updateDoc, deleteDoc, Timestamp, writeBatch, onSnapshot, orderBy, type FieldValue, getDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -25,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { MusicStyle, MUSIC_STYLE_OPTIONS, PricingType, PRICING_TYPE_OPTIONS, APP_URL } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode, Loader2, Share2, Trash, Ticket } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, Save, CalendarDays, Clapperboard, ArrowLeft, QrCode, Loader2, Share2, Trash, Ticket, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
@@ -90,10 +91,10 @@ interface EventDocument extends EventFormInputs {
   startDateTime: Timestamp;
   endDateTime: Timestamp;
   createdAt: Timestamp;
-  updatedAt?: Timestamp; 
+  updatedAt?: Timestamp;
   checkInToken?: string;
-  pricingValue?: number | null; 
-  averageRating?: number; 
+  pricingValue?: number | null;
+  averageRating?: number;
   ratingCount?: number;
   shareRewardsEnabled: boolean;
   ticketPurchaseUrl?: string | null;
@@ -122,6 +123,10 @@ const ManageEventsPage: NextPage = () => {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [isDeletingPastEvents, setIsDeletingPastEvents] = useState(false);
 
+  const [partnerCreatedAt, setPartnerCreatedAt] = useState<Timestamp | null>(null);
+  const [isSubscribedOrTrialing, setIsSubscribedOrTrialing] = useState<boolean>(true); // Default to true to avoid brief flicker of disabled state
+  const [canCreateEvents, setCanCreateEvents] = useState<boolean>(true); // Default to true
+
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch, reset } = useForm<EventFormInputs>({
     resolver: zodResolver(eventFormSchema),
     defaultValues: {
@@ -145,44 +150,60 @@ const ManageEventsPage: NextPage = () => {
   useEffect(() => {
     let unsubscribeEvents: (() => void) | null = null;
     let unsubscribeUserDoc: (() => void) | null = null;
+    let unsubscribePartnerStatus: (() => void) | null = null;
+    let unsubscribeSubscriptionStatus: (() => void) | null = null;
+
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
-        setLoading(true); 
+        setLoading(true);
 
+        // Fetch partner's name and creation date
         const userDocRef = doc(firestore, 'users', user.uid);
-        unsubscribeUserDoc = onSnapshot(userDocRef, (docSnap) => {
+        unsubscribePartnerStatus = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
-                setPartnerName(docSnap.data()?.venueName || 'Seu Local');
+                const userData = docSnap.data();
+                setPartnerName(userData?.venueName || 'Seu Local');
+                setPartnerCreatedAt(userData?.createdAt as Timestamp || null);
             }
         });
+        
+        // Listen for subscription status
+        const subscriptionsQuery = query(collection(firestore, `customers/${user.uid}/subscriptions`), where("status", "in", ["trialing", "active"]));
+        unsubscribeSubscriptionStatus = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
+            setIsSubscribedOrTrialing(!subscriptionsSnap.empty);
+        }, (error) => {
+            console.error("Error fetching Stripe subscription status:", error);
+            setIsSubscribedOrTrialing(false); // Assume not subscribed on error
+        });
 
+
+        // Fetch events
         const eventsCollectionRef = collection(firestore, 'users', user.uid, 'events');
-        const q = query(eventsCollectionRef, orderBy('updatedAt', 'desc')); 
+        const q = query(eventsCollectionRef, orderBy('updatedAt', 'desc'));
 
-        if (unsubscribeEvents) {
-          unsubscribeEvents();
-        }
-
+        if (unsubscribeEvents) unsubscribeEvents();
         unsubscribeEvents = onSnapshot(q, (snapshot) => {
-          const eventsData = snapshot.docs.map(docSnap => ({ 
+          const eventsData = snapshot.docs.map(docSnap => ({
             id: docSnap.id,
             ...docSnap.data(),
           } as EventDocument));
           setPartnerEvents(eventsData);
-          setLoading(false); 
+          setLoading(false);
         }, (error) => {
           console.error("Error fetching events with onSnapshot:", error);
           toast({ title: "Erro ao buscar eventos", variant: "destructive" });
-          setLoading(false); 
+          setLoading(false);
         });
 
       } else {
         router.push('/login');
         if (unsubscribeEvents) unsubscribeEvents();
         if (unsubscribeUserDoc) unsubscribeUserDoc();
-        setLoading(false); 
+        if (unsubscribePartnerStatus) unsubscribePartnerStatus();
+        if (unsubscribeSubscriptionStatus) unsubscribeSubscriptionStatus();
+        setLoading(false);
       }
     });
 
@@ -190,8 +211,26 @@ const ManageEventsPage: NextPage = () => {
       unsubscribeAuth();
       if (unsubscribeEvents) unsubscribeEvents();
       if (unsubscribeUserDoc) unsubscribeUserDoc();
+      if (unsubscribePartnerStatus) unsubscribePartnerStatus();
+      if (unsubscribeSubscriptionStatus) unsubscribeSubscriptionStatus();
     };
-  }, [router, toast]); 
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (partnerCreatedAt === null) { // Still loading or partner data not found
+        setCanCreateEvents(true); // Default to allow while loading essential data
+        return;
+    }
+
+    if (isSubscribedOrTrialing) {
+        setCanCreateEvents(true);
+    } else {
+        const trialEndDate = new Date(partnerCreatedAt.toDate().getTime() + 15 * 24 * 60 * 60 * 1000);
+        const isTrialStillActive = new Date() <= trialEndDate;
+        setCanCreateEvents(isTrialStillActive);
+    }
+  }, [partnerCreatedAt, isSubscribedOrTrialing]);
+
 
   const combineDateAndTime = (date: Date, time: string): Timestamp => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -205,6 +244,11 @@ const ManageEventsPage: NextPage = () => {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
     }
+    if (!canCreateEvents) {
+        toast({ title: "Criação de Eventos Bloqueada", description: "Seu período de teste expirou. Por favor, assine o plano para continuar criando eventos.", variant: "destructive", duration: 7000 });
+        return;
+    }
+
 
     const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
     const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
@@ -243,12 +287,12 @@ const ManageEventsPage: NextPage = () => {
     try {
       if (editingEventId) {
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', editingEventId);
-        eventDataForFirestore.updatedAt = serverTimestamp(); 
+        eventDataForFirestore.updatedAt = serverTimestamp();
         await updateDoc(eventDocRef, eventDataForFirestore);
         toast({ title: "Evento Atualizado!", description: "O evento foi atualizado com sucesso." });
       } else {
         eventDataForFirestore.createdAt = serverTimestamp();
-        eventDataForFirestore.updatedAt = serverTimestamp(); 
+        eventDataForFirestore.updatedAt = serverTimestamp();
         await addDoc(eventsCollectionRef, eventDataForFirestore);
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
@@ -261,6 +305,20 @@ const ManageEventsPage: NextPage = () => {
   };
 
   const handleEditEvent = (event: EventDocument) => {
+    if (!canCreateEvents && !event.visibility) { // Allow editing of non-visible past events even if trial expired
+        const eventEndTime = event.endDateTime.toDate();
+        if (eventEndTime < new Date()) {
+             // Allow editing past, non-visible events for record keeping
+        } else {
+            toast({ title: "Edição Bloqueada", description: "Seu período de teste expirou. Assine para editar eventos futuros ou visíveis.", variant: "destructive", duration: 7000 });
+            return;
+        }
+    } else if (!canCreateEvents && event.visibility) {
+         toast({ title: "Edição Bloqueada", description: "Seu período de teste expirou. Assine para editar eventos.", variant: "destructive", duration: 7000 });
+         return;
+    }
+
+
     setEditingEventId(event.id);
     reset({
       eventName: event.eventName,
@@ -281,7 +339,8 @@ const ManageEventsPage: NextPage = () => {
 
   const handleDeleteEvent = async (eventId: string) => {
     if (!currentUser) return;
-    
+
+    // Allow deleting events even if trial expired
     const confirmDelete = window.confirm("Tem certeza que deseja excluir este evento? As avaliações e comentários associados a ele serão mantidos para estatísticas gerais do local, mas o evento em si será removido.");
     if (!confirmDelete) return;
 
@@ -302,6 +361,7 @@ const ManageEventsPage: NextPage = () => {
 
   const handleDeletePastEvents = async () => {
     if (!currentUser) return;
+     // Allow deleting past events even if trial expired
 
     const pastEvents = partnerEvents.filter(event => isEventPast(event.endDateTime));
     if (pastEvents.length === 0) {
@@ -328,6 +388,11 @@ const ManageEventsPage: NextPage = () => {
 
   const toggleEventVisibility = async (event: EventDocument) => {
     if (!currentUser) return;
+
+    if (!canCreateEvents && !event.visibility) { // If trying to make an event visible when trial expired
+      toast({ title: "Ação Bloqueada", description: "Seu período de teste expirou. Assine para tornar eventos visíveis.", variant: "destructive", duration: 7000 });
+      return;
+    }
 
     const newVisibility = !event.visibility;
 
@@ -365,7 +430,7 @@ const ManageEventsPage: NextPage = () => {
     }
 
     const shareUrl = `${APP_URL}/shared-event/${event.partnerId}/${event.id}`;
-    
+
     try {
         if (navigator.share) {
             await navigator.share({
@@ -381,10 +446,9 @@ const ManageEventsPage: NextPage = () => {
     } catch (error: any) {
         if (error.name === 'AbortError') {
             console.log('Share operation cancelled by user.');
-            return; 
+            return;
         }
         console.error("Error sharing event:", error);
-        // Fallback to clipboard if navigator.share failed for other reasons
         try {
             await navigator.clipboard.writeText(shareUrl);
             toast({ title: "Link Copiado!", description: "O compartilhamento falhou ou não está disponível. O link foi copiado para a área de transferência!", variant: "default", duration: 6000 });
@@ -424,6 +488,14 @@ const ManageEventsPage: NextPage = () => {
         </CardHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
+             {!canCreateEvents && !editingEventId && (
+                <div className="p-3 my-4 bg-destructive/10 border border-destructive/30 rounded-md text-center">
+                    <AlertCircle className="w-5 h-5 inline-block mr-2 text-destructive" />
+                    <p className="text-sm text-destructive">
+                        Seu período de teste expirou. Para criar novos eventos, por favor, <Button variant="link" className="p-0 h-auto text-destructive underline" onClick={() => router.push('/partner/settings')}>assine um plano</Button>.
+                    </p>
+                </div>
+            )}
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Label htmlFor="eventName" className="text-primary/90">Nome do Evento</Label>
@@ -520,12 +592,12 @@ const ManageEventsPage: NextPage = () => {
                   {errors.pricingValue && <p className="mt-1 text-sm text-destructive">{errors.pricingValue.message}</p>}
                 </div>
               )}
-              
+
               <div className="md:col-span-2">
                 <Label htmlFor="ticketPurchaseUrl" className="text-primary/90">Link para Compra de Ingressos (Opcional)</Label>
                 <Controller name="ticketPurchaseUrl" control={control} render={({ field }) => <Input id="ticketPurchaseUrl" type="url" placeholder="https://exemplo.com/ingressos" {...field} className={errors.ticketPurchaseUrl ? 'border-destructive' : ''} />} />
                 {errors.ticketPurchaseUrl && <p className="mt-1 text-sm text-destructive">{errors.ticketPurchaseUrl.message}</p>}
-                <p className="mt-1 text-xs text-muted-foreground">Se fornecido, este link será usado para a venda de ingressos. Caso contrário, o sistema interno de ingressos (RG) será usado se o evento não for gratuito.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Se fornecido, este link será usado para a venda de ingressos. Se o evento não for gratuito e este campo estiver vazio, os usuários serão instruídos a pagar na entrada ou via contato direto.</p>
               </div>
 
 
@@ -560,7 +632,7 @@ const ManageEventsPage: NextPage = () => {
                     Cancelar Edição
                 </Button>
             )}
-            <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm" disabled={isSubmitting}>
+            <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm" disabled={isSubmitting || (!canCreateEvents && !editingEventId) || (!canCreateEvents && editingEventId && partnerEvents.find(e=>e.id===editingEventId)?.visibility) }>
               <Save className="w-4 h-4 mr-2" /> {isSubmitting ? 'Salvando...' : (editingEventId ? 'Salvar Alterações' : 'Criar Evento')}
             </Button>
           </CardFooter>
@@ -621,7 +693,7 @@ const ManageEventsPage: NextPage = () => {
                   return (
                   <Card key={event.id} className={`p-3 sm:p-4 border rounded-lg ${event.id === editingEventId ? 'border-primary shadow-md' : 'border-border'}`}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                      <div className="flex-1 min-w-0"> 
+                      <div className="flex-1 min-w-0">
                         <h3 className="text-md sm:text-lg font-semibold text-primary truncate">{event.eventName}</h3>
                         {isHappening && (
                           <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
@@ -648,27 +720,27 @@ const ManageEventsPage: NextPage = () => {
                         <Button variant="ghost" size="icon" onClick={() => toggleEventVisibility(event)} title={event.visibility ? "Ocultar evento" : "Tornar evento visível"}>
                           {event.visibility ? <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" /> : <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />}
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditEvent(event)} title="Editar evento" disabled={eventIsPast}>
-                          <Edit className={`w-4 h-4 sm:w-5 sm:h-5 ${eventIsPast ? 'text-muted-foreground' : 'text-primary'}`} />
+                        <Button variant="ghost" size="icon" onClick={() => handleEditEvent(event)} title="Editar evento" disabled={eventIsPast && event.visibility /* Allow editing past non-visible events */}>
+                          <Edit className={`w-4 h-4 sm:w-5 sm:h-5 ${(eventIsPast && event.visibility) ? 'text-muted-foreground' : 'text-primary'}`} />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteEvent(event.id)} title="Excluir evento">
                           <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
                         </Button>
                         {event.checkInToken && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => router.push(`/partner/qr-code/${event.id}`)} 
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => router.push(`/partner/qr-code/${event.id}`)}
                             title={eventIsPast ? "Evento encerrado, QR Code indisponível" : "Ver QR Code do Evento"}
                             disabled={eventIsPast}
                           >
                             <QrCode className={`w-4 h-4 sm:w-5 sm:h-5 ${eventIsPast ? 'text-muted-foreground' : 'text-primary'}`} />
                           </Button>
                         )}
-                         <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleSharePartnerEvent(event)} 
+                         <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleSharePartnerEvent(event)}
                             title={eventIsPast ? "Evento encerrado, não pode compartilhar" : "Compartilhar este evento"}
                             disabled={eventIsPast}
                           >
@@ -711,3 +783,4 @@ const ManageEventsPage: NextPage = () => {
 };
 
 export default ManageEventsPage;
+
