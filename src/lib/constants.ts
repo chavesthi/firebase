@@ -77,10 +77,11 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 
 // Stripe Constants for Partner Subscription (using Firebase Extension "firestore-stripe-payments")
 // This Price ID should correspond to your Fervo Partner Monthly plan in Stripe.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = "price_1RQejJL8kxrPyagwXVcCVdcx";
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = "price_1RQenWL8kxrPyagwKRHbP2i9";
 
 // PagBank (kept for reference if PagBank button is still used as alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
+
 
 
 
