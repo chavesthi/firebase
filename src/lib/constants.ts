@@ -79,8 +79,9 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 // Stripe Constants for Partner Subscription (using Firebase Extension "firestore-stripe-payments")
 // IMPORTANT: For LIVE mode, these MUST be LIVE keys/IDs. For TEST mode, they MUST be TEST keys/IDs.
 // Ensure this Price ID corresponds to the correct mode of your Stripe Extension.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RQenWL8kxrPyagwKRHbP2i9"; // Example, replace with your actual Price ID
-export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SIMUUs67RhC80g"; // Example, replace with your actual Product ID
+// This ID should match the Price ID of your "Fervo Partner Monthly" plan in your Stripe dashboard.
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RQenWL8kxrPyagwKRHbP2i9"; // Example: price_xxxxxxxxxxxxxx
+export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SIMUUs67RhC80g"; // Example: prod_xxxxxxxxxxxxxx
 
 // Stripe API Keys - Use environment variables for these in production!
 export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU";
