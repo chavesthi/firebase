@@ -75,14 +75,22 @@ export const COUPON_CODE_PREFIX = "FERVO";
 // App URL
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
 
+
 // Stripe Constants for Partner Subscription (using Firebase Extension "firestore-stripe-payments")
-// This Price ID should correspond to your Fervo Partner Monthly plan in Stripe.
-// IMPORTANT: If your Stripe Extension is in LIVE mode, this MUST be a LIVE Price ID.
-// If it's in TEST mode, this MUST be a TEST Price ID.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = "price_1RQenWL8kxrPyagwKRHbP2i9";
+// IMPORTANT: For LIVE mode, these MUST be LIVE keys/IDs. For TEST mode, they MUST be TEST keys/IDs.
+// Ensure this Price ID corresponds to the correct mode of your Stripe Extension.
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RQenWL8kxrPyagwKRHbP2i9"; // Example, replace with your actual Price ID
+export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SIMUUs67RhC80g"; // Example, replace with your actual Product ID
+
+// Stripe API Keys - Use environment variables for these in production!
+export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU";
+// WARNING: The key below is a RESTRICTED KEY (rk_live_...).
+// The Firebase Stripe Extension typically requires a full SECRET KEY (sk_live_... or sk_test_...).
+// Using a restricted key here might lead to permission errors if it doesn't have all necessary permissions.
+// Monitor Firebase Function logs for Stripe API errors if payments fail.
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "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";
+
 
 // PagBank (kept for reference if PagBank button is still used as alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
-//A584618E-1414-7284-4406-7FA92A607421
 
- 
