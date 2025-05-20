@@ -202,7 +202,7 @@ export default function PartnerSettingsPage() {
                     console.error("Stripe Checkout Session Error (full object):", data.error);
                     const errorMessage = typeof data.error === 'object' && data.error.message 
                                          ? data.error.message 
-                                         : "Ocorreu um erro desconhecido ao criar a sessão de checkout.";
+                                         : "Falha ao criar sessão de checkout. Verifique os logs do servidor para mais detalhes.";
                     toast({ title: "Erro ao Iniciar Checkout", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
                 }
@@ -655,7 +655,7 @@ export default function PartnerSettingsPage() {
                         disabled={isSubmittingCheckout}
                     >
                          {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                        Assinar Plano Fervo (R${(2).toFixed(2).replace('.',',')}/mês)
+                        Assinar Plano Fervo (R$2,00/mês)
                     </Button>
                 )}
                  <p className="text-xs text-center text-muted-foreground mt-2">
