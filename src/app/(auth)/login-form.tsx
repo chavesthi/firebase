@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
 import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore, googleAuthProvider } from '@/lib/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp } from 'firebase/firestore';
+import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; // Added googleAuthProvider
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; // Added signInWithPopup
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore'; // Added serverTimestamp
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
@@ -37,6 +37,7 @@ const signupSchema = z.object({
 type LoginFormInputs = z.infer<typeof loginSchema>;
 type SignupFormInputs = z.infer<typeof signupSchema>;
 
+// Simple Google Icon SVG
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 48 48" width="20" height="20" {...props}>
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
@@ -52,7 +53,7 @@ export function LoginForm() {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formMode, setFormMode] = useState<'login' | 'signup'>('login');
+  const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); // 'login' or 'signup'
   const router = useRouter();
   const { toast } = useToast();
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
@@ -86,12 +87,13 @@ export function LoginForm() {
         role: role,
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
-        trialExpiredNotified: false, // Initialize trial notification status
-        venueCoins: {},
+        trialExpiredNotified: false, 
+        venueCoins: {}, 
         favoriteVenueIds: [],
         favoriteVenueNotificationSettings: {},
         notifications: [],
         lastNotificationCheckTimestamp: null,
+        photoURL: user.photoURL || null, // Add photoURL from Google or null
       });
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
@@ -119,12 +121,12 @@ export function LoginForm() {
 
       // Partner trial check
       if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt && userData.trialExpiredNotified !== true) {
-        // Check for active Stripe subscription before showing trial expired toast
+        
         const subscriptionsRef = collection(firestore, `customers/${user.uid}/subscriptions`);
         const q = query(subscriptionsRef, where('status', 'in', ['trialing', 'active']));
         const subscriptionSnap = await getDocs(q);
 
-        if (subscriptionSnap.empty) { // No active or trialing Stripe subscription
+        if (subscriptionSnap.empty) { 
             const createdAtDate = (userData.createdAt as Timestamp).toDate();
             const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days
             const now = new Date();
@@ -166,7 +168,7 @@ export function LoginForm() {
 
 
   const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
-    loginMethods.formState.isSubmitting;
+    loginMethods.formState.isSubmitting; 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
       await handleSuccessfulAuth(userCredential, activeRole);
@@ -190,7 +192,7 @@ export function LoginForm() {
   };
 
   const onSignupSubmit: SubmitHandler<SignupFormInputs> = async (data) => {
-    signupMethods.formState.isSubmitting;
+    signupMethods.formState.isSubmitting; 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       await handleSuccessfulAuth(userCredential, activeRole, false, data.name);
@@ -240,14 +242,14 @@ export function LoginForm() {
   const cardStyles = 'border-primary/80 [--card-glow:hsl(var(--primary))] [--card-glow-soft:hsla(var(--primary),0.2)]';
   const buttonStyles = 'bg-primary hover:bg-primary/90 text-primary-foreground';
   const commonLabelStyle = "text-primary/80";
-  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive";
+  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive"; 
 
   const userTabStyle = activeRole === UserRole.USER
     ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]"
     : "hover:bg-primary/10";
   const partnerTabStyle = activeRole === UserRole.PARTNER
-    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]"
-    : "hover:bg-primary/10";
+    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]" 
+    : "hover:bg-primary/10"; 
 
   return (
     <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as UserRole)} className="w-full">
@@ -436,4 +438,7 @@ export function LoginForm() {
         .text-primary\\/80 { color: hsla(var(--primary), 0.8); }
         /* Keep destructive text color for actual errors */
         .text-destructive { color: hsl(var(--destructive)); }
-      
+      `}</style>
+    </Tabs>
+  );
+}

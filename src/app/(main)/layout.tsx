@@ -23,6 +23,7 @@ import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/theme-provider';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'; // Added Avatar imports
 
 // Data structure for venue-specific coins on user document
 interface UserVenueCoins {
@@ -67,6 +68,7 @@ interface AppUser {
   createdAt?: FirebaseTimestamp; // For partner trial period
   trialExpiredNotified?: boolean; // For partner trial period
   stripeSubscriptionActive?: boolean; // Added for Stripe Extension status
+  photoURL?: string | null; // Added for profile picture
 }
 
 // Keep track of active listeners to avoid duplicates and for cleanup
@@ -109,6 +111,7 @@ const useAuthAndUserSubscription = () => {
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
               stripeSubscriptionActive: false, // Default to false, will be updated by customer listener
+              photoURL: userData.photoURL || null, // Fetch photoURL
             };
 
             if (userData.role === UserRole.PARTNER) {
@@ -121,7 +124,7 @@ const useAuthAndUserSubscription = () => {
                         isActive = true;
                     }
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
-                    setLoading(false); // Ensure loading is set to false after appUser is updated
+                    setLoading(false); 
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
@@ -150,6 +153,7 @@ const useAuthAndUserSubscription = () => {
               createdAt: undefined,
               trialExpiredNotified: false,
               stripeSubscriptionActive: false,
+              photoURL: user.photoURL || null, // Use Firebase Auth photoURL as fallback
             });
             setLoading(false);
           }
@@ -178,7 +182,7 @@ const useAuthAndUserSubscription = () => {
            delete activeEventNotificationListeners[key];
       }
     };
-  }, [pathname, toast]); // Removed loading from dependencies to prevent potential loops
+  }, [pathname, toast]); 
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -785,13 +789,14 @@ export default function MainAppLayout({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={`relative w-10 h-10 rounded-full ${activeBorderColorClass} border-2 p-0 flex items-center justify-center`}>
-                    {appUser?.name ? (
-                      <span className={`text-lg font-semibold ${activeColorClass}`}>
-                        {appUser.name.charAt(0).toUpperCase()}
-                      </span>
-                    ) : (
-                      <UserCircle className={`w-6 h-6 ${activeColorClass}`} />
-                    )}
+                    <Avatar className="h-9 w-9">
+                      {appUser?.photoURL ? (
+                        <AvatarImage src={appUser.photoURL} alt={appUser.name || "User Avatar"} data-ai-hint="user avatar" />
+                      ) : null}
+                      <AvatarFallback className={cn(activeColorClass, "bg-transparent text-lg font-semibold")}>
+                        {appUser?.name ? appUser.name.charAt(0).toUpperCase() : <UserCircle className="w-6 h-6" />}
+                      </AvatarFallback>
+                    </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -860,4 +865,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-

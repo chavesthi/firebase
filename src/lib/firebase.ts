@@ -4,6 +4,7 @@ import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics"; // Ensured getAnalytics and Analytics type are imported
 import { getAuth, type Auth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage"; // Added for Firebase Storage
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -14,7 +15,7 @@ const firebaseConfig = {
   authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
   databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
   projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.firebasestorage.app",
+  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected storage bucket format
   messagingSenderId: "762698655248",
   appId: "1:762698655248:web:1a4a995fccd6bcf6cb0c95",
   measurementId: "G-3QD4RQHSMQ"
@@ -24,6 +25,7 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let firestore: Firestore;
+let storage: FirebaseStorage; // Added for Firebase Storage
 let analytics: Analytics | null = null;
 let googleAuthProvider: GoogleAuthProvider;
 
@@ -35,8 +37,7 @@ if (!getApps().length) {
 
 auth = getAuth(app);
 firestore = getFirestore(app);
-
-// Initialize GoogleAuthProvider
+storage = getStorage(app); // Initialize Firebase Storage
 googleAuthProvider = new GoogleAuthProvider();
 
 if (typeof window !== 'undefined') {
@@ -53,4 +54,4 @@ if (typeof window !== 'undefined') {
   }
 }
 
-export { app, auth, firestore, analytics, googleAuthProvider };
+export { app, auth, firestore, storage, analytics, googleAuthProvider }; // Export storage

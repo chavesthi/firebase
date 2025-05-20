@@ -2,23 +2,25 @@
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, deleteDoc as deleteFirestoreDoc } from 'firebase/firestore'; // Renamed to avoid conflict
+import { doc, getDoc, updateDoc, deleteDoc as deleteFirestoreDoc } from 'firebase/firestore';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import Image from 'next/image'; // Import next/image
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { UserCircle, Save, Loader2, Trash2, Eye, EyeOff } from 'lucide-react';
+import { UserCircle, Save, Loader2, Trash2, Eye, EyeOff, UploadCloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore } from '@/lib/firebase';
+import { auth, firestore, storage } from '@/lib/firebase';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -34,6 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress'; // For upload progress
 
 const userProfileSchema = z.object({
   name: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
@@ -61,14 +64,18 @@ const UserProfilePage: NextPage = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [showPasswordInput, setShowPasswordInput] = useState(false);
 
-
-  const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<UserProfileFormInputs>({
+  const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue } = useForm<UserProfileFormInputs>({
     resolver: zodResolver(userProfileSchema),
     defaultValues: {
       name: '',
@@ -96,6 +103,7 @@ const UserProfilePage: NextPage = () => {
               preferredVenueTypes: userData.preferredVenueTypes || [],
               preferredMusicStyles: userData.preferredMusicStyles || [],
             });
+            setPhotoURL(userData.photoURL || null);
           } else {
             reset({ 
               name: user.displayName || '',
@@ -103,6 +111,7 @@ const UserProfilePage: NextPage = () => {
               preferredVenueTypes: [],
               preferredMusicStyles: [],
             });
+            setPhotoURL(null);
             toast({ title: "Perfil Incompleto", description: "Alguns dados não foram carregados. Por favor, complete e salve seu perfil.", variant: "default" });
           }
         } catch (error) {
@@ -117,7 +126,62 @@ const UserProfilePage: NextPage = () => {
     return () => unsubscribe();
   }, [router, reset, toast]);
 
-  const onSubmit: SubmitHandler<UserProfileFormInputs> = async (data) => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        toast({ title: "Arquivo Muito Grande", description: "A imagem deve ter no máximo 2MB.", variant: "destructive"});
+        return;
+      }
+      setImageFile(file);
+      setPhotoURL(URL.createObjectURL(file)); // Show preview
+    }
+  };
+
+  const handleUploadAndSave = async (data: UserProfileFormInputs) => {
+    if (!currentUser) return;
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    let newPhotoURL = photoURL;
+
+    if (imageFile) {
+      const imagePath = `profilePictures/${currentUser.uid}/${imageFile.name}`;
+      const imageStorageRef = storageRef(storage, imagePath);
+      const uploadTask = uploadBytesResumable(imageStorageRef, imageFile);
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => {
+              console.error("Upload failed:", error);
+              toast({ title: "Falha no Upload", description: "Não foi possível enviar a imagem.", variant: "destructive" });
+              reject(error);
+            },
+            async () => {
+              newPhotoURL = await getDownloadURL(uploadTask.snapshot.ref);
+              setPhotoURL(newPhotoURL); // Update state for immediate display if submission is separate
+              resolve();
+            }
+          );
+        });
+      } catch (error) {
+        setIsUploading(false);
+        return; // Prevent form submission if upload fails
+      }
+    }
+
+    // Proceed to save all data (including newPhotoURL if image was uploaded)
+    await onSubmit({ ...data, photoURL: newPhotoURL });
+    setIsUploading(false);
+    setImageFile(null); // Clear selected file
+  };
+
+  const onSubmit: SubmitHandler<UserProfileFormInputs & { photoURL?: string | null }> = async (data) => {
     if (!currentUser) {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
@@ -135,6 +199,7 @@ const UserProfilePage: NextPage = () => {
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
         questionnaireCompleted: !!data.age, 
+        photoURL: data.photoURL !== undefined ? data.photoURL : photoURL, // Use passed photoURL or existing state
       });
 
       toast({
@@ -167,16 +232,23 @@ const UserProfilePage: NextPage = () => {
       const credential = EmailAuthProvider.credential(currentUser.email, deletePassword);
       await reauthenticateWithCredential(currentUser, credential);
 
-      // Attempt to delete the main user document in Firestore.
-      // Full data cleanup (subcollections, related data in other collections)
-      // is best handled by a Firebase Cloud Function triggered on user deletion.
       const userDocRef = doc(firestore, "users", currentUser.uid);
       await deleteFirestoreDoc(userDocRef); 
-      // console.log(`User document for ${currentUser.uid} deleted from Firestore.`);
+      
+      // Delete profile picture from storage if it exists
+      if (photoURL && photoURL.includes('firebasestorage.googleapis.com')) {
+        try {
+          const oldImageRef = storageRef(storage, photoURL);
+          await deleteObject(oldImageRef);
+        } catch (storageError) {
+          console.warn("Could not delete old profile picture from storage:", storageError);
+          // Non-critical, so don't block account deletion
+        }
+      }
 
       await deleteUser(currentUser);
 
-      toast({ title: "Conta Excluída", description: "Sua conta e dados principais foram excluídos. Dados residuais como avaliações podem ser removidos por processos de backend.", variant: "default", duration: 7000 });
+      toast({ title: "Conta Excluída", description: "Sua conta e dados principais foram excluídos.", variant: "default", duration: 7000 });
       router.push('/login'); 
       setShowDeleteDialog(false);
     } catch (error: any) {
@@ -196,7 +268,6 @@ const UserProfilePage: NextPage = () => {
     }
   };
 
-
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
@@ -206,7 +277,6 @@ const UserProfilePage: NextPage = () => {
     );
   }
 
-
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
       <Card className="max-w-2xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
@@ -214,19 +284,29 @@ const UserProfilePage: NextPage = () => {
           <CardTitle className="text-2xl sm:text-3xl text-primary">Meu Perfil</CardTitle>
           <CardDescription className="text-sm sm:text-base">Gerencie suas informações e preferências.</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(handleUploadAndSave)}>
           <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-            <div className="flex flex-col items-center space-y-2">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted">
-                {watchedName ? (
-                  <span className="text-2xl sm:text-3xl text-primary font-semibold">
-                    {watchedName.charAt(0).toUpperCase()}
-                  </span>
+            <div className="flex flex-col items-center space-y-3">
+              <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden border-2 border-primary bg-muted">
+                {photoURL ? (
+                  <Image src={photoURL} alt={watchedName || "Foto de Perfil"} layout="fill" objectFit="cover" data-ai-hint="profile picture" />
                 ) : (
-                  <UserCircle className="w-14 h-14 sm:w-16 sm:h-16 text-primary" />
+                  <UserCircle className="w-full h-full text-primary/50" data-ai-hint="avatar placeholder" />
                 )}
               </div>
-               <p className="text-xs sm:text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                <UploadCloud className="w-4 h-4 mr-2" /> {photoURL ? "Alterar Foto" : "Enviar Foto"}
+              </Button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImageChange}
+                accept="image/png, image/jpeg, image/webp"
+                className="hidden"
+              />
+              {isUploading && <Progress value={uploadProgress} className="w-full h-2 mt-2" />}
+              {uploadProgress > 0 && uploadProgress < 100 && <p className="text-xs text-muted-foreground">{Math.round(uploadProgress)}% enviado</p>}
+               <p className="text-xs text-muted-foreground">Tamanho máx: 2MB (PNG, JPG, WEBP)</p>
             </div>
 
             <div className="space-y-2">
@@ -348,8 +428,14 @@ const UserProfilePage: NextPage = () => {
               </ScrollArea>
               {errors.preferredMusicStyles && <p className="mt-1 text-sm text-destructive">{errors.preferredMusicStyles.message}</p>}
             </div>
+
+            <CardFooter className="px-0 pt-4 pb-0">
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isSubmitting || isUploading || isDeleting}>
+                {isSubmitting || isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
+                </Button>
+            </CardFooter>
+
              <Separator className="my-6 border-primary/20" />
-            {/* Account Deletion Section */}
             <div className="space-y-2">
                 <h3 className="text-lg font-medium text-destructive">Excluir Conta</h3>
                 <p className="text-sm text-muted-foreground">
@@ -357,7 +443,7 @@ const UserProfilePage: NextPage = () => {
                 </p>
                 <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" className="w-full sm:w-auto">
+                        <Button variant="destructive" className="w-full sm:w-auto" disabled={isDeleting || isSubmitting || isUploading}>
                             <Trash2 className="w-4 h-4 mr-2" /> Excluir Minha Conta
                         </Button>
                     </AlertDialogTrigger>
@@ -411,11 +497,6 @@ const UserProfilePage: NextPage = () => {
             </div>
 
           </CardContent>
-          <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isSubmitting}>
-               {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
-            </Button>
-          </CardFooter>
         </form>
       </Card>
     </div>
@@ -423,5 +504,3 @@ const UserProfilePage: NextPage = () => {
 };
 
 export default UserProfilePage;
-
-    
