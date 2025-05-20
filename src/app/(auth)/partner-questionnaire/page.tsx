@@ -195,7 +195,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         setIsGeocoding(false);
     }
 
-    if (!currentVenueLocation && !isProfileLocked) { // Only block saving if it's the initial setup and no location
+    if (!currentVenueLocation && !initialQuestionnaireCompletedState) { // Only block saving if it's the initial setup and no location
         toast({ title: "Localização Pendente", description: "Por favor, forneça um endereço válido e localize-o no mapa.", variant: "destructive" });
         return;
     }
@@ -205,51 +205,39 @@ const PartnerQuestionnairePage: NextPage = () => {
 
       // Data that can always be updated
       let dataToUpdate: any = {
-        venueName: data.venueName, // Now always editable
+        venueName: data.venueName,
         venueType: data.venueType,
         musicStyles: data.musicStyles || [],
         instagramUrl: data.instagramUrl,
         facebookUrl: data.facebookUrl,
         youtubeUrl: data.youtubeUrl,
         whatsappPhone: data.whatsappPhone,
-        phone: data.phone, // Now always editable
-      };
-
-      // Data that is only set/updated if the profile isn't locked (i.e., first time setup)
-      // OR if we decide some fields remain editable even if "locked"
-      if (!isProfileLocked) { // This implies initialQuestionnaireCompletedState is false
-        dataToUpdate = {
-          ...dataToUpdate,
-          address: {
+        phone: data.phone,
+        address: { // Address is now always updatable
             street: data.street,
             number: data.number,
             city: data.city,
             state: data.state,
             cep: data.cep.replace(/\D/g, ''),
             country: data.country,
-          },
-          location: currentVenueLocation,
+        },
+        location: currentVenueLocation, // Location also updatable with address
+      };
+
+      // Data that is only set if the profile isn't locked (i.e., first time setup)
+      if (!initialQuestionnaireCompletedState) {
+        dataToUpdate = {
+          ...dataToUpdate,
           averageVenueRating: 0,
           venueRatingCount: 0,
           questionnaireCompleted: true, // Mark as completed
           questionnaireCompletedAt: serverTimestamp(), // Timestamp for first completion
         };
       } else {
-        // If profile is locked, but we allow address editing, update address here.
-        // For now, assuming address is locked after initial setup.
-        // If address becomes editable later, this logic needs to adjust.
-        // For example, if we add a specific "edit address" flow.
-        dataToUpdate.address = { // Example if address could be edited by a partner
-            street: data.street,
-            number: data.number,
-            city: data.city,
-            state: data.state,
-            cep: data.cep.replace(/\D/g, ''),
-            country: data.country,
-        };
-        dataToUpdate.location = currentVenueLocation;
+        // If profile was already completed, we just update the fields above.
+        // Potentially add `updatedAt: serverTimestamp()` here if needed for edits.
+        dataToUpdate.updatedAt = serverTimestamp();
       }
-
 
       ['phone', 'instagramUrl', 'facebookUrl', 'youtubeUrl', 'whatsappPhone'].forEach(key => {
         if (dataToUpdate[key] === '') {
@@ -257,7 +245,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         }
       });
 
-      await updateDoc(userDocRef, dataToUpdate, { merge: true }); // Use merge:true to avoid overwriting existing fields unintentionally
+      await updateDoc(userDocRef, dataToUpdate, { merge: true });
 
       toast({
         title: "Informações do Local Salvas!",
@@ -265,9 +253,15 @@ const PartnerQuestionnairePage: NextPage = () => {
         variant: "default",
       });
 
-      if (!isProfileLocked) { // If it was the first completion
-        setIsProfileLocked(true);
-        setInitialQuestionnaireCompletedState(true);
+      if (!initialQuestionnaireCompletedState) { // If it was the first completion
+        setIsProfileLocked(true); // Visually lock parts of the UI if desired for subsequent edits
+        setInitialQuestionnaireCompletedState(true); // Update state to reflect completion
+        toast({
+          title: "Bem-vindo ao Fervo App, Parceiro!",
+          description: "Seu local agora está no mapa! Explore funcionalidades como criação de eventos, QR codes para check-in, análise de feedback com IA e muito mais. Você tem 15 dias de acesso gratuito para testar tudo!",
+          duration: 10000,
+          variant: "default"
+        });
         router.push('/partner/dashboard');
       }
     } catch (error) {
@@ -524,3 +518,4 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
+
