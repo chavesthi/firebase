@@ -103,7 +103,7 @@ const UserProfilePage: NextPage = () => {
               preferredVenueTypes: userData.preferredVenueTypes || [],
               preferredMusicStyles: userData.preferredMusicStyles || [],
             });
-            setPhotoURL(userData.photoURL || null);
+            setPhotoURL(userData.photoURL || user.photoURL || null);
           } else {
             reset({ 
               name: user.displayName || '',
@@ -111,7 +111,7 @@ const UserProfilePage: NextPage = () => {
               preferredVenueTypes: [],
               preferredMusicStyles: [],
             });
-            setPhotoURL(null);
+            setPhotoURL(user.photoURL || null);
             toast({ title: "Perfil Incompleto", description: "Alguns dados não foram carregados. Por favor, complete e salve seu perfil.", variant: "default" });
           }
         } catch (error) {
@@ -140,17 +140,33 @@ const UserProfilePage: NextPage = () => {
 
   const handleUploadAndSave = async (data: UserProfileFormInputs) => {
     if (!currentUser) return;
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    let newPhotoURL = photoURL;
+    
+    let newPhotoURL = photoURL; // Keep current photoURL if no new image is selected
 
     if (imageFile) {
+      setIsUploading(true);
+      setUploadProgress(0);
       const imagePath = `profilePictures/${currentUser.uid}/${imageFile.name}`;
       const imageStorageRef = storageRef(storage, imagePath);
       const uploadTask = uploadBytesResumable(imageStorageRef, imageFile);
 
       try {
+        // Delete old profile picture if it exists and is different from the new one
+        if (photoURL && photoURL.startsWith("https://firebasestorage.googleapis.com/")) {
+            const oldImageRefTry = storageRef(storage, photoURL);
+             // Check if old image path is different from new image path to avoid deleting the just-uploaded image if names are same.
+            if (oldImageRefTry.fullPath !== imageStorageRef.fullPath) {
+                try {
+                    await deleteObject(oldImageRefTry);
+                } catch (deleteError: any) {
+                    // Log if deletion failed but don't block upload of new one
+                    if (deleteError.code !== 'storage/object-not-found') {
+                        console.warn("Could not delete old profile picture from storage:", deleteError);
+                    }
+                }
+            }
+        }
+        
         await new Promise<void>((resolve, reject) => {
           uploadTask.on('state_changed',
             (snapshot) => {
@@ -164,7 +180,7 @@ const UserProfilePage: NextPage = () => {
             },
             async () => {
               newPhotoURL = await getDownloadURL(uploadTask.snapshot.ref);
-              setPhotoURL(newPhotoURL); // Update state for immediate display if submission is separate
+              setPhotoURL(newPhotoURL); // Update state for immediate display
               resolve();
             }
           );
@@ -172,13 +188,14 @@ const UserProfilePage: NextPage = () => {
       } catch (error) {
         setIsUploading(false);
         return; // Prevent form submission if upload fails
+      } finally {
+        setIsUploading(false);
       }
     }
 
     // Proceed to save all data (including newPhotoURL if image was uploaded)
     await onSubmit({ ...data, photoURL: newPhotoURL });
-    setIsUploading(false);
-    setImageFile(null); // Clear selected file
+    setImageFile(null); // Clear selected file after successful save
   };
 
   const onSubmit: SubmitHandler<UserProfileFormInputs & { photoURL?: string | null }> = async (data) => {
@@ -199,7 +216,7 @@ const UserProfilePage: NextPage = () => {
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
         questionnaireCompleted: !!data.age, 
-        photoURL: data.photoURL !== undefined ? data.photoURL : photoURL, // Use passed photoURL or existing state
+        photoURL: data.photoURL, // Directly use the photoURL passed from handleUploadAndSave
       });
 
       toast({
@@ -233,19 +250,21 @@ const UserProfilePage: NextPage = () => {
       await reauthenticateWithCredential(currentUser, credential);
 
       const userDocRef = doc(firestore, "users", currentUser.uid);
-      await deleteFirestoreDoc(userDocRef); 
       
       // Delete profile picture from storage if it exists
-      if (photoURL && photoURL.includes('firebasestorage.googleapis.com')) {
+      if (photoURL && photoURL.startsWith("https://firebasestorage.googleapis.com/")) {
         try {
-          const oldImageRef = storageRef(storage, photoURL);
-          await deleteObject(oldImageRef);
-        } catch (storageError) {
-          console.warn("Could not delete old profile picture from storage:", storageError);
-          // Non-critical, so don't block account deletion
+          const imageToDeleteRef = storageRef(storage, photoURL);
+          await deleteObject(imageToDeleteRef);
+        } catch (storageError: any) {
+          if (storageError.code !== 'storage/object-not-found') {
+            console.warn("Could not delete profile picture from storage during account deletion:", storageError);
+            // Non-critical, so don't block account deletion
+          }
         }
       }
-
+      
+      await deleteFirestoreDoc(userDocRef); 
       await deleteUser(currentUser);
 
       toast({ title: "Conta Excluída", description: "Sua conta e dados principais foram excluídos.", variant: "default", duration: 7000 });
@@ -294,7 +313,7 @@ const UserProfilePage: NextPage = () => {
                   <UserCircle className="w-full h-full text-primary/50" data-ai-hint="avatar placeholder" />
                 )}
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isSubmitting || isDeleting}>
                 <UploadCloud className="w-4 h-4 mr-2" /> {photoURL ? "Alterar Foto" : "Enviar Foto"}
               </Button>
               <input
@@ -431,7 +450,7 @@ const UserProfilePage: NextPage = () => {
 
             <CardFooter className="px-0 pt-4 pb-0">
                 <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base" disabled={isSubmitting || isUploading || isDeleting}>
-                {isSubmitting || isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>}
+                {isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando Imagem...</> : (isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-2" /> Salvar Alterações</>)}
                 </Button>
             </CardFooter>
 
@@ -441,7 +460,13 @@ const UserProfilePage: NextPage = () => {
                 <p className="text-sm text-muted-foreground">
                     Esta ação é permanente e não pode ser desfeita. Todos os seus dados serão removidos.
                 </p>
-                <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialog open={showDeleteDialog} onOpenChange={(open) => {
+                    if (!open) {
+                        setDeletePassword('');
+                        setShowPasswordInput(false);
+                    }
+                    setShowDeleteDialog(open);
+                }}>
                     <AlertDialogTrigger asChild>
                         <Button variant="destructive" className="w-full sm:w-auto" disabled={isDeleting || isSubmitting || isUploading}>
                             <Trash2 className="w-4 h-4 mr-2" /> Excluir Minha Conta
@@ -504,3 +529,4 @@ const UserProfilePage: NextPage = () => {
 };
 
 export default UserProfilePage;
+
