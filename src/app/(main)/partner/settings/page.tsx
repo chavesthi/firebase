@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore'; // Added orderBy
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore';
 import Image from 'next/image';
 
 
@@ -199,16 +199,15 @@ export default function PartnerSettingsPage() {
                     window.location.assign(data.url);
                 } else if (data?.error) {
                     unsubscribe(); 
-                    console.error("Stripe Checkout Session Error:", data.error);
-                    toast({ title: "Erro ao Iniciar Checkout", description: data.error.message || "Tente novamente.", variant: "destructive" });
+                    console.error("Stripe Checkout Session Error (full object):", data.error);
+                    const errorMessage = typeof data.error === 'object' && data.error.message 
+                                         ? data.error.message 
+                                         : "Ocorreu um erro desconhecido ao criar a sessão de checkout.";
+                    toast({ title: "Erro ao Iniciar Checkout", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
                 }
             },
             (error) => {
-                // It's important to call unsubscribe in the error callback of onSnapshot as well
-                // if (typeof unsubscribe === 'function') unsubscribe(); // Check if unsubscribe is a function before calling
-                // For this specific error, the listener itself might have failed to attach,
-                // but it's good practice to try to unsubscribe.
                 console.error("Error listening to checkout session:", error);
                 toast({ title: "Erro no Checkout", description: "Ocorreu um problema ao iniciar o pagamento.", variant: "destructive" });
                 setIsSubmittingCheckout(false);
@@ -239,14 +238,15 @@ export default function PartnerSettingsPage() {
                     window.location.assign(data.url);
                 } else if (data?.error) {
                     unsubscribe();
-                    console.error("Stripe Portal Session Error:", data.error);
-                    toast({ title: "Erro ao Abrir Portal", description: data.error.message || "Tente novamente.", variant: "destructive" });
+                    console.error("Stripe Portal Session Error (full object):", data.error);
+                    const errorMessage = typeof data.error === 'object' && data.error.message 
+                                        ? data.error.message 
+                                        : "Ocorreu um erro desconhecido ao abrir o portal.";
+                    toast({ title: "Erro ao Abrir Portal", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
                 }
             },
             (error) => {
-                // Similar to above, attempt to unsubscribe in error case
-                // if (typeof unsubscribe === 'function') unsubscribe();
                 console.error("Error listening to portal session:", error);
                 toast({ title: "Erro no Portal", description: "Ocorreu um problema ao abrir o portal de gerenciamento.", variant: "destructive" });
                 setIsSubmittingCheckout(false);
@@ -655,7 +655,7 @@ export default function PartnerSettingsPage() {
                         disabled={isSubmittingCheckout}
                     >
                          {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                        Assinar Plano Fervo (R$2,00/mês)
+                        Assinar Plano Fervo (R${(2).toFixed(2).replace('.',',')}/mês)
                     </Button>
                 )}
                  <p className="text-xs text-center text-muted-foreground mt-2">
@@ -664,7 +664,7 @@ export default function PartnerSettingsPage() {
                 <div className="pt-4">
                   <h4 className="text-md font-medium text-primary mb-2">Outras Formas de Pagamento</h4>
                   <p className="text-xs text-muted-foreground mb-3">Utilize o PagBank para assinar o plano Fervo Parceiro.</p>
-                  {/* PagBank Button Form */}
+                  {/* <!-- INICIO FORMULARIO BOTAO PAGBANK: NAO EDITE OS COMANDOS DAS LINHAS ABAIXO --> */}
                   <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full mt-2">
                       <input type="hidden" name="code" value={PAGBANK_PRE_APPROVAL_CODE} />
                       <input type="hidden" name="iot" value="button" />
@@ -675,6 +675,7 @@ export default function PartnerSettingsPage() {
                                  className="mx-auto" /> 
                       </Button>
                   </form>
+                 {/* <!-- FINAL FORMULARIO BOTAO PAGBANK --> */}
                 </div>
             </div>
 
