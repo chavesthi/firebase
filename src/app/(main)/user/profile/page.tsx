@@ -146,20 +146,19 @@ const UserProfilePage: NextPage = () => {
     if (imageFile) {
       setIsUploading(true);
       setUploadProgress(0);
-      const imagePath = `profilePictures/${currentUser.uid}/${imageFile.name}`;
+      const imagePath = `fotosperfilusuario/${currentUser.uid}/${imageFile.name}`;
       const imageStorageRef = storageRef(storage, imagePath);
       const uploadTask = uploadBytesResumable(imageStorageRef, imageFile);
 
       try {
-        // Delete old profile picture if it exists and is different from the new one
-        if (photoURL && photoURL.startsWith("https://firebasestorage.googleapis.com/")) {
+        // Delete old profile picture from storage if it exists and is a Firebase Storage URL
+        if (photoURL && photoURL.includes("firebasestorage.googleapis.com")) {
             const oldImageRefTry = storageRef(storage, photoURL);
              // Check if old image path is different from new image path to avoid deleting the just-uploaded image if names are same.
             if (oldImageRefTry.fullPath !== imageStorageRef.fullPath) {
                 try {
                     await deleteObject(oldImageRefTry);
                 } catch (deleteError: any) {
-                    // Log if deletion failed but don't block upload of new one
                     if (deleteError.code !== 'storage/object-not-found') {
                         console.warn("Could not delete old profile picture from storage:", deleteError);
                     }
@@ -180,14 +179,14 @@ const UserProfilePage: NextPage = () => {
             },
             async () => {
               newPhotoURL = await getDownloadURL(uploadTask.snapshot.ref);
-              setPhotoURL(newPhotoURL); // Update state for immediate display
+              setPhotoURL(newPhotoURL); 
               resolve();
             }
           );
         });
       } catch (error) {
         setIsUploading(false);
-        return; // Prevent form submission if upload fails
+        return; 
       } finally {
         setIsUploading(false);
       }
@@ -195,7 +194,7 @@ const UserProfilePage: NextPage = () => {
 
     // Proceed to save all data (including newPhotoURL if image was uploaded)
     await onSubmit({ ...data, photoURL: newPhotoURL });
-    setImageFile(null); // Clear selected file after successful save
+    setImageFile(null); 
   };
 
   const onSubmit: SubmitHandler<UserProfileFormInputs & { photoURL?: string | null }> = async (data) => {
@@ -216,7 +215,7 @@ const UserProfilePage: NextPage = () => {
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
         questionnaireCompleted: !!data.age, 
-        photoURL: data.photoURL, // Directly use the photoURL passed from handleUploadAndSave
+        photoURL: data.photoURL, 
       });
 
       toast({
@@ -252,14 +251,13 @@ const UserProfilePage: NextPage = () => {
       const userDocRef = doc(firestore, "users", currentUser.uid);
       
       // Delete profile picture from storage if it exists
-      if (photoURL && photoURL.startsWith("https://firebasestorage.googleapis.com/")) {
+      if (photoURL && photoURL.includes("firebasestorage.googleapis.com")) {
         try {
           const imageToDeleteRef = storageRef(storage, photoURL);
           await deleteObject(imageToDeleteRef);
         } catch (storageError: any) {
           if (storageError.code !== 'storage/object-not-found') {
             console.warn("Could not delete profile picture from storage during account deletion:", storageError);
-            // Non-critical, so don't block account deletion
           }
         }
       }
