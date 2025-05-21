@@ -1,24 +1,80 @@
 
 'use client';
 
-// Removed: import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LoginForm } from '@/components/auth/login-form';
 import { Logo } from '@/components/shared/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-// Removed: import { Button } from '@/components/ui/button';
-// Removed: import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 
 export default function LoginPage() {
-  // All audio-related state, refs, and functions have been removed.
-  // The useEffect hook for audio playback has been removed.
-  // The misplaced Music Controls div has been removed.
-  // The <audio> tag has been removed.
-  // The onLoginSuccess prop from <LoginForm /> has been removed.
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const playLoginSound = () => {
+    if (audioRef.current) {
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      audioRef.current.muted = isMuted; // Apply muted state before playing
+      audioRef.current.currentTime = 0; // Start from beginning
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+        timeoutRef.current = setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0; // Reset for next play
+            setIsPlaying(false);
+          }
+        }, 12000); // Play for 12 seconds
+      }).catch(error => console.error("Error playing login sound:", error));
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        if (timeoutRef.current) { // If manually paused, clear the auto-stop timeout
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+      } else {
+        // When manually played, don't enforce the 12s limit
+        audioRef.current.play().then(() => setIsPlaying(true)).catch(error => console.error("Error playing audio:", error));
+      }
+    }
+  };
+
+  const toggleMute = () => {
+    if (audioRef.current) {
+      const newMutedState = !isMuted;
+      audioRef.current.muted = newMutedState;
+      setIsMuted(newMutedState);
+    }
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      // Optionally stop audio when navigating away from login page
+      // if (audioRef.current) {
+      //   audioRef.current.pause();
+      // }
+    };
+  }, []);
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background relative">
-      {/* Audio Element has been removed */}
-      {/* Misplaced Music Controls div has been removed */}
+      <audio ref={audioRef} src="/audio/Name The Time And Place - Telecasted.mp3" preload="auto" loop={false} />
 
       <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <Logo />
@@ -33,10 +89,23 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <LoginForm /> {/* onLoginSuccess prop related to audio has been removed */}
+            <LoginForm onLoginSuccess={playLoginSound} />
           </CardContent>
         </Card>
       </div>
+      
+      {/* Music Controls */}
+      <div className="fixed bottom-4 right-4 flex items-center gap-2 p-2 bg-card/70 backdrop-blur-sm rounded-lg shadow-md border border-border">
+        <Button onClick={togglePlayPause} variant="ghost" size="icon" className="text-primary hover:bg-primary/10 w-8 h-8 sm:w-10 sm:h-10">
+          {isPlaying ? <Pause className="w-4 h-4 sm:w-5 sm:h-5" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
+          <span className="sr-only">{isPlaying ? "Pausar música" : "Tocar música"}</span>
+        </Button>
+        <Button onClick={toggleMute} variant="ghost" size="icon" className="text-primary hover:bg-primary/10 w-8 h-8 sm:w-10 sm:h-10">
+          {isMuted ? <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" /> : <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />}
+          <span className="sr-only">{isMuted ? "Ativar som" : "Silenciar som"}</span>
+        </Button>
+      </div>
+
        <style jsx global>{`
         .shadow-2xl {
           box-shadow: 0 0 15px 5px var(--card-glow-primary), 0 0 30px 10px hsla(var(--primary), 0.3), 0 0 15px 5px var(--card-glow-secondary), 0 0 30px 10px hsla(var(--secondary), 0.3);

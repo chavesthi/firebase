@@ -17,7 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; // Added googleAuthProvider
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; // Added signInWithPopup
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // Added serverTimestamp
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore'; // Added serverTimestamp
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
@@ -37,6 +37,10 @@ const signupSchema = z.object({
 type LoginFormInputs = z.infer<typeof loginSchema>;
 type SignupFormInputs = z.infer<typeof signupSchema>;
 
+interface LoginFormProps {
+  onLoginSuccess?: () => void;
+}
+
 // Simple Google Icon SVG
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 48 48" width="20" height="20" {...props}>
@@ -49,7 +53,7 @@ const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 
-export function LoginForm() {
+export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -70,29 +74,34 @@ export function LoginForm() {
   const handleSuccessfulAuth = async (userCredential: UserCredential, role: UserRole, isGoogleSignIn: boolean = false, googleName?: string) => {
     const user = userCredential.user;
     const userDocRef = doc(firestore, "users", user.uid);
-    const userDoc = await getDoc(userDocRef);
+    const userDocSnap = await getDoc(userDocRef);
 
     let userNameForGreeting: string;
     let venueNameForGreeting: string | undefined;
     let questionnaireCompletedForRedirect: boolean = false;
     let userRoleInDbForRedirect: UserRole = role;
 
-    if (!userDoc.exists()) {
+    if (onLoginSuccess) {
+      onLoginSuccess();
+    }
+
+    if (!userDocSnap.exists()) {
       // New user
       userNameForGreeting = isGoogleSignIn ? (googleName || user.displayName || (role === UserRole.USER ? "Usuário" : "Parceiro")) : signupMethods.getValues("name");
       await setDoc(userDocRef, {
         uid: user.uid,
-        name: userNameForGreeting, // For users, this is 'name'. For partners, this can be contact name.
-        // venueName will be set in partner questionnaire
+        name: userNameForGreeting,
         email: user.email,
         role: role,
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
-        venueCoins: {}, // Initialize venueCoins map
+        trialExpiredNotified: false, 
+        venueCoins: {}, 
         favoriteVenueIds: [],
         favoriteVenueNotificationSettings: {},
         notifications: [],
         lastNotificationCheckTimestamp: null,
+        photoURL: user.photoURL || null, // Add photoURL from Google or null
       });
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
@@ -102,9 +111,9 @@ export function LoginForm() {
       router.push(role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire');
     } else {
       // Existing user
-      const userData = userDoc.data();
+      const userData = userDocSnap.data();
       userNameForGreeting = userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro');
-      venueNameForGreeting = userData.venueName || (role === UserRole.PARTNER ? userNameForGreeting : undefined); // Partner's venueName
+      venueNameForGreeting = userData.venueName || (role === UserRole.PARTNER ? userNameForGreeting : undefined);
       userRoleInDbForRedirect = userData.role || UserRole.USER;
       questionnaireCompletedForRedirect = userData.questionnaireCompleted || false;
 
@@ -117,39 +126,38 @@ export function LoginForm() {
         await auth.signOut();
         return;
       }
-      
-      if (questionnaireCompletedForRedirect) {
-        const now = new Date();
-        const hour = now.getHours();
-        let greetingPrefix = "";
 
-        if (hour >= 0 && hour < 5) { 
-          greetingPrefix = "Boa Madrugada";
-        } else if (hour >= 5 && hour < 12) { 
-          greetingPrefix = "Bom Dia";
-        } else if (hour >= 12 && hour < 18) { 
-          greetingPrefix = "Boa Tarde";
-        } else { 
-          greetingPrefix = "Boa Noite";
-        }
+      // Partner trial check
+      if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt && userData.trialExpiredNotified !== true) {
         
-        let greetingTitle = "";
-        let greetingDescription = "";
+        const subscriptionsRef = collection(firestore, `customers/${user.uid}/subscriptions`);
+        const q = query(subscriptionsRef, where('status', 'in', ['trialing', 'active']));
+        const subscriptionSnap = await getDocs(q);
 
-        if (userRoleInDbForRedirect === UserRole.USER) {
-            greetingTitle = `${greetingPrefix}, ${userNameForGreeting}!`;
-            greetingDescription = "Onde vamos hoje?";
-        } else if (userRoleInDbForRedirect === UserRole.PARTNER) {
-            greetingTitle = `${greetingPrefix}, ${venueNameForGreeting || userNameForGreeting}!`;
-            greetingDescription = "Qual Evento Vai Rolar Hoje?";
+        if (subscriptionSnap.empty) { 
+            const createdAtDate = (userData.createdAt as Timestamp).toDate();
+            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days
+            const now = new Date();
+
+            if (now > trialEndDate) {
+            toast({
+                title: "Período de Teste Expirado",
+                description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
+                duration: 10000, 
+                action: (
+                <Button variant="outline" size="sm" onClick={() => router.push('/partner/settings')}>
+                    Assinar Agora
+                </Button>
+                ),
+            });
+            await updateDoc(userDocRef, { trialExpiredNotified: true });
+            }
         }
+      }
 
-        toast({
-          title: greetingTitle,
-          description: greetingDescription,
-          variant: "default",
-          duration: 3000, 
-        });
+
+      if (questionnaireCompletedForRedirect) {
+        // The greeting toast from layout.tsx will handle this for non-trial-expired partners.
       } else {
          toast({
             title: `Bem-vindo(a) de volta, ${userNameForGreeting}!`,
@@ -157,7 +165,6 @@ export function LoginForm() {
             variant: "default",
          });
       }
-
 
       if (userRoleInDbForRedirect === UserRole.USER) {
         router.push(questionnaireCompletedForRedirect ? '/map' : '/questionnaire');
@@ -443,4 +450,3 @@ export function LoginForm() {
     </Tabs>
   );
 }
-
