@@ -228,7 +228,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       }
       
       const croppedImageFile = blobToFile(blob, editorFile.name);
-      const imagePath = `fotosperfilparceiro/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`;
+      const imagePath = `fotoperfilparceiros/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`; // Updated path
       const imageStorageRef = storageRef(storage, imagePath);
       const uploadTask = uploadBytesResumable(imageStorageRef, croppedImageFile);
 
@@ -313,6 +313,12 @@ const PartnerQuestionnairePage: NextPage = () => {
           questionnaireCompleted: true,
           questionnaireCompletedAt: serverTimestamp(),
         };
+         toast({
+          title: "Bem-vindo ao Fervo App, Parceiro!",
+          description: "Seu local agora está no mapa! Explore funcionalidades como criação de eventos, QR codes para check-in, análise de feedback com IA e muito mais. Você tem 15 dias de acesso gratuito para testar tudo!",
+          duration: 10000,
+          variant: "default"
+        });
       } else {
         dataToUpdate.updatedAt = serverTimestamp();
       }
@@ -335,12 +341,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       if (!initialQuestionnaireCompletedState) {
         setIsProfileLocked(true);
         setInitialQuestionnaireCompletedState(true);
-        toast({
-          title: "Bem-vindo ao Fervo App, Parceiro!",
-          description: "Seu local agora está no mapa! Explore funcionalidades como criação de eventos, QR codes para check-in, análise de feedback com IA e muito mais. Você tem 15 dias de acesso gratuito para testar tudo!",
-          duration: 10000,
-          variant: "default"
-        });
+       
         router.push('/partner/dashboard');
       }
     } catch (error) {
