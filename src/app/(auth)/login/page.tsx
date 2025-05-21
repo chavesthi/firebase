@@ -65,16 +65,12 @@ export default function LoginPage() {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-      // Optionally stop audio when navigating away from login page
-      // if (audioRef.current) {
-      //   audioRef.current.pause();
-      // }
     };
   }, []);
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background relative">
-      <audio ref={audioRef} src="/audio/Name The Time And Place - Telecasted.mp3" preload="auto" loop={false} />
+      <audio ref={audioRef} src="/audio/Name The Time And Place - Telecasted.mp3" preload="auto" loop={false} autoPlay />
 
       <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <Logo />
