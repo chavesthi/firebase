@@ -1,7 +1,7 @@
 
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAnalytics, type Analytics } from "firebase/analytics"; 
+import { getAnalytics, type Analytics } from "firebase/analytics";
 import { getAuth, type Auth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
@@ -14,7 +14,7 @@ const firebaseConfig = {
   authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
   databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
   projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected to .appspot.com as per previous context
+  storageBucket: "fervoappusuarioeparceiro.firebasestorage.app", // Corrected to .firebasestorage.app as per your input
   messagingSenderId: "762698655248",
   appId: "1:762698655248:web:1a4a995fccd6bcf6cb0c95",
   measurementId: "G-3QD4RQHSMQ"
@@ -37,15 +37,15 @@ if (!getApps().length) {
 
 auth = getAuth(app);
 firestore = getFirestore(app);
-storage = getStorage(app);
-functions = getFunctions(app);
-googleAuthProvider = new GoogleAuthProvider();
+storage = getStorage(app); // Initialize Firebase Storage
+functions = getFunctions(app); // Initialize Firebase Functions
+googleAuthProvider = new GoogleAuthProvider(); // Initialize Google Auth Provider
 
 if (typeof window !== 'undefined') {
   // Initialize Analytics only on the client side
   try {
     if (firebaseConfig.measurementId) {
-      analytics = getAnalytics(app); 
+      analytics = getAnalytics(app);
     } else {
       console.warn("Firebase measurementId not found in config, Analytics not initialized.");
     }
