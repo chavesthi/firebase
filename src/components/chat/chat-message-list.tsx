@@ -23,39 +23,43 @@ interface ChatMessageListProps {
   chatRoomId: string;
   currentUserId: string;
   isChatSoundMuted: boolean;
+  chatClearedTimestamp: number | null;
 }
 
-export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }: ChatMessageListProps) {
+export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, chatClearedTimestamp }: ChatMessageListProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const lastPlayedMessageIdRef = useRef<string | null>(null);
-  const initialLoadRef = useRef(true); // To prevent sound on initial load of existing messages
+  const initialLoadRef = useRef(true); 
 
   useEffect(() => {
     setIsLoading(true);
     const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
-    initialLoadRef.current = true; // Reset for new chat room or re-mount
+    initialLoadRef.current = true; 
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const fetchedMessages: ChatMessage[] = [];
+      let fetchedMessages: ChatMessage[] = [];
       querySnapshot.forEach((doc) => {
         fetchedMessages.push({ id: doc.id, ...doc.data() } as ChatMessage);
       });
+
+      if (chatClearedTimestamp !== null) {
+        fetchedMessages = fetchedMessages.filter(msg => msg.timestamp.toMillis() > chatClearedTimestamp);
+      }
+      
       setMessages(fetchedMessages);
       setIsLoading(false);
 
       if (fetchedMessages.length > 0) {
-        // After initial load, set the last played message ID to the latest one
-        // to prevent playing sound for messages already present.
         if (initialLoadRef.current) {
           lastPlayedMessageIdRef.current = fetchedMessages[fetchedMessages.length - 1].id;
           initialLoadRef.current = false;
         }
       } else {
-        initialLoadRef.current = false; // No messages, so initial load is done
+        initialLoadRef.current = false; 
       }
 
     }, (error) => {
@@ -64,7 +68,7 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }:
     });
 
     return () => unsubscribe();
-  }, [chatRoomId]);
+  }, [chatRoomId, chatClearedTimestamp]); // Add chatClearedTimestamp to dependencies
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -83,7 +87,7 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }:
       lastPlayedMessageIdRef.current = latestMessage.id;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, isChatSoundMuted, currentUserId, isLoading]); // isLoading ensures we don't play sound while initially loading
+  }, [messages, isChatSoundMuted, currentUserId, isLoading]); 
 
 
   if (isLoading) {
@@ -100,7 +104,8 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }:
       <div className="flex flex-col justify-center items-center h-full">
         <MessageSquare className="w-16 h-16 text-muted-foreground/50 mb-4" />
         <p className="text-muted-foreground text-center">
-          Nenhuma mensagem ainda.<br/>Seja o primeiro a iniciar a conversa!
+          {chatClearedTimestamp ? "Chat limpo." : "Nenhuma mensagem ainda."}<br/>
+          {chatClearedTimestamp ? "Novas mensagens aparecerão aqui." : "Seja o primeiro a iniciar a conversa!"}
         </p>
       </div>
     );
@@ -147,3 +152,4 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }:
     </div>
   );
 }
+

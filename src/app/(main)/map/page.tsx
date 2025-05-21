@@ -5,7 +5,7 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback, type ReactElement, useRef } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX, AlertCircle } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX, AlertCircle, Trash2 } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -325,6 +325,8 @@ const MapContentAndLogic = () => {
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
+  const [chatClearedTimestamp, setChatClearedTimestamp] = useState<number | null>(null);
+
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
   const barAudioRef = useRef<HTMLAudioElement>(null);
   const adultEntertainmentAudioRef = useRef<HTMLAudioElement>(null);
@@ -437,8 +439,8 @@ const MapContentAndLogic = () => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          setUserLocation(loc); // Update map center
-          setActualUserLocation(loc); // Update user's marker position
+          setUserLocation(loc); 
+          setActualUserLocation(loc); 
         },
         (error) => {
           console.error("Error getting user location:", error);
@@ -579,6 +581,7 @@ const MapContentAndLogic = () => {
     return () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVenue]);
 
 
@@ -1510,6 +1513,15 @@ const MapContentAndLogic = () => {
                   >
                       {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
                   </Button>
+                  <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setChatClearedTimestamp(Date.now())}
+                      className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
+                      title="Limpar Chat (apenas visualização)"
+                  >
+                      <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
                       <XCircleIcon className="h-5 w-5"/>
                   </Button>
@@ -1537,6 +1549,7 @@ const MapContentAndLogic = () => {
                             chatRoomId={chatRoomId}
                             currentUserId={currentUser.uid}
                             isChatSoundMuted={isChatSoundMuted}
+                            chatClearedTimestamp={chatClearedTimestamp}
                         />
                     </CardContent>
                     <div className="p-3 sm:p-4 border-t border-border bg-card">
@@ -1580,3 +1593,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
