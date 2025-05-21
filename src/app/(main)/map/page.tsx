@@ -327,6 +327,7 @@ const MapContentAndLogic = () => {
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
   const barAudioRef = useRef<HTMLAudioElement>(null);
+  const adultEntertainmentAudioRef = useRef<HTMLAudioElement>(null);
 
 
   const mapsApi = useMapsLibrary('maps');
@@ -436,8 +437,8 @@ const MapContentAndLogic = () => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          setUserLocation(loc);
-          setActualUserLocation(loc);
+          setUserLocation(loc); // Update map center
+          setActualUserLocation(loc); // Update user's marker position
         },
         (error) => {
           console.error("Error getting user location:", error);
@@ -594,36 +595,32 @@ const MapContentAndLogic = () => {
   }, []);
 
   useEffect(() => {
-    const nightclubAudio = nightclubAudioRef.current;
-    const barAudio = barAudioRef.current;
-
-    if (nightclubAudio) {
-      if (activeVenueTypeFilters.includes(VenueType.NIGHTCLUB)) {
-        nightclubAudio.play().catch(error => console.warn("Error playing nightclub music:", error));
-      } else {
-        nightclubAudio.pause();
-        nightclubAudio.currentTime = 0;
+    const playAudio = (audioRef: React.RefObject<HTMLAudioElement>) => {
+      if (audioRef.current) {
+        audioRef.current.play().catch(error => console.warn("Error playing audio:", error));
       }
-    }
-
-    if (barAudio) {
-      if (activeVenueTypeFilters.includes(VenueType.BAR)) {
-        barAudio.play().catch(error => console.warn("Error playing bar music:", error));
-      } else {
-        barAudio.pause();
-        barAudio.currentTime = 0;
+    };
+    const pauseAudio = (audioRef: React.RefObject<HTMLAudioElement>) => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       }
-    }
-    // Cleanup: pause music if component unmounts or filter changes
+    };
+
+    if (activeVenueTypeFilters.includes(VenueType.NIGHTCLUB)) playAudio(nightclubAudioRef);
+    else pauseAudio(nightclubAudioRef);
+
+    if (activeVenueTypeFilters.includes(VenueType.BAR)) playAudio(barAudioRef);
+    else pauseAudio(barAudioRef);
+
+    if (activeVenueTypeFilters.includes(VenueType.ADULT_ENTERTAINMENT)) playAudio(adultEntertainmentAudioRef);
+    else pauseAudio(adultEntertainmentAudioRef);
+
+    // Cleanup: pause all music if component unmounts or filters change drastically
     return () => {
-      if (nightclubAudio) {
-        nightclubAudio.pause();
-        nightclubAudio.currentTime = 0;
-      }
-      if (barAudio) {
-        barAudio.pause();
-        barAudio.currentTime = 0;
-      }
+      pauseAudio(nightclubAudioRef);
+      pauseAudio(barAudioRef);
+      pauseAudio(adultEntertainmentAudioRef);
     };
   }, [activeVenueTypeFilters]);
 
@@ -986,6 +983,7 @@ const MapContentAndLogic = () => {
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
       <audio ref={nightclubAudioRef} src="/audio/night-club-music-196359.mp3" loop preload="auto" />
       <audio ref={barAudioRef} src="/audio/general-chatter-in-bar-14816.mp3" loop preload="auto" />
+      <audio ref={adultEntertainmentAudioRef} src="/audio/Sound Effcet Sexy Sax - Efeitos Sonoros.mp3" loop preload="auto" />
       <Card
         className={cn(
           "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
@@ -1510,7 +1508,7 @@ const MapContentAndLogic = () => {
                       className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary"
                       title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}
                   >
-                      {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:w-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:w-5" />}
+                      {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
                       <XCircleIcon className="h-5 w-5"/>
@@ -1582,4 +1580,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
