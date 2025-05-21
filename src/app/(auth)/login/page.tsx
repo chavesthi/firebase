@@ -59,6 +59,19 @@ export default function LoginPage() {
     }
   };
 
+  // Autoplay attempt effect
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(error => {
+        // Autoplay was prevented, which is common. User interaction will be needed.
+        console.warn("Autoplay prevented:", error);
+        setIsPlaying(false);
+      });
+    }
+  }, []);
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
@@ -70,7 +83,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-background relative">
-      <audio ref={audioRef} src="/audio/Name The Time And Place - Telecasted.mp3" preload="auto" loop={false} autoPlay />
+      <audio ref={audioRef} src="/audio/Name The Time And Place - Telecasted.mp3" preload="auto" loop={false} />
 
       <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <Logo />
@@ -79,7 +92,7 @@ export default function LoginPage() {
            style={{'--card-glow-primary': 'hsl(var(--primary))', '--card-glow-secondary': 'hsl(var(--secondary))'} as React.CSSProperties}>
         <Card className="w-full bg-card/95 backdrop-blur-sm">
           <CardHeader className="text-center px-4 sm:px-6 pt-6 sm:pt-8">
-            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Bem-vindo ao Fervo App!</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary login-title-aura-blink">Bem-vindo ao Fervo App!</CardTitle>
             <CardDescription className="text-muted-foreground text-sm sm:text-base">
               Encontre os melhores fervos ou cadastre seu estabelecimento.
             </CardDescription>
@@ -105,6 +118,17 @@ export default function LoginPage() {
        <style jsx global>{`
         .shadow-2xl {
           box-shadow: 0 0 15px 5px var(--card-glow-primary), 0 0 30px 10px hsla(var(--primary), 0.3), 0 0 15px 5px var(--card-glow-secondary), 0 0 30px 10px hsla(var(--secondary), 0.3);
+        }
+        @keyframes loginTitleAuraBlink {
+          0%, 100% {
+            text-shadow: 0 0 6px hsl(var(--primary)), 0 0 10px hsl(var(--primary));
+          }
+          50% {
+            text-shadow: 0 0 6px hsl(var(--destructive)), 0 0 10px hsl(var(--destructive));
+          }
+        }
+        .login-title-aura-blink {
+          animation: loginTitleAuraBlink 2s infinite ease-in-out;
         }
       `}</style>
     </main>
