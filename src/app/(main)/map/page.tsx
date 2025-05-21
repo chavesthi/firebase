@@ -5,7 +5,7 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback, type ReactElement, useRef } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX, AlertCircle, Trash2 } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX, AlertCircle, Trash2, ExternalLink } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1057,16 +1057,17 @@ const MapContentAndLogic = () => {
         {currentAppUser && currentAppUser.role === UserRole.USER && (
             <Button
                 variant="default"
-                size="icon"
+                size="lg" 
                 className={cn(
-                    "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full h-14 w-14 shadow-xl z-40",
+                    "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
                     "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
                     isChatWidgetOpen ? "animate-none" : "animate-bounce"
                 )}
                 onClick={() => setIsChatWidgetOpen(prev => !prev)}
-                title="Fervo Chat"
+                title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
             >
-                {isChatWidgetOpen ? <XCircleIcon className="h-7 w-7" /> : <MessageSquare className="h-7 w-7" />}
+                {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
+                <span>Fervo Chat</span>
                 <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
             </Button>
         )}
