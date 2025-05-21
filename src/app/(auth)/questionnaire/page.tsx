@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore'; // Added getDoc
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,8 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+
 
 const questionnaireSchema = z.object({
   age: z.coerce
@@ -28,15 +30,23 @@ const questionnaireSchema = z.object({
     .int({ message: 'Idade deve ser um número inteiro.' })
     .positive({ message: 'Idade deve ser um número positivo.' })
     .min(12, { message: 'Você deve ter pelo menos 12 anos.' })
-    .max(120, { message: 'Idade inválida.' })
-    .optional() // Allow undefined to clear errors when input is empty
-    .or(z.literal(undefined)), // Explicitly allow undefined for initial state
+    .max(120, { message: 'Idade inválida.' }),
   preferredVenueTypes: z.array(z.nativeEnum(VenueType))
     .max(4, { message: "Selecione no máximo 4 tipos de local." })
     .optional().default([]),
   preferredMusicStyles: z.array(z.nativeEnum(MusicStyle))
     .max(4, { message: "Selecione no máximo 4 estilos musicais." })
     .optional().default([]),
+  city: z.string().min(2, { message: "Nome da cidade inválido." }).optional().or(z.literal(undefined).or(z.literal(''))),
+  state: z.string().min(2, { message: "Nome do estado inválido." }).optional().or(z.literal(undefined).or(z.literal(''))),
+}).refine(data => {
+  if ((data.city && !data.state) || (!data.city && data.state)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Para usar o chat, Cidade e Estado devem ser preenchidos juntos ou ambos vazios.",
+  path: ["city"], 
 });
 
 type QuestionnaireFormInputs = z.infer<typeof questionnaireSchema>;
@@ -47,49 +57,77 @@ const QuestionnairePage: NextPage = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const { control, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm<QuestionnaireFormInputs>({
+  const { control, handleSubmit, formState: { errors, isSubmitting }, watch, reset } = useForm<QuestionnaireFormInputs>({
     resolver: zodResolver(questionnaireSchema),
     defaultValues: {
       age: undefined,
       preferredVenueTypes: [],
       preferredMusicStyles: [],
+      city: '',
+      state: '',
     },
   });
 
-  const watchedVenueTypes = watch('preferredVenueTypes');
-  const watchedMusicStyles = watch('preferredMusicStyles');
-
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
+        // Check if questionnaire was already completed to avoid overwriting good data with empty form
+        const userDocRef = doc(firestore, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists() && userDocSnap.data().questionnaireCompleted) {
+          const userData = userDocSnap.data();
+          reset({
+            age: userData.age,
+            preferredVenueTypes: userData.preferredVenueTypes || [],
+            preferredMusicStyles: userData.preferredMusicStyles || [],
+            city: userData.address?.city || '',
+            state: userData.address?.state || '',
+          });
+        }
       } else {
         router.push('/login');
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, reset]);
 
   const onSubmit: SubmitHandler<QuestionnaireFormInputs> = async (data) => {
     if (!currentUser) {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
     }
-    if (data.age === undefined) { // Ensure age is provided if schema doesn't make it optional for submission
-        toast({ title: "Erro", description: "Idade é obrigatória.", variant: "destructive" });
+    if (data.age === undefined) {
+        toast({ title: "Erro de Validação", description: "Idade é obrigatória.", variant: "destructive" });
         return;
+    }
+    if ((data.city && !data.state) || (!data.city && data.state)) {
+      toast({ title: "Localização Incompleta", description: "Se for preencher a localização para o chat, tanto Cidade quanto Estado são necessários.", variant: "destructive" });
+      return;
     }
 
 
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
-      await updateDoc(userDocRef, {
+      const updateData: any = {
         age: data.age,
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
-        questionnaireCompleted: true,
-      });
+        questionnaireCompleted: true, // Mark as completed since age is mandatory
+      };
+
+      if (data.city && data.state) {
+        updateData.address = {
+          city: data.city,
+          state: data.state,
+        };
+      } else {
+        // If user clears city/state, ensure address field is removed or nulled
+        updateData.address = null; 
+      }
+
+      await updateDoc(userDocRef, updateData, { merge: true }); // Use merge to avoid overwriting other fields like name
 
       toast({
         title: "Preferências Salvas!",
@@ -111,15 +149,6 @@ const QuestionnairePage: NextPage = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <p className="text-foreground">Carregando...</p>
-      </div>
-    );
-  }
-
-  if (!currentUser) {
-     // Should be handled by the effect, but as a fallback
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-        <p className="text-foreground">Redirecionando para login...</p>
       </div>
     );
   }
@@ -153,10 +182,9 @@ const QuestionnairePage: NextPage = () => {
                       placeholder="Sua idade"
                       name={name}
                       ref={ref}
-                      value={value ?? ''} // Ensures value is never undefined for the input element
+                      value={value ?? ''} 
                       onChange={e => {
                         const val = e.target.value;
-                        // Pass undefined to RHF if empty, otherwise parse to int
                         onChange(val === '' ? undefined : parseInt(val, 10));
                       }}
                       onBlur={onBlur}
@@ -166,6 +194,28 @@ const QuestionnairePage: NextPage = () => {
                 />
                 {errors.age && <p className="mt-1 text-sm text-destructive">{errors.age.message}</p>}
               </div>
+              
+              <Separator className="my-4 border-primary/20" />
+              <h3 className="text-lg font-medium text-primary/90 -mb-3">Localização (para o Chat)</h3>
+              <p className="text-xs text-muted-foreground">Opcional, mas necessário para usar o Fervo Chat da sua região.</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="city" className="text-primary/90">Sua Cidade</Label>
+                    <Controller name="city" control={control} render={({ field }) => <Input id="city" placeholder="Ex: São Paulo" {...field} value={field.value ?? ''} className={errors.city ? 'border-destructive' : ''} />} />
+                    {errors.city && <p className="mt-1 text-sm text-destructive">{errors.city.message}</p>}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="state" className="text-primary/90">Seu Estado (UF)</Label>
+                    <Controller name="state" control={control} render={({ field }) => <Input id="state" placeholder="Ex: SP" {...field} value={field.value ?? ''} className={errors.state ? 'border-destructive' : ''} />} />
+                    {errors.state && <p className="mt-1 text-sm text-destructive">{errors.state.message}</p>}
+                </div>
+              </div>
+               {errors.root?.message && <p className="mt-1 text-sm text-destructive">{errors.root.message}</p>}
+
+
+              <Separator className="my-4 border-primary/20" />
+              <h3 className="text-lg font-medium text-primary/90 -mb-3">Preferências de Fervo</h3>
 
               <div className="space-y-2">
                 <Label className="text-primary/90">Quais locais você mais gosta? (Máx. 4)</Label>
@@ -186,8 +236,8 @@ const QuestionnairePage: NextPage = () => {
                                   if (currentSelection.length < 4) {
                                     field.onChange([...currentSelection, option.value]);
                                   } else {
-                                    toast({ title: "Limite atingido", description: "Você pode selecionar no máximo 4 tipos de local.", variant: "destructive", duration: 3000 });
-                                    return false; // Prevent checking
+                                    toast({ title: "Limite atingido", description: "Máximo 4 tipos de local.", variant: "destructive", duration: 3000 });
+                                    return false; 
                                   }
                                 } else {
                                   field.onChange(currentSelection.filter((value) => value !== option.value));
@@ -225,8 +275,8 @@ const QuestionnairePage: NextPage = () => {
                                 if (currentSelection.length < 4) {
                                   field.onChange([...currentSelection, option.value]);
                                 } else {
-                                  toast({ title: "Limite atingido", description: "Você pode selecionar no máximo 4 estilos musicais.", variant: "destructive", duration: 3000 });
-                                  return false; // Prevent checking
+                                  toast({ title: "Limite atingido", description: "Máximo 4 estilos musicais.", variant: "destructive", duration: 3000 });
+                                  return false; 
                                 }
                               } else {
                                 field.onChange(currentSelection.filter((value) => value !== option.value));
@@ -264,3 +314,5 @@ const QuestionnairePage: NextPage = () => {
 };
 
 export default QuestionnairePage;
+
+      
