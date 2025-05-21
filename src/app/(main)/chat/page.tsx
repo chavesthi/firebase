@@ -106,7 +106,7 @@ const ChatPage = () => {
           <CardHeader>
             <CardTitle className="text-primary">Complete seu Perfil</CardTitle>
             <CardDescription>
-              Para participar do Fervo Chat da sua região ({appUserProfile.address?.city || 'sua cidade'}, {appUserProfile.address?.state || 'seu estado'}), precisamos que você informe sua cidade e estado no seu perfil.
+              Para usar o Fervo Chat, precisamos que você defina sua Cidade e Estado em seu perfil. O chat conecta você com outros fervorosos da região que você cadastrar.
             </CardDescription>
           </CardHeader>
           <CardContent>
