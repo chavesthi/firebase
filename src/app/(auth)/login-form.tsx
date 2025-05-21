@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
 import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; // Added googleAuthProvider
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; // Added signInWithPopup
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore'; // Added serverTimestamp
+import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; 
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; 
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore'; 
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
@@ -37,6 +37,10 @@ const signupSchema = z.object({
 type LoginFormInputs = z.infer<typeof loginSchema>;
 type SignupFormInputs = z.infer<typeof signupSchema>;
 
+interface LoginFormProps {
+  onLoginSuccess?: () => void;
+}
+
 // Simple Google Icon SVG
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 48 48" width="20" height="20" {...props}>
@@ -49,11 +53,11 @@ const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 
-export function LoginForm() {
+export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); // 'login' or 'signup'
+  const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); 
   const router = useRouter();
   const { toast } = useToast();
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
@@ -73,14 +77,17 @@ export function LoginForm() {
     const userDocSnap = await getDoc(userDocRef);
 
     let userNameForGreeting: string;
-    let venueNameForGreeting: string | undefined;
     let questionnaireCompletedForRedirect: boolean = false;
     let userRoleInDbForRedirect: UserRole = role;
+
+    if (onLoginSuccess) {
+      onLoginSuccess();
+    }
 
     if (!userDocSnap.exists()) {
       // New user
       userNameForGreeting = isGoogleSignIn ? (googleName || user.displayName || (role === UserRole.USER ? "Usuário" : "Parceiro")) : signupMethods.getValues("name");
-      await setDoc(userDocRef, {
+      const initialUserData: any = {
         uid: user.uid,
         name: userNameForGreeting,
         email: user.email,
@@ -88,13 +95,19 @@ export function LoginForm() {
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
         trialExpiredNotified: false, 
-        venueCoins: {}, 
-        favoriteVenueIds: [],
-        favoriteVenueNotificationSettings: {},
-        notifications: [],
-        lastNotificationCheckTimestamp: null,
-        photoURL: user.photoURL || null, // Add photoURL from Google or null
-      });
+        photoURL: user.photoURL || null, 
+      };
+      if (role === UserRole.USER) {
+        initialUserData.venueCoins = {};
+        initialUserData.favoriteVenueIds = [];
+        initialUserData.favoriteVenueNotificationSettings = {};
+        initialUserData.notifications = [];
+        initialUserData.lastNotificationCheckTimestamp = null;
+      } else if (role === UserRole.PARTNER) {
+        // Partner specific initial fields if any, photoURL is already covered
+      }
+      await setDoc(userDocRef, initialUserData);
+
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
         description: "Quase lá! Conte-nos um pouco mais sobre você.",
@@ -105,9 +118,14 @@ export function LoginForm() {
       // Existing user
       const userData = userDocSnap.data();
       userNameForGreeting = userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro');
-      venueNameForGreeting = userData.venueName || (role === UserRole.PARTNER ? userNameForGreeting : undefined);
       userRoleInDbForRedirect = userData.role || UserRole.USER;
       questionnaireCompletedForRedirect = userData.questionnaireCompleted || false;
+
+      // Ensure photoURL is updated if user logs in with Google and has a new photo
+      if (isGoogleSignIn && user.photoURL && userData.photoURL !== user.photoURL) {
+        await updateDoc(userDocRef, { photoURL: user.photoURL });
+      }
+
 
       if (role !== userRoleInDbForRedirect) {
         toast({
@@ -119,7 +137,6 @@ export function LoginForm() {
         return;
       }
 
-      // Partner trial check
       if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt && userData.trialExpiredNotified !== true) {
         
         const subscriptionsRef = collection(firestore, `customers/${user.uid}/subscriptions`);
@@ -128,7 +145,7 @@ export function LoginForm() {
 
         if (subscriptionSnap.empty) { 
             const createdAtDate = (userData.createdAt as Timestamp).toDate();
-            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days
+            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); 
             const now = new Date();
 
             if (now > trialEndDate) {
@@ -147,9 +164,8 @@ export function LoginForm() {
         }
       }
 
-
       if (questionnaireCompletedForRedirect) {
-        // The greeting toast from layout.tsx will handle this for non-trial-expired partners.
+        // Greeting toast handled by layout.tsx
       } else {
          toast({
             title: `Bem-vindo(a) de volta, ${userNameForGreeting}!`,

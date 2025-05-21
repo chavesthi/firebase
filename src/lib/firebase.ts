@@ -1,12 +1,11 @@
 
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAnalytics, type Analytics } from "firebase/analytics"; // Ensured getAnalytics and Analytics type are imported
+import { getAnalytics, type Analytics } from "firebase/analytics"; 
 import { getAuth, type Auth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getStorage, type FirebaseStorage } from "firebase/storage"; // Added Firebase Storage
+import { getFunctions, type Functions } from 'firebase/functions'; // Added Firebase Functions
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -15,7 +14,7 @@ const firebaseConfig = {
   authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
   databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
   projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.firebasestorage.app", // Corrected based on previous successful config
+  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected storageBucket name
   messagingSenderId: "762698655248",
   appId: "1:762698655248:web:1a4a995fccd6bcf6cb0c95",
   measurementId: "G-3QD4RQHSMQ"
@@ -25,7 +24,8 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let firestore: Firestore;
-let storage: FirebaseStorage;
+let storage: FirebaseStorage; // Declare storage
+let functions: Functions; // Declare functions
 let analytics: Analytics | null = null;
 let googleAuthProvider: GoogleAuthProvider;
 
@@ -38,14 +38,14 @@ if (!getApps().length) {
 auth = getAuth(app);
 firestore = getFirestore(app);
 storage = getStorage(app); // Initialize Firebase Storage
+functions = getFunctions(app); // Initialize Firebase Functions
 googleAuthProvider = new GoogleAuthProvider();
 
 if (typeof window !== 'undefined') {
   // Initialize Analytics only on the client side
   try {
-    // Check if firebaseConfig has measurementId before initializing analytics
     if (firebaseConfig.measurementId) {
-      analytics = getAnalytics(app); // Initialize analytics
+      analytics = getAnalytics(app); 
     } else {
       console.warn("Firebase measurementId not found in config, Analytics not initialized.");
     }
@@ -54,4 +54,4 @@ if (typeof window !== 'undefined') {
   }
 }
 
-export { app, auth, firestore, storage, analytics, googleAuthProvider }; // Export storage
+export { app, auth, firestore, storage, analytics, googleAuthProvider, functions }; // Export storage and functions

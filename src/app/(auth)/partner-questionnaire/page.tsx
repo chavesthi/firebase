@@ -2,7 +2,7 @@
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react'; // Added useRef
 import { useForm, Controller, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,8 +10,11 @@ import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage"; // Added Firebase Storage
+import Image from 'next/image'; // Added Next Image
+import AvatarEditor from 'react-avatar-editor'; // Added AvatarEditor
 
+import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,14 +23,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/shared/logo';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore } from '@/lib/firebase';
+import { auth, firestore, storage } from '@/lib/firebase'; // Added storage
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS, GOOGLE_MAPS_API_KEY } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { geocodeAddress, type Location } from '@/services/geocoding';
-import { MapPin, Save, ArrowLeft } from 'lucide-react';
+import { MapPin, Save, ArrowLeft, UploadCloud, UserCircle, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'; // Added icons
+import { Progress } from '@/components/ui/progress'; // Added Progress
+import { Slider } from '@/components/ui/slider'; // Added Slider
+import { cn } from '@/lib/utils';
 
 const cepRegex = /^\d{5}-?\d{3}$/;
-// Updated phoneRegex to be more specific for Brazilian format, allowing optional country code
 const phoneRegex = /^(\+?\d{1,3}\s?)?\(?[1-9]{2}\)?\s?9?\d{4,5}-?\d{4}$/;
 
 
@@ -51,9 +56,14 @@ const partnerQuestionnaireSchema = z.object({
   facebookUrl: z.string().url({ message: 'URL do Facebook inválida.' }).optional().or(z.literal('')),
   youtubeUrl: z.string().url({ message: 'URL do YouTube inválida.' }).optional().or(z.literal('')),
   whatsappPhone: z.string().regex(phoneRegex, { message: 'Número do WhatsApp inválido. Formato esperado: (XX) 9XXXX-XXXX ou (XX) XXXX-XXXX.' }).optional().or(z.literal('')),
+  // No photoURL field in schema, as it's handled separately
 });
 
 type PartnerQuestionnaireFormInputs = z.infer<typeof partnerQuestionnaireSchema>;
+
+function blobToFile(blob: Blob, fileName: string): File {
+  return new File([blob], fileName, { type: blob.type, lastModified: Date.now() });
+}
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
   const map = useMap();
@@ -75,8 +85,17 @@ const PartnerQuestionnairePage: NextPage = () => {
   const [isProfileLocked, setIsProfileLocked] = useState(false);
   const [initialQuestionnaireCompletedState, setInitialQuestionnaireCompletedState] = useState(false);
 
+  const [currentPhotoURL, setCurrentPhotoURL] = useState<string | null>(null);
+  const [editorFile, setEditorFile] = useState<File | null>(null);
+  const [editorScale, setEditorScale] = useState(1.2);
+  const [editorRotation, setEditorRotation] = useState(0);
+  const editorRef = useRef<AvatarEditor | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { control, handleSubmit, formState: { errors, isSubmitting }, watch, getValues, setValue, reset } = useForm<PartnerQuestionnaireFormInputs>({
+
+  const { control, handleSubmit, formState: { errors, isSubmitting: isFormSubmitting }, watch, getValues, setValue, reset } = useForm<PartnerQuestionnaireFormInputs>({
     resolver: zodResolver(partnerQuestionnaireSchema),
     defaultValues: {
       venueName: '',
@@ -95,6 +114,7 @@ const PartnerQuestionnairePage: NextPage = () => {
     },
   });
 
+  const watchedVenueName = watch('venueName');
   const addressFields = watch(['street', 'number', 'city', 'state', 'cep', 'country']);
 
   useEffect(() => {
@@ -124,7 +144,8 @@ const PartnerQuestionnairePage: NextPage = () => {
             whatsappPhone: userData.whatsappPhone || '',
           });
           
-          setIsProfileLocked(userData.questionnaireCompleted || false); // Profile is locked if questionnaireCompleted is true
+          setCurrentPhotoURL(userData.photoURL || user.photoURL || null);
+          setIsProfileLocked(userData.questionnaireCompleted || false);
           if (userData.questionnaireCompleted) {
             toast({
               title: "Modo de Edição",
@@ -138,6 +159,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             setVenueLocation(userData.location);
           }
         } else {
+          setCurrentPhotoURL(user.photoURL || null);
           setIsProfileLocked(false);
           setInitialQuestionnaireCompletedState(false);
         }
@@ -149,9 +171,20 @@ const PartnerQuestionnairePage: NextPage = () => {
     return () => unsubscribe();
   }, [router, reset, toast]);
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({ title: "Arquivo Muito Grande", description: "A imagem deve ter no máximo 5MB.", variant: "destructive"});
+        return;
+      }
+      setEditorFile(file);
+      setEditorScale(1.2); 
+      setEditorRotation(0); 
+    }
+  };
+
   const handleGeocode = async () => {
-    // Geocoding is allowed even if profile is locked, for viewing purposes or if address fields become editable later
-    // However, saving the new location would be restricted if profile is locked for address changes.
     const { street, number, city, state: formState, cep, country } = getValues();
     if (!street || !number || !city || !formState || !cep || !country) {
       toast({ title: "Endereço Incompleto", description: "Preencha todos os campos de endereço para localizar.", variant: "destructive" });
@@ -179,9 +212,58 @@ const PartnerQuestionnairePage: NextPage = () => {
     }
 
     let currentVenueLocation = venueLocation;
+    let finalPhotoURL = currentPhotoURL;
 
-    // Attempt geocoding if address fields are filled and no location is set yet, even if profile is "locked" for other fields.
-    // The actual restriction on saving this location would happen based on isProfileLocked *for address data*.
+    // Handle photo upload
+    if (editorFile && editorRef.current) {
+      setIsUploading(true);
+      setUploadProgress(0);
+      const canvas = editorRef.current.getImageScaledToCanvas();
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, editorFile.type, 0.90));
+
+      if (!blob) {
+        toast({ title: "Erro ao Processar Imagem", description: "Não foi possível obter a imagem recortada.", variant: "destructive" });
+        setIsUploading(false);
+        return;
+      }
+      
+      const croppedImageFile = blobToFile(blob, editorFile.name);
+      const imagePath = `fotosperfilparceiro/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`;
+      const imageStorageRef = storageRef(storage, imagePath);
+      const uploadTask = uploadBytesResumable(imageStorageRef, croppedImageFile);
+
+      try {
+        // Delete old photo if it exists and is different
+        if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com") && currentPhotoURL !== finalPhotoURL) {
+            const oldImageRefTry = storageRef(storage, currentPhotoURL);
+            try { await deleteObject(oldImageRefTry); } 
+            catch (deleteError: any) { 
+                if (deleteError.code !== 'storage/object-not-found') {
+                    console.warn("Could not delete old partner profile picture:", deleteError);
+                }
+            }
+        }
+        
+        await new Promise<void>((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => { console.error("Upload failed:", error); reject(error); },
+            async () => { finalPhotoURL = await getDownloadURL(uploadTask.snapshot.ref); resolve(); }
+          );
+        });
+      } catch (error) {
+        toast({ title: "Falha no Upload da Foto", description: "Não foi possível enviar a imagem.", variant: "destructive" });
+        setIsUploading(false);
+        return; 
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+
     if (!currentVenueLocation && (data.street && data.number && data.city && data.state && data.cep && data.country)) {
         setIsGeocoding(true);
         try {
@@ -195,15 +277,13 @@ const PartnerQuestionnairePage: NextPage = () => {
         setIsGeocoding(false);
     }
 
-    if (!currentVenueLocation && !initialQuestionnaireCompletedState) { // Only block saving if it's the initial setup and no location
+    if (!currentVenueLocation && !initialQuestionnaireCompletedState) {
         toast({ title: "Localização Pendente", description: "Por favor, forneça um endereço válido e localize-o no mapa.", variant: "destructive" });
         return;
     }
 
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
-
-      // Data that can always be updated
       let dataToUpdate: any = {
         venueName: data.venueName,
         venueType: data.venueType,
@@ -213,7 +293,7 @@ const PartnerQuestionnairePage: NextPage = () => {
         youtubeUrl: data.youtubeUrl,
         whatsappPhone: data.whatsappPhone,
         phone: data.phone,
-        address: { // Address is now always updatable
+        address: {
             street: data.street,
             number: data.number,
             city: data.city,
@@ -221,31 +301,30 @@ const PartnerQuestionnairePage: NextPage = () => {
             cep: data.cep.replace(/\D/g, ''),
             country: data.country,
         },
-        location: currentVenueLocation, // Location also updatable with address
+        location: currentVenueLocation,
+        photoURL: finalPhotoURL, // Save the photo URL
       };
 
-      // Data that is only set if the profile isn't locked (i.e., first time setup)
       if (!initialQuestionnaireCompletedState) {
         dataToUpdate = {
           ...dataToUpdate,
           averageVenueRating: 0,
           venueRatingCount: 0,
-          questionnaireCompleted: true, // Mark as completed
-          questionnaireCompletedAt: serverTimestamp(), // Timestamp for first completion
+          questionnaireCompleted: true,
+          questionnaireCompletedAt: serverTimestamp(),
         };
       } else {
-        // If profile was already completed, we just update the fields above.
-        // Potentially add `updatedAt: serverTimestamp()` here if needed for edits.
         dataToUpdate.updatedAt = serverTimestamp();
       }
 
       ['phone', 'instagramUrl', 'facebookUrl', 'youtubeUrl', 'whatsappPhone'].forEach(key => {
-        if (dataToUpdate[key] === '') {
-          dataToUpdate[key] = null;
-        }
+        if (dataToUpdate[key] === '') dataToUpdate[key] = null;
       });
 
       await updateDoc(userDocRef, dataToUpdate, { merge: true });
+      
+      setCurrentPhotoURL(finalPhotoURL);
+      setEditorFile(null);
 
       toast({
         title: "Informações do Local Salvas!",
@@ -253,9 +332,9 @@ const PartnerQuestionnairePage: NextPage = () => {
         variant: "default",
       });
 
-      if (!initialQuestionnaireCompletedState) { // If it was the first completion
-        setIsProfileLocked(true); // Visually lock parts of the UI if desired for subsequent edits
-        setInitialQuestionnaireCompletedState(true); // Update state to reflect completion
+      if (!initialQuestionnaireCompletedState) {
+        setIsProfileLocked(true);
+        setInitialQuestionnaireCompletedState(true);
         toast({
           title: "Bem-vindo ao Fervo App, Parceiro!",
           description: "Seu local agora está no mapa! Explore funcionalidades como criação de eventos, QR codes para check-in, análise de feedback com IA e muito mais. Você tem 15 dias de acesso gratuito para testar tudo!",
@@ -311,7 +390,77 @@ const PartnerQuestionnairePage: NextPage = () => {
           </CardHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
             <CardContent className="space-y-6 px-4 sm:px-6">
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            
+            {/* Profile Picture Section */}
+            <div className="flex flex-col items-center space-y-3 pt-4 border-t border-border">
+                <Label className="text-lg font-semibold text-foreground">Foto de Perfil do Local</Label>
+                <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-2 border-primary bg-muted flex items-center justify-center overflow-hidden">
+                  {editorFile ? (
+                    <AvatarEditor
+                      ref={editorRef}
+                      image={editorFile}
+                      width={200} 
+                      height={200} 
+                      border={25} 
+                      borderRadius={125} 
+                      color={[0, 0, 0, 0.6]} 
+                      scale={editorScale}
+                      rotate={editorRotation}
+                      className="rounded-full"
+                    />
+                  ) : currentPhotoURL ? (
+                    <Image src={currentPhotoURL} alt={watchedVenueName || "Foto do Local"} width={160} height={160} className="rounded-full object-cover w-full h-full" data-ai-hint="venue building" />
+                  ) : (
+                    <UserCircle className="w-full h-full text-primary/40" data-ai-hint="avatar placeholder" />
+                  )}
+                </div>
+                
+                {!editorFile && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isFormSubmitting}>
+                    <UploadCloud className="w-4 h-4 mr-2" /> {currentPhotoURL ? "Alterar Foto" : "Enviar Foto do Local"}
+                  </Button>
+                )}
+
+                {editorFile && (
+                  <div className="w-full max-w-xs space-y-3">
+                    <div className="flex items-center gap-2">
+                      <ZoomOut className="w-5 h-5 text-muted-foreground" />
+                      <Slider
+                        min={1} max={3} step={0.05}
+                        value={[editorScale]}
+                        onValueChange={(value) => setEditorScale(value[0])}
+                        className="flex-1"
+                      />
+                      <ZoomIn className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RotateCcw className="w-5 h-5 text-muted-foreground"/>
+                      <Slider
+                          min={0} max={360} step={1}
+                          value={[editorRotation]}
+                          onValueChange={(value) => setEditorRotation(value[0])}
+                          className="flex-1"
+                        />
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setEditorFile(null)} className="w-full text-destructive hover:text-destructive/80">
+                      Cancelar Edição da Foto
+                    </Button>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageChange}
+                  accept="image/png, image/jpeg, image/webp"
+                  className="hidden"
+                />
+                {isUploading && <Progress value={uploadProgress} className="w-full h-2 mt-2" />}
+                {uploadProgress > 0 && uploadProgress < 100 && <p className="text-xs text-muted-foreground">{Math.round(uploadProgress)}% enviado</p>}
+                <p className="text-xs text-muted-foreground">Tamanho máx: 5MB (PNG, JPG, WEBP)</p>
+              </div>
+
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 pt-4 border-t border-border">
                 {/* Left Column */}
                 <div className="space-y-4">
                   <div>
@@ -424,7 +573,7 @@ const PartnerQuestionnairePage: NextPage = () => {
                     {errors.number && <p className="mt-1 text-sm text-destructive">{errors.number.message}</p>}
                   </div>
 
-                  <Button type="button" onClick={handleGeocode} disabled={isGeocoding || !addressFields.every(f => f && f.length > 0)} className="w-full bg-primary/80 hover:bg-primary text-primary-foreground">
+                  <Button type="button" onClick={handleGeocode} disabled={isGeocoding || !addressFields.every(f => f && f.length > 0) || isUploading || isFormSubmitting} className="w-full bg-primary/80 hover:bg-primary text-primary-foreground">
                     <MapPin className="w-4 h-4 mr-2"/> {isGeocoding ? 'Localizando...' : 'Localizar Endereço no Mapa'}
                   </Button>
 
@@ -491,9 +640,9 @@ const PartnerQuestionnairePage: NextPage = () => {
 
             </CardContent>
             <CardFooter className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting || isGeocoding}>
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isFormSubmitting || isGeocoding || isUploading}>
                 <Save className="w-4 h-4 mr-2"/>
-                {isSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Alterações' : 'Salvar e Continuar')}
+                {isUploading ? 'Enviando Foto...' : (isFormSubmitting ? 'Salvando...' : (isProfileLocked ? 'Salvar Alterações' : 'Salvar e Continuar'))}
               </Button>
             </CardFooter>
           </form>
@@ -518,4 +667,3 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
-

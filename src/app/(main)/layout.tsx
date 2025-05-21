@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff } from 'lucide-react'; // Removido MessageSquare
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -25,26 +25,25 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/theme-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-// Data structure for venue-specific coins on user document
 interface UserVenueCoins {
     [partnerId: string]: number;
 }
 
 interface Notification {
   id: string;
-  partnerId?: string; // Optional: if it's a venue-specific notification
-  eventId?: string; // Optional: if it's an event-specific notification
+  partnerId?: string; 
+  eventId?: string; 
   venueName?: string;
   eventName?: string;
   message: string;
-  createdAt: FirebaseTimestamp; // Timestamp of the event or notification creation
+  createdAt: FirebaseTimestamp; 
   read: boolean;
   venueType?: VenueType;
   musicStyles?: MusicStyle[];
 }
 
 interface FavoriteVenueNotificationSettings {
-  [venueId: string]: boolean; // true if notifications are enabled, false or undefined if disabled
+  [venueId: string]: boolean; 
 }
 
 interface AppUser {
@@ -60,18 +59,17 @@ interface AppUser {
   notifications?: Notification[];
   favoriteVenueIds?: string[];
   favoriteVenueNotificationSettings?: FavoriteVenueNotificationSettings;
-  venueName?: string; // For partner role, to show in greeting
+  venueName?: string; 
   address?: {
     city?: string;
     state?: string;
   };
-  createdAt?: FirebaseTimestamp; // For partner trial period
-  trialExpiredNotified?: boolean; // For partner trial period
+  createdAt?: FirebaseTimestamp; 
+  trialExpiredNotified?: boolean; 
   stripeSubscriptionActive?: boolean;
-  photoURL?: string | null;
+  photoURL?: string | null; // Added photoURL
 }
 
-// Keep track of active listeners to avoid duplicates and for cleanup
 const activeEventNotificationListeners: Record<string, () => void> = {};
 
 const useAuthAndUserSubscription = () => {
@@ -111,7 +109,7 @@ const useAuthAndUserSubscription = () => {
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
               stripeSubscriptionActive: false, 
-              photoURL: userData.photoURL || null,
+              photoURL: userData.photoURL || user.photoURL || null, // Prioritize Firestore, then Auth
             };
 
             if (userData.role === UserRole.PARTNER) {
@@ -153,7 +151,7 @@ const useAuthAndUserSubscription = () => {
               createdAt: undefined,
               trialExpiredNotified: false,
               stripeSubscriptionActive: false,
-              photoURL: user.photoURL || null,
+              photoURL: user.photoURL || null, // Get from auth provider if new doc
             });
             setLoading(false);
           }
@@ -224,7 +222,7 @@ export default function MainAppLayout({
 
     const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEventPage = pathname.startsWith('/shared-event');
-    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons'); // Removido /chat
+    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons'); 
 
     if (!appUser) {
       if (!isAuthPage && !isSharedEventPage && !isGeneralUserAccessiblePage) {
@@ -629,7 +627,7 @@ export default function MainAppLayout({
   if (!loading) {
     const isAuthPg = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEvtPg = pathname.startsWith('/shared-event');
-    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons'); // Removido /chat
+    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons'); 
 
     if (isAuthPg || isSharedEvtPg || isGeneralUserAccPg) {
       renderChildrenContent = true;
@@ -792,10 +790,11 @@ export default function MainAppLayout({
                     <Avatar className="h-9 w-9">
                       {appUser?.photoURL ? (
                         <AvatarImage src={appUser.photoURL} alt={appUser.name || "User Avatar"} data-ai-hint="user avatar" />
-                      ) : null}
-                      <AvatarFallback className={cn(activeColorClass, "bg-transparent text-lg font-semibold")}>
-                        {appUser?.name ? appUser.name.charAt(0).toUpperCase() : <UserCircle className="w-6 h-6" />}
-                      </AvatarFallback>
+                      ) : (
+                         <AvatarFallback className={cn(activeColorClass, "bg-transparent text-lg font-semibold")}>
+                            {appUser?.name ? appUser.name.charAt(0).toUpperCase() : <UserCircle className="w-6 h-6" />}
+                         </AvatarFallback>
+                      )}
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
@@ -855,7 +854,6 @@ export default function MainAppLayout({
       <main className="flex-1">
         {renderChildrenContent ? children : null }
       </main>
-      {/* Botão flutuante para o chat foi removido daqui. Será adicionado diretamente na página do mapa. */}
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal
           isOpen={isQrScannerOpen}
