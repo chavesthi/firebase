@@ -1,12 +1,11 @@
 
-
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useEffect, useState, useMemo, useCallback, type ReactElement } from 'react';
+import { useEffect, useState, useMemo, useCallback, type ReactElement, useRef } from 'react'; // Added useRef
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon } from 'lucide-react'; // Added XCircleIcon
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -43,7 +42,9 @@ import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from '@/components/shared/logo';
 import { PurchaseTicketModal } from '@/components/tickets/purchase-ticket-modal';
-
+import { ChatMessageList } from '@/components/chat/chat-message-list'; // Import Chat
+import { ChatInputForm } from '@/components/chat/chat-input-form';   // Import Chat
+import { AlertCircle } from 'lucide-react'; // For chat prompt
 
 interface VenueEvent {
   id: string;
@@ -95,6 +96,12 @@ interface MapPageAppUser {
     name: string;
     favoriteVenueIds?: string[];
     role: UserRole;
+    photoURL?: string | null; // For chat
+    address?: { // For chat
+        city?: string;
+        state?: string;
+    };
+    questionnaireCompleted?: boolean; // For chat
 }
 
 
@@ -312,6 +319,12 @@ const MapContentAndLogic = () => {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
+  // Chat Widget State
+  const [isChatWidgetOpen, setIsChatWidgetOpen] = useState(false);
+  const [chatRoomId, setChatRoomId] = useState<string | null>(null);
+  const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
+  const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
+
 
   const mapsApi = useMapsLibrary('maps');
 
@@ -319,23 +332,44 @@ const MapContentAndLogic = () => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
       if (user) {
+        setIsLoadingUserProfileForChat(true);
         const userDocRef = doc(firestore, "users", user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data();
-              setCurrentAppUser({
+              const profile: MapPageAppUser = {
                 uid: user.uid,
                 name: userData.name || (userData.role === UserRole.PARTNER ? "Parceiro Fervo" : "Usuário Fervo"),
                 favoriteVenueIds: userData.favoriteVenueIds || [],
                 role: userData.role as UserRole || UserRole.USER,
-              });
+                photoURL: userData.photoURL || null,
+                address: userData.address,
+                questionnaireCompleted: userData.questionnaireCompleted,
+              };
+              setCurrentAppUser(profile);
+              setChatUserProfile(profile); // Set profile for chat
+              
+              if (userData.address?.city && userData.address?.state) {
+                const city = userData.address.city.toUpperCase().replace(/\s+/g, '_');
+                const state = userData.address.state.toUpperCase().replace(/\s+/g, '_');
+                setChatRoomId(`${state}_${city}`);
+              } else {
+                setChatRoomId(null);
+              }
             } else {
-              setCurrentAppUser({ uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER });
+              const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false };
+              setCurrentAppUser(basicProfile);
+              setChatUserProfile(basicProfile);
+              setChatRoomId(null);
             }
+            setIsLoadingUserProfileForChat(false);
         });
         return () => unsubscribeUser();
       } else {
         setCurrentAppUser(null);
+        setChatUserProfile(null);
+        setChatRoomId(null);
+        setIsLoadingUserProfileForChat(false);
       }
     });
     return () => unsubscribeAuth();
@@ -490,17 +524,13 @@ const MapContentAndLogic = () => {
             setUserLocation(venueToSelect.location);
           }
         } else {
-          // Only clear selection if it was previously set to this venueId
-          // This prevents clearing if another venue sheet is open and then a non-existent venueId is in URL
           if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); 
           router.replace('/map', { scroll: false });
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
       }
     }
-  // Do not add selectedVenue to dependencies here to avoid re-triggering when it's set by this effect
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, venues, router, toast, isPreviewMode]);
+  }, [searchParams, venues, router, toast, isPreviewMode, selectedVenue?.id]);
 
 
   const fetchVenueEvents = async (venueId: string) => {
@@ -536,7 +566,6 @@ const MapContentAndLogic = () => {
     if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
-      // Clear rating form when events are loaded for a new venue or sheet opens
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
@@ -544,7 +573,6 @@ const MapContentAndLogic = () => {
     return () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVenue]);
 
 
@@ -690,7 +718,7 @@ const MapContentAndLogic = () => {
       return;
     }
 
-    if (isEventPast(eventEndDateTime)) { // Use the helper function
+    if (isEventPast(eventEndDateTime)) { 
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
         return;
     }
@@ -788,7 +816,7 @@ const MapContentAndLogic = () => {
               userId: currentUser.uid,
               couponCode: couponCode,
               description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
-              eventName: eventDataForShare.eventName, // Store the event name with the coupon
+              eventName: eventDataForShare.eventName, 
               createdAt: serverTimestamp(),
               status: 'active',
               validAtPartnerId: partnerId,
@@ -868,11 +896,10 @@ const MapContentAndLogic = () => {
 
   const openPurchaseTicketModal = (event: VenueEvent) => {
     if (!selectedVenue) return;
-    if (event.ticketPurchaseUrl) { // If there's an external URL, open it
+    if (event.ticketPurchaseUrl) { 
         window.open(event.ticketPurchaseUrl, '_blank', 'noopener,noreferrer');
         return;
     }
-    // Otherwise, open the internal modal
     setTicketPurchaseDetails({
         eventId: event.id,
         eventName: event.eventName,
@@ -901,7 +928,7 @@ const MapContentAndLogic = () => {
   }
 
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE";
+  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; // Should match the one in constants if used as a placeholder
 
   if (!apiKey || apiKey === genericPlaceholder) {
     return (
@@ -912,7 +939,10 @@ const MapContentAndLogic = () => {
     );
   }
 
-  // Check for parsing error before this return
+  const chatRoomDisplayName = chatUserProfile?.address?.city && chatUserProfile?.address?.state 
+    ? `${chatUserProfile.address.city}, ${chatUserProfile.address.state}` 
+    : "Chat Geral";
+
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
       <Card
@@ -981,6 +1011,25 @@ const MapContentAndLogic = () => {
                  <Logo iconClassName="text-primary h-8 w-auto" className="bg-background/80 p-1.5 rounded-md shadow-lg" />
             )}
         </div>
+        
+        {/* Chat Toggle Button - only for USER role */}
+        {currentAppUser && currentAppUser.role === UserRole.USER && (
+            <Button
+                variant="default"
+                size="icon"
+                className={cn(
+                    "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full h-14 w-14 shadow-xl z-40",
+                    "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
+                    isChatWidgetOpen ? "animate-none" : "animate-bounce"
+                )}
+                onClick={() => setIsChatWidgetOpen(prev => !prev)}
+                title="Fervo Chat"
+            >
+                {isChatWidgetOpen ? <XCircleIcon className="h-7 w-7" /> : <MessageSquare className="h-7 w-7" />}
+                <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
+            </Button>
+        )}
+
 
         {GOOGLE_MAPS_API_KEY && mapsApi && (
             <GoogleMap
@@ -1399,6 +1448,58 @@ const MapContentAndLogic = () => {
             currentUser={currentUser}
         />
       )}
+
+      {/* Floating Chat Widget */}
+      {isChatWidgetOpen && currentUser && chatUserProfile && (
+         <Card className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 w-[calc(100%-2rem)] sm:w-96 max-h-[70vh] sm:max-h-[60vh] z-50 flex flex-col shadow-2xl border-primary/50 bg-background/90 backdrop-blur-md">
+            <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-primary" />
+                    <div>
+                        <UICardTitle className="text-md sm:text-lg text-primary leading-tight">Fervo Chat</UICardTitle>
+                        <UICardDescription className="text-xs sm:text-sm leading-tight">{chatRoomDisplayName}</UICardDescription>
+                    </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
+                    <XCircleIcon className="h-5 w-5"/>
+                </Button>
+            </CardHeader>
+            {isLoadingUserProfileForChat ? (
+                <CardContent className="flex-1 flex items-center justify-center p-4">
+                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                </CardContent>
+            ) : (!chatUserProfile.questionnaireCompleted || !chatUserProfile.address?.city || !chatUserProfile.address?.state) ? (
+                <CardContent className="flex-1 flex flex-col items-center justify-center p-4 text-center">
+                     <AlertCircle className="w-10 h-10 text-destructive mb-3" />
+                    <UICardTitle className="text-primary mb-1 text-lg">Complete seu Perfil</UICardTitle>
+                    <UICardDescription className="text-xs sm:text-sm">
+                        Para usar o Fervo Chat, precisamos que você defina sua Cidade e Estado em seu perfil.
+                    </UICardDescription>
+                    <Button onClick={() => { router.push('/user/profile'); setIsChatWidgetOpen(false);}} className="mt-4 w-full text-xs sm:text-sm">
+                        Completar Perfil Agora
+                    </Button>
+                </CardContent>
+            ) : chatRoomId && chatUserProfile ? (
+                <>
+                    <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
+                        <ChatMessageList chatRoomId={chatRoomId} currentUserId={currentUser.uid} />
+                    </CardContent>
+                    <div className="p-3 sm:p-4 border-t border-border bg-card">
+                        <ChatInputForm
+                            chatRoomId={chatRoomId}
+                            userId={currentUser.uid}
+                            userName={chatUserProfile.name || 'Usuário Anônimo'}
+                            userPhotoURL={chatUserProfile.photoURL || null}
+                        />
+                    </div>
+                </>
+            ) : (
+                 <CardContent className="flex-1 flex items-center justify-center p-4">
+                    <p className="text-muted-foreground">Não foi possível carregar o chat.</p>
+                 </CardContent>
+            )}
+         </Card>
+      )}
     </div>
   );
 };
@@ -1424,5 +1525,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
-
