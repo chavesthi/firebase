@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff, MessageSquare } from 'lucide-react'; // Added MessageSquare
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -23,7 +23,7 @@ import { auth, firestore } from '@/lib/firebase';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/theme-provider';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'; // Added Avatar imports
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 // Data structure for venue-specific coins on user document
 interface UserVenueCoins {
@@ -67,8 +67,8 @@ interface AppUser {
   };
   createdAt?: FirebaseTimestamp; // For partner trial period
   trialExpiredNotified?: boolean; // For partner trial period
-  stripeSubscriptionActive?: boolean; // Added for Stripe Extension status
-  photoURL?: string | null; // Added for profile picture
+  stripeSubscriptionActive?: boolean;
+  photoURL?: string | null;
 }
 
 // Keep track of active listeners to avoid duplicates and for cleanup
@@ -110,8 +110,8 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false, // Default to false, will be updated by customer listener
-              photoURL: userData.photoURL || null, // Fetch photoURL
+              stripeSubscriptionActive: false, 
+              photoURL: userData.photoURL || null,
             };
 
             if (userData.role === UserRole.PARTNER) {
@@ -153,7 +153,7 @@ const useAuthAndUserSubscription = () => {
               createdAt: undefined,
               trialExpiredNotified: false,
               stripeSubscriptionActive: false,
-              photoURL: user.photoURL || null, // Use Firebase Auth photoURL as fallback
+              photoURL: user.photoURL || null,
             });
             setLoading(false);
           }
@@ -224,7 +224,7 @@ export default function MainAppLayout({
 
     const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEventPage = pathname.startsWith('/shared-event');
-    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons');
+    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/chat');
 
     if (!appUser) {
       if (!isAuthPage && !isSharedEventPage && !isGeneralUserAccessiblePage) {
@@ -629,7 +629,7 @@ export default function MainAppLayout({
   if (!loading) {
     const isAuthPg = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEvtPg = pathname.startsWith('/shared-event');
-    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons');
+    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/chat');
 
     if (isAuthPg || isSharedEvtPg || isGeneralUserAccPg) {
       renderChildrenContent = true;
@@ -855,6 +855,21 @@ export default function MainAppLayout({
       <main className="flex-1">
         {renderChildrenContent ? children : null }
       </main>
+      {appUser && appUser.role === UserRole.USER && appUser.uid && appUser.questionnaireCompleted && (
+        <Button
+          variant="default"
+          size="icon"
+          className={cn(
+            "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full h-14 w-14 shadow-xl z-40",
+            "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90 animate-bounce"
+          )}
+          onClick={() => router.push('/chat')}
+          title="Fervo Chat"
+        >
+          <MessageSquare className="h-7 w-7" />
+          <span className="sr-only">Abrir Fervo Chat</span>
+        </Button>
+      )}
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal
           isOpen={isQrScannerOpen}
