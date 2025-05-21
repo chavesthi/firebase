@@ -4,8 +4,8 @@ import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAnalytics, type Analytics } from "firebase/analytics"; 
 import { getAuth, type Auth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import { getStorage, type FirebaseStorage } from "firebase/storage"; // Added Firebase Storage
-import { getFunctions, type Functions } from 'firebase/functions'; // Added Firebase Functions
+import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { getFunctions, type Functions } from 'firebase/functions';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -14,7 +14,7 @@ const firebaseConfig = {
   authDomain: "fervoappusuarioeparceiro.firebaseapp.com",
   databaseURL: "https://fervoappusuarioeparceiro-default-rtdb.firebaseio.com",
   projectId: "fervoappusuarioeparceiro",
-  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected storageBucket name
+  storageBucket: "fervoappusuarioeparceiro.appspot.com", // Corrected to .appspot.com as per previous context
   messagingSenderId: "762698655248",
   appId: "1:762698655248:web:1a4a995fccd6bcf6cb0c95",
   measurementId: "G-3QD4RQHSMQ"
@@ -24,8 +24,8 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let firestore: Firestore;
-let storage: FirebaseStorage; // Declare storage
-let functions: Functions; // Declare functions
+let storage: FirebaseStorage;
+let functions: Functions;
 let analytics: Analytics | null = null;
 let googleAuthProvider: GoogleAuthProvider;
 
@@ -37,8 +37,8 @@ if (!getApps().length) {
 
 auth = getAuth(app);
 firestore = getFirestore(app);
-storage = getStorage(app); // Initialize Firebase Storage
-functions = getFunctions(app); // Initialize Firebase Functions
+storage = getStorage(app);
+functions = getFunctions(app);
 googleAuthProvider = new GoogleAuthProvider();
 
 if (typeof window !== 'undefined') {
@@ -54,4 +54,4 @@ if (typeof window !== 'undefined') {
   }
 }
 
-export { app, auth, firestore, storage, analytics, googleAuthProvider, functions }; // Export storage and functions
+export { app, auth, firestore, storage, analytics, googleAuthProvider, functions };
