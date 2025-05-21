@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { UserCircle, Loader2 } from 'lucide-react';
+import { UserCircle, Loader2, MessageSquare } from 'lucide-react'; // Added MessageSquare
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
