@@ -161,12 +161,10 @@ const VenueCustomMapMarker = ({
   let effectiveBlinkHighlightColor = '#FACC15'; // yellow-400 for blinking effect
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
   
-  // Ensure basePinColor is treated as hex if it's not HSL for comparison
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
-  // If the base color is too similar to the blink color, choose an alternative blink color
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'white'; // Use white as an alternative if base is yellow
+    effectiveBlinkHighlightColor = 'white'; 
   }
 
 
@@ -322,13 +320,13 @@ const MapContentAndLogic = () => {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
-  // Chat Widget State
   const [isChatWidgetOpen, setIsChatWidgetOpen] = useState(false);
   const [chatRoomId, setChatRoomId] = useState<string | null>(null);
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
+  const barAudioRef = useRef<HTMLAudioElement>(null);
 
 
   const mapsApi = useMapsLibrary('maps');
@@ -438,14 +436,14 @@ const MapContentAndLogic = () => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          setUserLocation(loc); // Update map center
-          setActualUserLocation(loc); // Set the precise marker location
+          setUserLocation(loc);
+          setActualUserLocation(loc);
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // Default to Sao Paulo
-          setUserLocation(defaultLoc); // Set map center to default
-          setActualUserLocation(null); // No actual location determined
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; 
+          setUserLocation(defaultLoc);
+          setActualUserLocation(null);
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
         }
       );
@@ -595,24 +593,36 @@ const MapContentAndLogic = () => {
     );
   }, []);
 
-  // Effect to control nightclub music based on filter
   useEffect(() => {
-    const audio = nightclubAudioRef.current;
-    if (!audio) return;
+    const nightclubAudio = nightclubAudioRef.current;
+    const barAudio = barAudioRef.current;
 
-    const isNightclubFilterActive = activeVenueTypeFilters.includes(VenueType.NIGHTCLUB);
+    if (nightclubAudio) {
+      if (activeVenueTypeFilters.includes(VenueType.NIGHTCLUB)) {
+        nightclubAudio.play().catch(error => console.warn("Error playing nightclub music:", error));
+      } else {
+        nightclubAudio.pause();
+        nightclubAudio.currentTime = 0;
+      }
+    }
 
-    if (isNightclubFilterActive) {
-      audio.play().catch(error => console.warn("Error playing nightclub music:", error));
-    } else {
-      audio.pause();
-      audio.currentTime = 0; // Reset audio to beginning
+    if (barAudio) {
+      if (activeVenueTypeFilters.includes(VenueType.BAR)) {
+        barAudio.play().catch(error => console.warn("Error playing bar music:", error));
+      } else {
+        barAudio.pause();
+        barAudio.currentTime = 0;
+      }
     }
     // Cleanup: pause music if component unmounts or filter changes
     return () => {
-      if (audio) { // Check if audio still exists
-        audio.pause();
-        audio.currentTime = 0;
+      if (nightclubAudio) {
+        nightclubAudio.pause();
+        nightclubAudio.currentTime = 0;
+      }
+      if (barAudio) {
+        barAudio.pause();
+        barAudio.currentTime = 0;
       }
     };
   }, [activeVenueTypeFilters]);
@@ -746,11 +756,6 @@ const MapContentAndLogic = () => {
       toast({ title: "Login Necessário", description: "Faça login para compartilhar e ganhar moedas.", variant: "destructive" });
       return;
     }
-
-    if (currentAppUser.role === UserRole.PARTNER && !isPreviewMode) {
-        // This is a partner sharing their own event, no FervoCoin reward logic.
-    }
-
 
     if (isEventPast(eventEndDateTime)) { 
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
@@ -893,7 +898,7 @@ const MapContentAndLogic = () => {
       return;
     }
 
-    if (currentAppUser.role === UserRole.PARTNER) {
+    if (currentAppUser.role === UserRole.PARTNER && !isPreviewMode) {
         toast({ title: "Ação não permitida", description: "Parceiros não podem favoritar locais.", variant: "default" });
         return;
     }
@@ -934,7 +939,6 @@ const MapContentAndLogic = () => {
         window.open(event.ticketPurchaseUrl, '_blank', 'noopener,noreferrer');
         return;
     }
-    // Legacy ticket purchase flow - can be removed if all tickets are external
     setTicketPurchaseDetails({
         eventId: event.id,
         eventName: event.eventName,
@@ -949,7 +953,7 @@ const MapContentAndLogic = () => {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" /> Carregando sua localização...</div>;
   }
 
-  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" />Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
@@ -979,8 +983,9 @@ const MapContentAndLogic = () => {
     : "Chat Geral";
 
   return (
-    <div className="relative flex w-full h-[calc(100vh-4rem)]"> {/* Adjusted for header height */}
-       <audio ref={nightclubAudioRef} src="/audio/night-club-music-196359.mp3" loop preload="auto" />
+    <div className="relative flex w-full h-[calc(100vh-4rem)]">
+      <audio ref={nightclubAudioRef} src="/audio/night-club-music-196359.mp3" loop preload="auto" />
+      <audio ref={barAudioRef} src="/audio/general-chatter-in-bar-14816.mp3" loop preload="auto" />
       <Card
         className={cn(
           "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
@@ -1250,7 +1255,7 @@ const MapContentAndLogic = () => {
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && ( // Only show if not already embedded
+                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && ( 
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1349,7 +1354,7 @@ const MapContentAndLogic = () => {
                                       Compre Aqui o Seu Ingresso Saia Na frente!!!
                                     </a>
                                   </Button>
-                                ) : event.pricingType !== PricingType.FREE ? ( // Legacy button for internal purchase (can be removed)
+                                ) : event.pricingType !== PricingType.FREE ? ( 
                                   <Button
                                     className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
                                     size="sm"
@@ -1388,11 +1393,11 @@ const MapContentAndLogic = () => {
                                     size="sm"
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
-                                        if(currentlyRatingEventId !== event.id) { // Reset rating if user switches event context
+                                        if(currentlyRatingEventId !== event.id) { 
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id); // Ensure current event is set before submit
+                                        setCurrentlyRatingEventId(event.id); 
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1527,7 +1532,7 @@ const MapContentAndLogic = () => {
                         Completar Perfil Agora
                     </Button>
                 </CardContent>
-            ) : chatRoomId && chatUserProfile && currentUser ? ( // Added currentUser check for safety
+            ) : chatRoomId && chatUserProfile && currentUser ? ( 
                 <>
                     <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
                         <ChatMessageList
