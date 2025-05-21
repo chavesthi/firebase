@@ -158,14 +158,17 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = '#FACC15'; // yellow-400
+  let effectiveBlinkHighlightColor = '#FACC15'; // yellow-400 for blinking effect
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
-  const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : normalizeHex(basePinColor);
+  
+  // Ensure basePinColor is treated as hex if it's not HSL for comparison
+  const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
-
-  if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor)) {
-    effectiveBlinkHighlightColor = 'white';
+  // If the base color is too similar to the blink color, choose an alternative blink color
+  if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
+    effectiveBlinkHighlightColor = 'white'; // Use white as an alternative if base is yellow
   }
+
 
   const animationName = `blinkingMarkerAnimation_${type.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
@@ -325,6 +328,7 @@ const MapContentAndLogic = () => {
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
+  const nightclubAudioRef = useRef<HTMLAudioElement>(null); // Ref for nightclub music
 
 
   const mapsApi = useMapsLibrary('maps');
@@ -590,6 +594,26 @@ const MapContentAndLogic = () => {
       prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]
     );
   }, []);
+
+  // Effect to control nightclub music based on filter
+  useEffect(() => {
+    const audio = nightclubAudioRef.current;
+    if (!audio) return;
+
+    const isNightclubFilterActive = activeVenueTypeFilters.includes(VenueType.NIGHTCLUB);
+
+    if (isNightclubFilterActive) {
+      audio.play().catch(error => console.warn("Error playing nightclub music:", error));
+    } else {
+      audio.pause();
+      audio.currentTime = 0; // Reset audio to beginning
+    }
+    // Cleanup: pause music if component unmounts or filter changes
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, [activeVenueTypeFilters]);
 
   const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
 
@@ -954,6 +978,7 @@ const MapContentAndLogic = () => {
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]"> {/* Adjusted for header height */}
+       <audio ref={nightclubAudioRef} src="/audio/night-club-music-196359.mp3" loop preload="auto" />
       <Card
         className={cn(
           "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
@@ -1550,3 +1575,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
