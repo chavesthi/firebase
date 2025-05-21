@@ -5,7 +5,7 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback, type ReactElement, useRef } from 'react'; // Added useRef
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon } from 'lucide-react'; // Added XCircleIcon
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX } from 'lucide-react'; // Added Volume2, VolumeX
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,9 +42,9 @@ import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from '@/components/shared/logo';
 import { PurchaseTicketModal } from '@/components/tickets/purchase-ticket-modal';
-import { ChatMessageList } from '@/components/chat/chat-message-list'; // Import Chat
-import { ChatInputForm } from '@/components/chat/chat-input-form';   // Import Chat
-import { AlertCircle } from 'lucide-react'; // For chat prompt
+import { ChatMessageList } from '@/components/chat/chat-message-list';
+import { ChatInputForm } from '@/components/chat/chat-input-form';
+import { AlertCircle } from 'lucide-react';
 
 interface VenueEvent {
   id: string;
@@ -59,7 +59,7 @@ interface VenueEvent {
   ratingCount?: number;
   shareRewardsEnabled?: boolean;
   description?: string;
-  ticketPurchaseUrl?: string;
+  ticketPurchaseUrl?: string | null;
 }
 
 interface Venue {
@@ -96,12 +96,12 @@ interface MapPageAppUser {
     name: string;
     favoriteVenueIds?: string[];
     role: UserRole;
-    photoURL?: string | null; // For chat
-    address?: { // For chat
+    photoURL?: string | null;
+    address?: {
         city?: string;
         state?: string;
     };
-    questionnaireCompleted?: boolean; // For chat
+    questionnaireCompleted?: boolean;
 }
 
 
@@ -128,10 +128,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15',
+  [VenueType.STAND_UP]: '#FACC15', // yellow-400
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
-  [VenueType.LGBT]: '#F97316',
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // pink-500
+  [VenueType.LGBT]: '#F97316', // orange-600
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -158,7 +158,7 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = '#FACC15';
+  let effectiveBlinkHighlightColor = '#FACC15'; // yellow-400
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : normalizeHex(basePinColor);
 
@@ -324,6 +324,7 @@ const MapContentAndLogic = () => {
   const [chatRoomId, setChatRoomId] = useState<string | null>(null);
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
+  const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
 
 
   const mapsApi = useMapsLibrary('maps');
@@ -347,7 +348,7 @@ const MapContentAndLogic = () => {
                 questionnaireCompleted: userData.questionnaireCompleted,
               };
               setCurrentAppUser(profile);
-              setChatUserProfile(profile); // Set profile for chat
+              setChatUserProfile(profile);
               
               if (userData.address?.city && userData.address?.state) {
                 const city = userData.address.city.toUpperCase().replace(/\s+/g, '_');
@@ -357,7 +358,7 @@ const MapContentAndLogic = () => {
                 setChatRoomId(null);
               }
             } else {
-              const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false };
+              const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null };
               setCurrentAppUser(basicProfile);
               setChatUserProfile(basicProfile);
               setChatRoomId(null);
@@ -438,9 +439,10 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // Default to Sao Paulo
           setUserLocation(defaultLoc);
           setActualUserLocation(defaultLoc);
+          toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
         }
       );
     } else {
@@ -448,8 +450,9 @@ const MapContentAndLogic = () => {
       const defaultLoc = { lat: -23.55052, lng: -46.633308 };
       setUserLocation(defaultLoc);
       setActualUserLocation(defaultLoc);
+      toast({ title: "Geolocalização Indisponível", description: "Seu navegador não suporta geolocalização. Usando localização padrão.", variant: "default" });
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     setIsLoadingVenues(true);
@@ -713,10 +716,15 @@ const MapContentAndLogic = () => {
         toast({ title: "Modo Preview", description: "Compartilhamento de eventos desabilitado para parceiros no modo de preview.", variant: "default" });
         return;
     }
-    if (!currentUser) {
+    if (!currentUser || !currentAppUser) {
       toast({ title: "Login Necessário", description: "Faça login para compartilhar e ganhar moedas.", variant: "destructive" });
       return;
     }
+
+    if (currentAppUser.role === UserRole.PARTNER && !isPreviewMode) {
+        // This is a partner sharing their own event, no FervoCoin reward logic.
+    }
+
 
     if (isEventPast(eventEndDateTime)) { 
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
@@ -900,6 +908,7 @@ const MapContentAndLogic = () => {
         window.open(event.ticketPurchaseUrl, '_blank', 'noopener,noreferrer');
         return;
     }
+    // Legacy ticket purchase flow - can be removed if all tickets are external
     setTicketPurchaseDetails({
         eventId: event.id,
         eventName: event.eventName,
@@ -911,11 +920,11 @@ const MapContentAndLogic = () => {
 
 
   if (!userLocation) {
-    return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando sua localização...</div>;
+    return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" /> Carregando sua localização...</div>;
   }
 
   if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
-    return <div className="flex items-center justify-center h-screen bg-background text-foreground">Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
+    return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" />Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
   if (isLoadingVenues) {
@@ -928,7 +937,7 @@ const MapContentAndLogic = () => {
   }
 
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; // Should match the one in constants if used as a placeholder
+  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE";
 
   if (!apiKey || apiKey === genericPlaceholder) {
     return (
@@ -944,7 +953,7 @@ const MapContentAndLogic = () => {
     : "Chat Geral";
 
   return (
-    <div className="relative flex w-full h-[calc(100vh-4rem)]">
+    <div className="relative flex w-full h-[calc(100vh-4rem)]"> {/* Adjusted for header height */}
       <Card
         className={cn(
           "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
@@ -1012,7 +1021,6 @@ const MapContentAndLogic = () => {
             )}
         </div>
         
-        {/* Chat Toggle Button - only for USER role */}
         {currentAppUser && currentAppUser.role === UserRole.USER && (
             <Button
                 variant="default"
@@ -1138,7 +1146,7 @@ const MapContentAndLogic = () => {
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
                         title={(isPreviewMode && currentAppUser?.role === UserRole.PARTNER) ? "Ação desabilitada em modo preview para parceiros" : (currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos")}
-                        disabled={isPreviewMode && currentAppUser?.role === UserRole.PARTNER}
+                        disabled={(isPreviewMode && currentAppUser?.role === UserRole.PARTNER) || !currentAppUser}
                       >
                         {currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? (
                             <HeartOff className="w-4 h-4 sm:w-5 sm:w-5 fill-current" />
@@ -1215,7 +1223,7 @@ const MapContentAndLogic = () => {
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && (
+                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && ( // Only show if not already embedded
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1251,6 +1259,9 @@ const MapContentAndLogic = () => {
                                       <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                                         <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
                                       </Badge>
+                                    )}
+                                    {eventHasEnded && !isHappening && (
+                                        <Badge variant="outline" className="mt-1 text-xs border-destructive text-destructive">Encerrado</Badge>
                                     )}
                                   </div>
                                   <div className="flex items-center space-x-1">
@@ -1311,7 +1322,7 @@ const MapContentAndLogic = () => {
                                       Compre Aqui o Seu Ingresso Saia Na frente!!!
                                     </a>
                                   </Button>
-                                ) : event.pricingType !== PricingType.FREE ? (
+                                ) : event.pricingType !== PricingType.FREE ? ( // Legacy button for internal purchase (can be removed)
                                   <Button
                                     className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
                                     size="sm"
@@ -1350,11 +1361,11 @@ const MapContentAndLogic = () => {
                                     size="sm"
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
-                                        if(currentlyRatingEventId !== event.id) {
+                                        if(currentlyRatingEventId !== event.id) { // Reset rating if user switches event context
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id);
+                                        setCurrentlyRatingEventId(event.id); // Ensure current event is set before submit
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1449,7 +1460,6 @@ const MapContentAndLogic = () => {
         />
       )}
 
-      {/* Floating Chat Widget */}
       {isChatWidgetOpen && currentUser && chatUserProfile && (
          <Card className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 w-[calc(100%-2rem)] sm:w-96 max-h-[70vh] sm:max-h-[60vh] z-50 flex flex-col shadow-2xl border-primary/50 bg-background/90 backdrop-blur-md">
             <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between">
@@ -1460,9 +1470,20 @@ const MapContentAndLogic = () => {
                         <UICardDescription className="text-xs sm:text-sm leading-tight">{chatRoomDisplayName}</UICardDescription>
                     </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
-                    <XCircleIcon className="h-5 w-5"/>
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsChatSoundMuted(prev => !prev)}
+                      className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary"
+                      title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}
+                  >
+                      {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:w-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:w-5" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
+                      <XCircleIcon className="h-5 w-5"/>
+                  </Button>
+                </div>
             </CardHeader>
             {isLoadingUserProfileForChat ? (
                 <CardContent className="flex-1 flex items-center justify-center p-4">
@@ -1479,10 +1500,14 @@ const MapContentAndLogic = () => {
                         Completar Perfil Agora
                     </Button>
                 </CardContent>
-            ) : chatRoomId && chatUserProfile ? (
+            ) : chatRoomId && chatUserProfile && currentUser ? ( // Added currentUser check for safety
                 <>
                     <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
-                        <ChatMessageList chatRoomId={chatRoomId} currentUserId={currentUser.uid} />
+                        <ChatMessageList
+                            chatRoomId={chatRoomId}
+                            currentUserId={currentUser.uid}
+                            isChatSoundMuted={isChatSoundMuted}
+                        />
                     </CardContent>
                     <div className="p-3 sm:p-4 border-t border-border bg-card">
                         <ChatInputForm

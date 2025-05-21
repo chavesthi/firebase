@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { collection, query, orderBy, onSnapshot, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { UserCircle, Loader2, MessageSquare } from 'lucide-react'; // Added MessageSquare
+import { UserCircle, Loader2, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -22,17 +22,22 @@ interface ChatMessage {
 interface ChatMessageListProps {
   chatRoomId: string;
   currentUserId: string;
+  isChatSoundMuted: boolean;
 }
 
-export function ChatMessageList({ chatRoomId, currentUserId }: ChatMessageListProps) {
+export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }: ChatMessageListProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const lastPlayedMessageIdRef = useRef<string | null>(null);
+  const initialLoadRef = useRef(true); // To prevent sound on initial load of existing messages
 
   useEffect(() => {
     setIsLoading(true);
     const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
+    initialLoadRef.current = true; // Reset for new chat room or re-mount
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const fetchedMessages: ChatMessage[] = [];
@@ -41,10 +46,21 @@ export function ChatMessageList({ chatRoomId, currentUserId }: ChatMessageListPr
       });
       setMessages(fetchedMessages);
       setIsLoading(false);
+
+      if (fetchedMessages.length > 0) {
+        // After initial load, set the last played message ID to the latest one
+        // to prevent playing sound for messages already present.
+        if (initialLoadRef.current) {
+          lastPlayedMessageIdRef.current = fetchedMessages[fetchedMessages.length - 1].id;
+          initialLoadRef.current = false;
+        }
+      } else {
+        initialLoadRef.current = false; // No messages, so initial load is done
+      }
+
     }, (error) => {
       console.error("Error fetching messages: ", error);
       setIsLoading(false);
-      // Optionally show a toast or error message to the user
     });
 
     return () => unsubscribe();
@@ -53,6 +69,22 @@ export function ChatMessageList({ chatRoomId, currentUserId }: ChatMessageListPr
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+
+  useEffect(() => {
+    if (isLoading || isChatSoundMuted || messages.length === 0 || initialLoadRef.current) {
+      return;
+    }
+
+    const latestMessage = messages[messages.length - 1];
+
+    if (latestMessage && latestMessage.id !== lastPlayedMessageIdRef.current && latestMessage.userId !== currentUserId) {
+      audioRef.current?.play().catch(error => console.warn("Chat sound play failed:", error));
+      lastPlayedMessageIdRef.current = latestMessage.id;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, isChatSoundMuted, currentUserId, isLoading]); // isLoading ensures we don't play sound while initially loading
+
 
   if (isLoading) {
     return (
@@ -89,7 +121,7 @@ export function ChatMessageList({ chatRoomId, currentUserId }: ChatMessageListPr
             <Avatar className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-primary/50">
               <AvatarImage src={msg.userPhotoURL || undefined} alt={msg.userName} data-ai-hint="user avatar" />
               <AvatarFallback className="text-xs sm:text-sm bg-muted text-muted-foreground">
-                {msg.userName ? msg.userName.charAt(0).toUpperCase() : <UserCircle className="w-4 h-4 sm:w-5 sm:h-5" />}
+                {msg.userName ? msg.userName.charAt(0).toUpperCase() : <UserCircle className="w-4 h-4 sm:w-5 sm:w-5" />}
               </AvatarFallback>
             </Avatar>
             <div className={cn(
@@ -111,6 +143,7 @@ export function ChatMessageList({ chatRoomId, currentUserId }: ChatMessageListPr
         );
       })}
       <div ref={messagesEndRef} />
+      <audio ref={audioRef} src="/audio/livechat-129007.mp3" preload="auto" />
     </div>
   );
 }
