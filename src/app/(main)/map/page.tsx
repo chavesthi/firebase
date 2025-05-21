@@ -2,10 +2,10 @@
 'use client';
 
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useEffect, useState, useMemo, useCallback, type ReactElement, useRef } from 'react'; // Added useRef
+import { useEffect, useState, useMemo, useCallback, type ReactElement, useRef } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX } from 'lucide-react'; // Added Volume2, VolumeX
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX, AlertCircle } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -44,7 +44,7 @@ import { Logo } from '@/components/shared/logo';
 import { PurchaseTicketModal } from '@/components/tickets/purchase-ticket-modal';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatInputForm } from '@/components/chat/chat-input-form';
-import { AlertCircle } from 'lucide-react';
+
 
 interface VenueEvent {
   id: string;
@@ -328,7 +328,7 @@ const MapContentAndLogic = () => {
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
-  const nightclubAudioRef = useRef<HTMLAudioElement>(null); // Ref for nightclub music
+  const nightclubAudioRef = useRef<HTMLAudioElement>(null);
 
 
   const mapsApi = useMapsLibrary('maps');
@@ -438,14 +438,14 @@ const MapContentAndLogic = () => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          setUserLocation(loc);
-          setActualUserLocation(loc);
+          setUserLocation(loc); // Update map center
+          setActualUserLocation(loc); // Set the precise marker location
         },
         (error) => {
           console.error("Error getting user location:", error);
           const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // Default to Sao Paulo
-          setUserLocation(defaultLoc);
-          setActualUserLocation(defaultLoc);
+          setUserLocation(defaultLoc); // Set map center to default
+          setActualUserLocation(null); // No actual location determined
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
         }
       );
@@ -453,7 +453,7 @@ const MapContentAndLogic = () => {
       console.error("Geolocation is not supported by this browser.");
       const defaultLoc = { lat: -23.55052, lng: -46.633308 };
       setUserLocation(defaultLoc);
-      setActualUserLocation(defaultLoc);
+      setActualUserLocation(null);
       toast({ title: "Geolocalização Indisponível", description: "Seu navegador não suporta geolocalização. Usando localização padrão.", variant: "default" });
     }
   }, [toast]);
@@ -610,8 +610,10 @@ const MapContentAndLogic = () => {
     }
     // Cleanup: pause music if component unmounts or filter changes
     return () => {
-      audio.pause();
-      audio.currentTime = 0;
+      if (audio) { // Check if audio still exists
+        audio.pause();
+        audio.currentTime = 0;
+      }
     };
   }, [activeVenueTypeFilters]);
 
@@ -1088,7 +1090,7 @@ const MapContentAndLogic = () => {
                     <AdvancedMarker
                         key={venue.id}
                         position={venue.location}
-                        onClick={() => { setSelectedVenue(venue); }}
+                        onClick={() => { setSelectedVenue(venue); setUserLocation(venue.location); }}
                         title={venue.name}
                         zIndex={isVenueFilteredForBlinking || venue.hasActiveEvent ? 100 : 1}
                     >
