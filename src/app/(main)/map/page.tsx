@@ -1146,7 +1146,7 @@ const MapContentAndLogic = () => {
         }}>
           <SheetContent
             side="right"
-            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto"
+            className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto rounded-tl-lg rounded-bl-lg"
             onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
@@ -1594,4 +1594,5 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
 
