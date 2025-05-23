@@ -86,6 +86,10 @@ const partnerFaqData: FAQCategory[] = [
         answer: "No seu painel, vá para 'Avaliações e Comentários'. Você poderá ver as notas e os comentários deixados pelos usuários para cada um dos seus eventos. Além disso, pode usar a ferramenta de 'Análise de Feedback (IA)' para obter insights e sugestões de melhoria.",
       },
       {
+        question: "Como funciona a \"Análise de Feedback (IA)\" e como posso usá-la?",
+        answer: "A ferramenta de Análise de Feedback com IA processa todas as avaliações (notas e comentários) que seus eventos receberam. Ela gera um relatório conciso que inclui: resumo geral do sentimento dos usuários, os principais aspectos positivos mencionados, os principais aspectos negativos ou reclamações, e sugestões acionáveis para você melhorar seu local. Para usar, vá ao seu Painel de Parceiro, encontre o card \"Análise de Feedback (IA)\" e clique no botão \"Analisar Feedback com IA\". Isso pode levar alguns instantes para processar, especialmente se houver muitos comentários.",
+      },
+      {
         question: "Como funciona o sistema de cupons?",
         answer: "Quando usuários compartilham seus eventos (se a opção de recompensa estiver ativa), eles ganham FervoCoins específicas para o seu local. Ao acumularem 20 FervoCoins do seu estabelecimento, eles recebem um cupom. Vá para 'Resgatar Cupom' no seu painel para validar os cupons apresentados pelos usuários.",
       },
@@ -183,3 +187,4 @@ const HelpPage: NextPage = () => {
 };
 
 export default HelpPage;
+
