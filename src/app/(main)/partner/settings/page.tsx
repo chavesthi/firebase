@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { PAGBANK_PRE_APPROVAL_CODE, STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY } from "@/lib/constants";
+import { STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -481,7 +481,6 @@ export default function PartnerSettingsPage() {
                   <UserCircle className="w-14 h-14 sm:w-16 sm:h-16 text-primary" />
                 )}
               </div>
-               <p className="text-xs sm:text-sm text-muted-foreground">(Recurso de foto de perfil desativado)</p>
             </div>
 
             <div className="space-y-4">
@@ -655,28 +654,13 @@ export default function PartnerSettingsPage() {
                         disabled={isSubmittingCheckout}
                     >
                          {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                        Assinar Plano Fervo (R$2,00/mês)
+                        Assinar Plano Fervo
                     </Button>
                 )}
                  <p className="text-xs text-center text-muted-foreground mt-2">
                     Pagamentos processados de forma segura pelo Stripe.
                 </p>
-                <div className="pt-4">
-                  <h4 className="text-md font-medium text-primary mb-2">Outras Formas de Pagamento</h4>
-                  <p className="text-xs text-muted-foreground mb-3">Utilize o PagBank para assinar o plano Fervo Parceiro.</p>
-                  {/* <!-- INICIO FORMULARIO BOTAO PAGBANK: NAO EDITE OS COMANDOS DAS LINHAS ABAIXO --> */}
-                  <form action="https://pagseguro.uol.com.br/pre-approvals/request.html" method="post" className="w-full mt-2">
-                      <input type="hidden" name="code" value={PAGBANK_PRE_APPROVAL_CODE} />
-                      <input type="hidden" name="iot" value="button" />
-                      <Button type="submit" variant="outline" className="w-full border-amber-500 text-amber-600 hover:bg-amber-500/10" name="submit" value="" > 
-                          <Image src="https://stc.pagseguro.uol.com.br/public/img/botoes/assinaturas/209x48-assinar-assina.gif" 
-                                 alt="Pague com PagBank - É rápido, grátis e seguro!" 
-                                 width={150} height={34} // Adjusted size
-                                 className="mx-auto" /> 
-                      </Button>
-                  </form>
-                 {/* <!-- FINAL FORMULARIO BOTAO PAGBANK --> */}
-                </div>
+               
             </div>
 
             <Separator className="border-primary/20" />
@@ -695,52 +679,9 @@ export default function PartnerSettingsPage() {
                         </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle className="text-destructive">Excluir Conta de Parceiro Permanentemente?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta ação é irreversível. Todos os seus dados como parceiro serão removidos.
-                            As FervoCoins associadas ao seu local serão redistribuídas para os usuários.
-                            Notificações sobre seu local ou eventos serão removidas dos usuários.
-                            Para continuar, por favor, insira sua senha.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <div className="space-y-2 py-2">
-                            <Label htmlFor="deletePartnerPassword">Senha</Label>
-                            <div className="relative">
-                                <Input
-                                    id="deletePartnerPassword"
-                                    type={showDeletePasswordInput ? "text" : "password"}
-                                    value={deletePasswordInput}
-                                    onChange={(e) => setDeletePasswordInput(e.target.value)}
-                                    placeholder="Sua senha atual"
-                                    className={cn(deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && 'border-yellow-500')}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-primary"
-                                    onClick={() => setShowDeletePasswordInput(!showDeletePasswordInput)}
-                                    aria-label={showDeletePasswordInput ? "Esconder senha" : "Mostrar senha"}
-                                >
-                                    {showDeletePasswordInput ? <EyeOff size={18} /> : <Eye size={18} />}
-                                </Button>
-                            </div>
-                            {deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && (
-                                <p className="text-xs text-yellow-600">A senha deve ter pelo menos 6 caracteres.</p>
-                            )}
-                        </div>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => { setDeletePasswordInput(''); setShowDeletePasswordInput(false);}}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeleteAccount}
-                            disabled={isDeletingAccount || deletePasswordInput.length < 6}
-                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                        >
-                            {isDeletingAccount ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            Confirmar Exclusão da Conta
-                        </AlertDialogAction>
-                        </AlertDialogFooter>
+                        <AlertDialogHeader><AlertDialogTitle className="text-destructive">Excluir Conta de Parceiro Permanentemente?</AlertDialogTitle><AlertDialogDescription>Esta ação é irreversível. Todos os seus dados como parceiro serão removidos. As FervoCoins associadas ao seu local serão redistribuídas para os usuários. Notificações sobre seu local ou eventos serão removidas dos usuários. Para continuar, por favor, insira sua senha.</AlertDialogDescription></AlertDialogHeader>
+                        <div className="space-y-2 py-2"><Label htmlFor="deletePartnerPassword">Senha</Label><div className="relative"><Input id="deletePartnerPassword" type={showDeletePasswordInput ? "text" : "password"} value={deletePasswordInput} onChange={(e) => setDeletePasswordInput(e.target.value)} placeholder="Sua senha atual" className={cn(deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && 'border-yellow-500')} /><Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-primary" onClick={() => setShowDeletePasswordInput(!showDeletePasswordInput)} aria-label={showDeletePasswordInput ? "Esconder senha" : "Mostrar senha"}>{showDeletePasswordInput ? <EyeOff size={18} /> : <Eye size={18} />}</Button></div>{deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && (<p className="text-xs text-yellow-600">A senha deve ter pelo menos 6 caracteres.</p>)}</div>
+                        <AlertDialogFooter><AlertDialogCancel onClick={() => { setDeletePasswordInput(''); setShowDeletePasswordInput(false);}}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteAccount} disabled={isDeletingAccount || deletePasswordInput.length < 6} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{isDeletingAccount ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Confirmar Exclusão da Conta</AlertDialogAction></AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
             </div>
