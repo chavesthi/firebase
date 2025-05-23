@@ -23,10 +23,10 @@ interface ChatMessageListProps {
   chatRoomId: string;
   currentUserId: string;
   isChatSoundMuted: boolean;
-  chatClearedTimestamp: number | null; // This prop is kept for potential future use but current clear logic deletes from DB
+  chatClearedTimestamp: number | null;
 }
 
-export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }: ChatMessageListProps) {
+export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, chatClearedTimestamp }: ChatMessageListProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -46,6 +46,12 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }:
         fetchedMessages.push({ id: doc.id, ...doc.data() } as ChatMessage);
       });
       
+      if (chatClearedTimestamp) {
+        fetchedMessages = fetchedMessages.filter(
+          (msg) => msg.timestamp && msg.timestamp.toMillis() > chatClearedTimestamp
+        );
+      }
+      
       setMessages(fetchedMessages);
       setIsLoading(false);
 
@@ -64,7 +70,7 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }:
     });
 
     return () => unsubscribe();
-  }, [chatRoomId]);
+  }, [chatRoomId, chatClearedTimestamp]); // Added chatClearedTimestamp to dependencies
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

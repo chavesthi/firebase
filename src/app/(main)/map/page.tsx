@@ -46,8 +46,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's not used here directly
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -169,7 +168,7 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = '#FACC15'; // yellow-400 for blinking effect
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; 
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
   
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
@@ -336,8 +335,7 @@ const MapContentAndLogic = () => {
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
-  const [isDeletingChat, setIsDeletingChat] = useState(false);
-  const [showClearChatDialog, setShowClearChatDialog] = useState(false);
+  const [chatClearedTimestamp, setChatClearedTimestamp] = useState<number | null>(null);
 
 
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
@@ -613,7 +611,7 @@ const MapContentAndLogic = () => {
   useEffect(() => {
     const playAudio = (audioRef: React.RefObject<HTMLAudioElement>) => {
       if (audioRef.current) {
-        audioRef.current.currentTime = 0; // Start from beginning
+        audioRef.current.currentTime = 0; 
         audioRef.current.play().catch(error => console.warn("Error playing audio:", error));
       }
     };
@@ -668,11 +666,11 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; // Default color
+    let colorClass = "text-foreground"; 
 
-    if (activeVenueTypeFilters.includes(type)) { // If filter is active, use secondary color
+    if (activeVenueTypeFilters.includes(type)) { 
       colorClass = "text-secondary";
-    } else { // Otherwise, use specific type color or default
+    } else { 
       if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
       else if (type === VenueType.BAR) colorClass = "text-accent";
       else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
@@ -964,35 +962,9 @@ const MapContentAndLogic = () => {
     setIsPurchaseTicketModalOpen(true);
   };
 
-  const handleClearChat = async () => {
-    if (!chatRoomId || !currentUser) {
-      toast({ title: "Erro", description: "Não foi possível identificar a sala de chat.", variant: "destructive" });
-      return;
-    }
-    setIsDeletingChat(true);
-    try {
-      const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
-      const messagesSnapshot = await getDocs(messagesRef);
-      if (messagesSnapshot.empty) {
-        toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
-        setIsDeletingChat(false);
-        setShowClearChatDialog(false);
-        return;
-      }
-
-      const batch = writeBatch(firestore);
-      messagesSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
-      toast({ title: "Chat Limpo!", description: "Todas as mensagens desta sala foram apagadas.", variant: "default" });
-    } catch (error) {
-      console.error("Error deleting chat messages:", error);
-      toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens.", variant: "destructive" });
-    } finally {
-      setIsDeletingChat(false);
-      setShowClearChatDialog(false);
-    }
+  const handleClearChat = () => {
+    setChatClearedTimestamp(Date.now());
+    toast({ title: "Chat Limpo", description: "As mensagens anteriores foram ocultadas para esta sessão.", variant: "default" });
   };
 
 
@@ -1114,7 +1086,7 @@ const MapContentAndLogic = () => {
                 title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
             >
                 {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-                <span>Fervo Chat</span>
+                <span className="hidden sm:inline">Fervo Chat</span>
                 <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
             </Button>
         )}
@@ -1561,33 +1533,15 @@ const MapContentAndLogic = () => {
                   >
                       {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
                   </Button>
-                  <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
-                    <AlertDialogTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
-                            title="Limpar Chat (apaga todas as mensagens)"
-                        >
-                            <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Limpar Histórico do Chat?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta ação apagará permanentemente todas as mensagens nesta sala de chat ({chatRoomDisplayName}) para todos os participantes. Esta ação não pode ser desfeita.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeletingChat}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleClearChat} disabled={isDeletingChat} className="bg-destructive hover:bg-destructive/90">
-                            {isDeletingChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Sim, Apagar Tudo
-                        </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                   <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleClearChat}
+                        className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
+                        title="Limpar mensagens desta sessão"
+                    >
+                        <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
+                    </Button>
                   <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
                       <XCircleIcon className="h-5 w-5"/>
                   </Button>
@@ -1615,7 +1569,7 @@ const MapContentAndLogic = () => {
                             chatRoomId={chatRoomId}
                             currentUserId={currentUser.uid}
                             isChatSoundMuted={isChatSoundMuted}
-                            chatClearedTimestamp={null} // Removed chatClearedTimestamp from props as deletion is now permanent
+                            chatClearedTimestamp={chatClearedTimestamp} 
                         />
                     </CardContent>
                     <div className="p-3 sm:p-4 border-t border-border bg-card">
