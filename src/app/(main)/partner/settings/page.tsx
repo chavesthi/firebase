@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore';
+import Image from 'next/image'; // Added Next Image for PagBank button
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY } from "@/lib/constants";
+import { STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY, PAGBANK_PRE_APPROVAL_CODE } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -652,7 +653,7 @@ export default function PartnerSettingsPage() {
                         disabled={isSubmittingCheckout}
                     >
                          {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                        Assinar Plano Fervo (R$ 69,90)
+                        Assinar Plano Fervo (R$ 69,90) por mês
                     </Button>
                 )}
                  <p className="text-xs text-center text-muted-foreground mt-2">
