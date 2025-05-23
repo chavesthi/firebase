@@ -2,15 +2,32 @@
 'use client';
 
 import type { NextPage } from 'next';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ArrowLeft, HelpCircle } from 'lucide-react';
+import { ArrowLeft, HelpCircle, Loader2 } from 'lucide-react';
+import { auth, firestore } from '@/lib/firebase';
+import { UserRole } from '@/lib/constants';
 
-const faqData = [
+interface FAQ {
+  question: string;
+  answer: string;
+}
+
+interface FAQCategory {
+  categoryName: string;
+  questions: FAQ[];
+}
+
+const userFaqData: FAQCategory[] = [
   {
-    category: "Para Usuários",
+    categoryName: "Para Usuários",
     questions: [
       {
         question: "Como faço para encontrar eventos?",
@@ -26,7 +43,7 @@ const faqData = [
       },
       {
         question: "Como faço check-in em um evento?",
-        answer: "No menu principal (na barra de navegação superior), clique no ícone de QR Code (parece um quadrado com um leitor) e escaneie o código fornecido pelo local do evento. Após o check-in, você poderá avaliar o evento.",
+        answer: "No menu principal (na barra de navegação superior), clique no ícone de QR Code (ScanLine) e escaneie o código fornecido pelo local do evento. Após o check-in, você poderá avaliar o evento.",
       },
       {
         question: "Como avalio um evento?",
@@ -46,11 +63,74 @@ const faqData = [
       },
     ],
   }
-  // Partner FAQ section removed
+];
+
+const partnerFaqData: FAQCategory[] = [
+   {
+    categoryName: "Para Parceiros",
+    questions: [
+      {
+        question: "Como cadastro meu local?",
+        answer: "Após criar sua conta como parceiro, você será direcionado para um questionário onde poderá fornecer todos os detalhes do seu estabelecimento, incluindo nome, tipo, endereço, estilos musicais, contatos e foto de perfil do local.",
+      },
+      {
+        question: "Como crio e gerencio eventos?",
+        answer: "No seu painel de parceiro, acesse a seção 'Gerenciar Eventos'. Lá você pode adicionar novos eventos, editar existentes, definir visibilidade, preços e mais. Lembre-se que você tem um limite de 5 eventos visíveis simultaneamente e que a criação de novos eventos pode ser bloqueada se seu período de teste expirar e você não tiver uma assinatura ativa.",
+      },
+      {
+        question: "Como funciona o QR Code para check-in?",
+        answer: "Para cada evento, você pode gerar um QR Code único na seção 'Gerenciar Eventos'. Os usuários escaneiam este código com o app Fervo para fazer check-in, o que os habilita a avaliar o evento posteriormente.",
+      },
+      {
+        question: "Como vejo as avaliações e comentários dos meus eventos?",
+        answer: "No seu painel, vá para 'Avaliações e Comentários'. Você poderá ver as notas e os comentários deixados pelos usuários para cada um dos seus eventos. Além disso, pode usar a ferramenta de 'Análise de Feedback (IA)' para obter insights e sugestões de melhoria.",
+      },
+      {
+        question: "Como funciona o sistema de cupons?",
+        answer: "Quando usuários compartilham seus eventos (se a opção de recompensa estiver ativa), eles ganham FervoCoins específicas para o seu local. Ao acumularem 20 FervoCoins do seu estabelecimento, eles recebem um cupom. Vá para 'Resgatar Cupom' no seu painel para validar os cupons apresentados pelos usuários.",
+      },
+      {
+        question: "Como gerencio minha assinatura do Fervo App?",
+        answer: "Acesse 'Configurações da Conta e Pagamentos' no seu painel. Lá você poderá ver o status da sua assinatura e, se necessário, gerenciá-la.",
+      },
+      {
+        question: "Posso editar as informações do meu local após o cadastro?",
+        answer: "Sim, você pode editar a maioria das informações do seu local (como nome, contatos, foto, estilos musicais, tipo de local) a qualquer momento através do questionário de parceiro acessível pelas 'Configurações do Local'. Algumas informações mais sensíveis, como o endereço principal após a primeira configuração, podem ter restrições.",
+      },
+    ],
+  }
 ];
 
 const HelpPage: NextPage = () => {
   const router = useRouter();
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [isLoadingRole, setIsLoadingRole] = useState(true);
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userDocRef = doc(firestore, "users", user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            setCurrentUserRole(userDocSnap.data().role as UserRole);
+          } else {
+            setCurrentUserRole(UserRole.USER); // Default to user if doc not found
+          }
+        } catch (error) {
+          console.error("Error fetching user role for help page:", error);
+          setCurrentUserRole(UserRole.USER); // Default on error
+        }
+      } else {
+        // Not logged in, default to user FAQs or handle as guest
+        setCurrentUserRole(UserRole.USER);
+      }
+      setIsLoadingRole(false);
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  const displayedFaqData = currentUserRole === UserRole.PARTNER ? partnerFaqData : userFaqData;
 
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
@@ -72,23 +152,30 @@ const HelpPage: NextPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
-          <Accordion type="multiple" className="w-full space-y-4">
-            {faqData.map((categoryItem, index) => (
-              <div key={index}>
-                <h2 className="text-xl font-semibold text-secondary mb-3 mt-4 first:mt-0">{categoryItem.category}</h2>
-                {categoryItem.questions.map((faq, qIndex) => (
-                  <AccordionItem value={`${categoryItem.category}-${qIndex}`} key={qIndex} className="border-b-primary/20 last:border-b-0">
-                    <AccordionTrigger className="text-left hover:text-primary/80 py-3 text-sm sm:text-base">
-                      {faq.question}
-                    </AccordionTrigger>
-                    <AccordionContent className="pt-1 pb-3 text-xs sm:text-sm text-muted-foreground">
-                      {faq.answer}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </div>
-            ))}
-          </Accordion>
+          {isLoadingRole ? (
+            <div className="flex justify-center items-center py-10">
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              <p className="ml-2 text-muted-foreground">Carregando ajuda...</p>
+            </div>
+          ) : (
+            <Accordion type="multiple" className="w-full space-y-4">
+              {displayedFaqData.map((categoryItem, index) => (
+                <div key={index}>
+                  <h2 className="text-xl font-semibold text-secondary mb-3 mt-4 first:mt-0">{categoryItem.categoryName}</h2>
+                  {categoryItem.questions.map((faq, qIndex) => (
+                    <AccordionItem value={`${categoryItem.categoryName}-${qIndex}`} key={qIndex} className="border-b-primary/20 last:border-b-0">
+                      <AccordionTrigger className="text-left hover:text-primary/80 py-3 text-sm sm:text-base">
+                        {faq.question}
+                      </AccordionTrigger>
+                      <AccordionContent className="pt-1 pb-3 text-xs sm:text-sm text-muted-foreground">
+                        {faq.answer}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </div>
+              ))}
+            </Accordion>
+          )}
         </CardContent>
       </Card>
     </div>
