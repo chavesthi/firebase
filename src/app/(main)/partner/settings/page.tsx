@@ -9,14 +9,14 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore';
-import Image from 'next/image'; // Added Next Image for PagBank button
+import Image from 'next/image';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2, ExternalLink } from 'lucide-react';
+import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2, ExternalLink, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { format as formatDate, addDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 
 // Schema for partner settings form
@@ -64,8 +66,7 @@ interface StripeSubscription {
     status: 'trialing' | 'active' | 'canceled' | 'incomplete' | 'past_due' | 'unpaid';
     trial_end?: Timestamp;
     current_period_end?: Timestamp;
-    created: Timestamp; // Ensure created is part of the interface for ordering
-    // Add other relevant fields you sync from Stripe
+    created: Timestamp;
 }
 
 export default function PartnerSettingsPage() {
@@ -79,6 +80,8 @@ export default function PartnerSettingsPage() {
   const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
   const [activeSubscription, setActiveSubscription] = useState<StripeSubscription | null>(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
+  const [partnerCreatedAt, setPartnerCreatedAt] = useState<Timestamp | null>(null);
+  const [trialEndDateString, setTrialEndDateString] = useState<string | null>(null);
 
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -120,6 +123,7 @@ export default function PartnerSettingsPage() {
               couponReportClearPassword: '',
               confirmCouponReportClearPassword: '',
             });
+            setPartnerCreatedAt(userData.createdAt as Timestamp || null);
             // Stripe subscription status will be fetched in another effect
           } else {
             reset({ 
@@ -156,7 +160,6 @@ export default function PartnerSettingsPage() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
         if (!snapshot.empty) {
-            // Assuming the most recent one is the relevant one if multiple exist
             const subData = snapshot.docs[0].data() as StripeSubscription;
             setActiveSubscription(subData);
         } else {
@@ -172,6 +175,22 @@ export default function PartnerSettingsPage() {
 
     return () => unsubscribe();
   }, [currentUser, toast]);
+
+  // Calculate trial end date
+  useEffect(() => {
+    if (partnerCreatedAt && (!activeSubscription || activeSubscription.status !== 'active')) {
+      const createdAtDate = partnerCreatedAt.toDate();
+      const trialEndDate = addDays(createdAtDate, 15);
+      const now = new Date();
+      if (now <= trialEndDate) {
+        setTrialEndDateString(formatDate(trialEndDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }));
+      } else {
+        setTrialEndDateString(null); // Trial has passed
+      }
+    } else {
+      setTrialEndDateString(null); // Has active sub or no creation date
+    }
+  }, [partnerCreatedAt, activeSubscription]);
 
 
   const handleStartSubscriptionCheckout = async () => {
@@ -618,6 +637,16 @@ export default function PartnerSettingsPage() {
                 <CardDescription className="text-xs sm:text-sm">
                     Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
                 </CardDescription>
+
+                {trialEndDateString && (
+                  <div className="p-3 border rounded-md bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 flex items-center">
+                    <Info className="w-5 h-5 mr-3 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      Seu período de teste gratuito termina em: <span className="font-semibold">{trialEndDateString}</span>.
+                    </p>
+                  </div>
+                )}
+
                 {loadingSubscription && (
                     <div className="flex items-center justify-center p-4">
                         <Loader2 className="w-6 h-6 mr-2 animate-spin text-primary" />
