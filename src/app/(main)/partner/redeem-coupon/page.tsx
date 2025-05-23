@@ -308,7 +308,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <Card className="border-primary/50 shadow-lg shadow-primary/15">
           <CardHeader className="text-center p-4 sm:p-6">
-            <CardTitle className="text-xl sm:text-2xl text-primary flex items-center justify-center">
+            <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center justify-center">
               <TicketCheck className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
               Resgatar Cupom de Usuário
             </CardTitle>
@@ -319,7 +319,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
           <form onSubmit={handleSubmit(onSubmit)}>
             <CardContent className="space-y-6 px-4 sm:px-6">
               <div>
-                <Label htmlFor="couponCode" className="text-primary/90">Código do Cupom</Label>
+                <Label htmlFor="couponCode" className="text-foreground">Código do Cupom</Label>
                 <Controller
                   name="couponCode"
                   control={control}
@@ -364,7 +364,7 @@ const PartnerRedeemCouponPage: NextPage = () => {
 
         <Card className="border-primary/50 shadow-lg shadow-primary/15">
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
+            <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
               <History className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
               Relatório de Cupons Resgatados
             </CardTitle>
@@ -454,25 +454,25 @@ const PartnerRedeemCouponPage: NextPage = () => {
                             </AlertDialog>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground/80">Código:</span> {coupon.couponCode}
+                          <span className="font-medium text-foreground">Código:</span> {coupon.couponCode}
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center">
                           <UserIcon className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
-                          <span className="font-medium text-foreground/80">Usuário:</span> {coupon.userName}
+                          <span className="font-medium text-foreground">Usuário:</span> {coupon.userName}
                         </p>
                         {coupon.eventName && (
                             <p className="text-xs text-muted-foreground flex items-center">
                                 <ScrollText className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
-                                <span className="font-medium text-foreground/80">Evento:</span> {coupon.eventName}
+                                <span className="font-medium text-foreground">Evento:</span> {coupon.eventName}
                             </p>
                         )}
                         <p className="text-xs text-muted-foreground flex items-center">
                            <CalendarClock className="w-3 h-3 mr-1.5 text-primary/70 shrink-0" />
-                           <span className="font-medium text-foreground/80">Validado em:</span> {coupon.redeemedAt ? format(coupon.redeemedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}
+                           <span className="font-medium text-foreground">Validado em:</span> {coupon.redeemedAt ? format(coupon.redeemedAt.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'N/A'}
                         </p>
                          {coupon.partnerVenueName && (
                             <p className="text-xs text-muted-foreground">
-                                <span className="font-medium text-foreground/80">Local:</span> {coupon.partnerVenueName}
+                                <span className="font-medium text-foreground">Local:</span> {coupon.partnerVenueName}
                             </p>
                         )}
                       </CardContent>

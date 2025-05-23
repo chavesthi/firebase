@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore';
-import Image from 'next/image'; // Ensure Image is imported
+import Image from 'next/image';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -393,7 +393,6 @@ export default function PartnerSettingsPage() {
       batch.delete(partnerDocRef);
   
       // 5. Delete Stripe customer data (via extension, usually by deleting customers/{userId} doc)
-      // This also attempts to cancel any active subscriptions via the Stripe extension's triggers.
       const stripeCustomerDocRef = doc(firestore, `customers/${partnerIdToDelete}`);
       batch.delete(stripeCustomerDocRef); 
 
@@ -469,7 +468,7 @@ export default function PartnerSettingsPage() {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
-        <p className="ml-4 text-lg text-primary">Carregando configurações...</p>
+        <p className="ml-4 text-lg text-foreground">Carregando configurações...</p>
       </div>
     );
   }
@@ -484,8 +483,8 @@ export default function PartnerSettingsPage() {
         </div>
       <Card className="max-w-2xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
         <CardHeader className="text-center p-4 sm:p-6">
-          <CardTitle className="text-2xl sm:text-3xl text-primary">Configurações da Conta e Pagamentos</CardTitle>
-          <CardDescription className="text-sm sm:text-base">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
+          <CardTitle className="text-2xl sm:text-3xl text-foreground">Configurações da Conta e Pagamentos</CardTitle>
+          <CardDescription className="text-sm sm:text-base text-muted-foreground">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
         
         <form onSubmit={handleSubmit(onSettingsSubmit)}>
@@ -504,7 +503,7 @@ export default function PartnerSettingsPage() {
 
             <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="contactName" className="text-primary/90">Nome do Contato</Label>
+                  <Label htmlFor="contactName" className="text-foreground">Nome do Contato</Label>
                    <Controller
                     name="contactName"
                     control={control}
@@ -515,7 +514,7 @@ export default function PartnerSettingsPage() {
                   {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="companyName" className="text-primary/90">Nome da Empresa/Estabelecimento</Label>
+                  <Label htmlFor="companyName" className="text-foreground">Nome da Empresa/Estabelecimento</Label>
                    <Controller
                     name="companyName"
                     control={control}
@@ -526,7 +525,7 @@ export default function PartnerSettingsPage() {
                    {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-primary/90">E-mail de Login</Label>
+                  <Label htmlFor="email" className="text-foreground">E-mail de Login</Label>
                    <Controller
                     name="email"
                     control={control}
@@ -539,7 +538,7 @@ export default function PartnerSettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                  <Label htmlFor="notificationsEnabled" className="text-primary/90 text-sm sm:text-base">Receber Notificações por E-mail</Label>
+                  <Label htmlFor="notificationsEnabled" className="text-foreground text-sm sm:text-base">Receber Notificações por E-mail</Label>
                    <Controller
                       name="notificationsEnabled"
                       control={control}
@@ -557,11 +556,11 @@ export default function PartnerSettingsPage() {
             </div>
             
             <div className="space-y-4">
-                <h3 className="text-lg font-medium text-primary">Senha para Limpar Relatório de Cupons</h3>
+                <h3 className="text-lg font-medium text-foreground">Senha para Limpar Relatório de Cupons</h3>
                 <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
 
                  <div className="space-y-2">
-                    <Label htmlFor="couponReportClearPassword" className="text-primary/90">Nova Senha</Label>
+                    <Label htmlFor="couponReportClearPassword" className="text-foreground">Nova Senha</Label>
                     <div className="relative">
                         <Controller
                             name="couponReportClearPassword"
@@ -591,7 +590,7 @@ export default function PartnerSettingsPage() {
                  </div>
 
                  <div className="space-y-2">
-                    <Label htmlFor="confirmCouponReportClearPassword" className="text-primary/90">Confirmar Nova Senha</Label>
+                    <Label htmlFor="confirmCouponReportClearPassword" className="text-foreground">Confirmar Nova Senha</Label>
                      <div className="relative">
                         <Controller
                             name="confirmCouponReportClearPassword"
@@ -632,10 +631,10 @@ export default function PartnerSettingsPage() {
             <Separator className="border-primary/20" />
 
              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-primary flex items-center">
+                <h3 className="text-lg font-medium text-foreground flex items-center">
                     <CreditCard className="w-5 h-5 mr-2"/> Meus Planos Fervo Parceiro
                 </h3>
-                <CardDescription className="text-xs sm:text-sm">
+                <CardDescription className="text-xs sm:text-sm text-muted-foreground">
                     Assine o Fervo App para ter acesso a todas as funcionalidades premium e destacar seu estabelecimento!
                 </CardDescription>
 

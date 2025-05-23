@@ -149,7 +149,6 @@ const ManageEventsPage: NextPage = () => {
 
   useEffect(() => {
     let unsubscribeEvents: (() => void) | null = null;
-    let unsubscribeUserDoc: (() => void) | null = null;
     let unsubscribePartnerStatus: (() => void) | null = null;
     let unsubscribeSubscriptionStatus: (() => void) | null = null;
 
@@ -200,7 +199,6 @@ const ManageEventsPage: NextPage = () => {
       } else {
         router.push('/login');
         if (unsubscribeEvents) unsubscribeEvents();
-        if (unsubscribeUserDoc) unsubscribeUserDoc();
         if (unsubscribePartnerStatus) unsubscribePartnerStatus();
         if (unsubscribeSubscriptionStatus) unsubscribeSubscriptionStatus();
         setLoading(false);
@@ -210,7 +208,6 @@ const ManageEventsPage: NextPage = () => {
     return () => {
       unsubscribeAuth();
       if (unsubscribeEvents) unsubscribeEvents();
-      if (unsubscribeUserDoc) unsubscribeUserDoc();
       if (unsubscribePartnerStatus) unsubscribePartnerStatus();
       if (unsubscribeSubscriptionStatus) unsubscribeSubscriptionStatus();
     };
@@ -340,7 +337,6 @@ const ManageEventsPage: NextPage = () => {
   const handleDeleteEvent = async (eventId: string) => {
     if (!currentUser) return;
 
-    // Allow deleting events even if trial expired
     const confirmDelete = window.confirm("Tem certeza que deseja excluir este evento? As avaliações e comentários associados a ele serão mantidos para estatísticas gerais do local, mas o evento em si será removido.");
     if (!confirmDelete) return;
 
@@ -361,7 +357,6 @@ const ManageEventsPage: NextPage = () => {
 
   const handleDeletePastEvents = async () => {
     if (!currentUser) return;
-     // Allow deleting past events even if trial expired
 
     const pastEvents = partnerEvents.filter(event => isEventPast(event.endDateTime));
     if (pastEvents.length === 0) {
@@ -389,7 +384,7 @@ const ManageEventsPage: NextPage = () => {
   const toggleEventVisibility = async (event: EventDocument) => {
     if (!currentUser) return;
 
-    if (!canCreateEvents && !event.visibility) { // If trying to make an event visible when trial expired
+    if (!canCreateEvents && !event.visibility) { 
       toast({ title: "Ação Bloqueada", description: "Seu período de teste expirou. Assine para tornar eventos visíveis.", variant: "destructive", duration: 7000 });
       return;
     }
@@ -478,11 +473,11 @@ const ManageEventsPage: NextPage = () => {
       </div>
       <Card className="mb-8 border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
+          <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
             <PlusCircle className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             {editingEventId ? 'Editar Evento' : 'Adicionar Novo Evento'}
           </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
+          <CardDescription className="text-xs sm:text-sm text-muted-foreground">
             {editingEventId ? 'Modifique os detalhes do seu evento.' : 'Crie um novo evento para seu local. Você pode ter até 5 eventos visíveis simultaneamente.'}
           </CardDescription>
         </CardHeader>
@@ -498,35 +493,35 @@ const ManageEventsPage: NextPage = () => {
             )}
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
               <div className="md:col-span-2">
-                <Label htmlFor="eventName" className="text-primary/90">Nome do Evento</Label>
+                <Label htmlFor="eventName" className="text-foreground">Nome do Evento</Label>
                 <Controller name="eventName" control={control} render={({ field }) => <Input id="eventName" placeholder="Ex: Festa Neon Anos 2000" {...field} className={errors.eventName ? 'border-destructive' : ''} />} />
                 {errors.eventName && <p className="mt-1 text-sm text-destructive">{errors.eventName.message}</p>}
               </div>
 
               <div>
-                <Label htmlFor="startDate" className="text-primary/90">Data de Início</Label>
+                <Label htmlFor="startDate" className="text-foreground">Data de Início</Label>
                 <Controller name="startDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.startDate ? 'border-destructive' : ''} />} />
                 {errors.startDate && <p className="mt-1 text-sm text-destructive">{errors.startDate.message}</p>}
               </div>
               <div>
-                <Label htmlFor="startTime" className="text-primary/90">Hora de Início</Label>
+                <Label htmlFor="startTime" className="text-foreground">Hora de Início</Label>
                 <Controller name="startTime" control={control} render={({ field }) => <Input id="startTime" type="time" {...field} className={errors.startTime ? 'border-destructive' : ''} />} />
                 {errors.startTime && <p className="mt-1 text-sm text-destructive">{errors.startTime.message}</p>}
               </div>
 
               <div>
-                <Label htmlFor="endDate" className="text-primary/90">Data de Fim</Label>
+                <Label htmlFor="endDate" className="text-foreground">Data de Fim</Label>
                 <Controller name="endDate" control={control} render={({ field }) => <DatePicker value={field.value} onChange={field.onChange} className={errors.endDate ? 'border-destructive' : ''} />} />
                 {errors.endDate && <p className="mt-1 text-sm text-destructive">{errors.endDate.message}</p>}
               </div>
               <div>
-                <Label htmlFor="endTime" className="text-primary/90">Hora de Fim</Label>
+                <Label htmlFor="endTime" className="text-foreground">Hora de Fim</Label>
                 <Controller name="endTime" control={control} render={({ field }) => <Input id="endTime" type="time" {...field} className={errors.endTime ? 'border-destructive' : ''} />} />
                 {errors.endTime && <p className="mt-1 text-sm text-destructive">{errors.endTime.message}</p>}
               </div>
 
               <div className="md:col-span-2">
-                <Label className="text-primary/90">Estilos Musicais (Máx. 4)</Label>
+                <Label className="text-foreground">Estilos Musicais (Máx. 4)</Label>
                 <ScrollArea className="h-32 p-2 border rounded-md border-input">
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {MUSIC_STYLE_OPTIONS.map((option) => (
@@ -565,7 +560,7 @@ const ManageEventsPage: NextPage = () => {
               </div>
 
               <div>
-                <Label htmlFor="pricingType" className="text-primary/90">Tipo de Preço</Label>
+                <Label htmlFor="pricingType" className="text-foreground">Tipo de Preço</Label>
                 <Controller
                   name="pricingType"
                   control={control}
@@ -587,14 +582,14 @@ const ManageEventsPage: NextPage = () => {
 
               {watchedPricingType !== PricingType.FREE && (
                 <div>
-                  <Label htmlFor="pricingValue" className="text-primary/90">Valor (R$)</Label>
+                  <Label htmlFor="pricingValue" className="text-foreground">Valor (R$)</Label>
                   <Controller name="pricingValue" control={control} render={({ field }) => <Input id="pricingValue" type="number" step="0.01" placeholder="Ex: 25.50" {...field} value={field.value ?? ''} className={errors.pricingValue ? 'border-destructive' : ''} />} />
                   {errors.pricingValue && <p className="mt-1 text-sm text-destructive">{errors.pricingValue.message}</p>}
                 </div>
               )}
 
               <div className="md:col-span-2">
-                <Label htmlFor="ticketPurchaseUrl" className="text-primary/90">Link para Compra de Ingressos (Opcional)</Label>
+                <Label htmlFor="ticketPurchaseUrl" className="text-foreground">Link para Compra de Ingressos (Opcional)</Label>
                 <Controller name="ticketPurchaseUrl" control={control} render={({ field }) => <Input id="ticketPurchaseUrl" type="url" placeholder="https://exemplo.com/ingressos" {...field} className={errors.ticketPurchaseUrl ? 'border-destructive' : ''} />} />
                 {errors.ticketPurchaseUrl && <p className="mt-1 text-sm text-destructive">{errors.ticketPurchaseUrl.message}</p>}
                 <p className="mt-1 text-xs text-muted-foreground">Se fornecido, este link será usado para a venda de ingressos. Se o evento não for gratuito e este campo estiver vazio, os usuários serão instruídos a pagar na entrada ou via contato direto.</p>
@@ -602,14 +597,14 @@ const ManageEventsPage: NextPage = () => {
 
 
               <div className="md:col-span-2">
-                <Label htmlFor="description" className="text-primary/90">Descrição do Evento (Opcional)</Label>
+                <Label htmlFor="description" className="text-foreground">Descrição do Evento (Opcional)</Label>
                 <Controller name="description" control={control} render={({ field }) => <Textarea id="description" placeholder="Detalhes sobre o evento, atrações, etc." {...field} className={errors.description ? 'border-destructive' : ''} />} />
                 {errors.description && <p className="mt-1 text-sm text-destructive">{errors.description.message}</p>}
               </div>
 
               <div className="md:col-span-2 flex items-center space-x-2 pt-2">
                 <Controller name="shareRewardsEnabled" control={control} render={({ field }) => <Switch id="shareRewardsEnabled" checked={field.value} onCheckedChange={field.onChange} />} />
-                <Label htmlFor="shareRewardsEnabled" className="text-primary/90">Ativar Recompensa por Compartilhamento (FervoCoins). Quando o Usuário Compartilha o seu Evento para 10 pessoas ele ganha 20 moedas, 2 moedas por compartilhamento que valem um cupom de Cerveja ou Refrigerante 350ml. Esse Cupom pode ser Autenticado no seu painel Resgatar Cupons. Isso é um incentivo ao Usuário</Label>
+                <Label htmlFor="shareRewardsEnabled" className="text-foreground">Ativar Recompensa por Compartilhamento (FervoCoins). Quando o Usuário Compartilha o seu Evento para 10 pessoas ele ganha 20 moedas, 2 moedas por compartilhamento que valem um cupom de Cerveja ou Refrigerante 350ml. Esse Cupom pode ser Autenticado no seu painel Resgatar Cupons. Isso é um incentivo ao Usuário</Label>
               </div>
               <div className="md:col-span-2 -mt-3">
                 <p className="text-xs text-muted-foreground pl-8">
@@ -621,7 +616,7 @@ const ManageEventsPage: NextPage = () => {
 
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Controller name="visibility" control={control} render={({ field }) => <Switch id="visibility" checked={field.value} onCheckedChange={field.onChange} />} />
-                <Label htmlFor="visibility" className="text-primary/90">Visível para usuários?</Label>
+                <Label htmlFor="visibility" className="text-foreground">Visível para usuários?</Label>
                 {errors.visibility && <p className="mt-1 text-sm text-destructive">{errors.visibility.message}</p>}
               </div>
             </div>
@@ -642,11 +637,11 @@ const ManageEventsPage: NextPage = () => {
       <Card className="border-primary/50 shadow-lg shadow-primary/15">
         <CardHeader className="p-4 sm:p-6 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl sm:text-2xl text-primary flex items-center">
+            <CardTitle className="text-xl sm:text-2xl text-foreground flex items-center">
                 <CalendarDays className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
                 Meus Eventos Cadastrados
             </CardTitle>
-            <CardDescription className="text-xs sm:text-sm">Gerencie seus eventos existentes.</CardDescription>
+            <CardDescription className="text-xs sm:text-sm text-muted-foreground">Gerencie seus eventos existentes.</CardDescription>
           </div>
           {partnerEvents.some(event => isEventPast(event.endDateTime)) && (
              <AlertDialog>
@@ -694,7 +689,7 @@ const ManageEventsPage: NextPage = () => {
                   <Card key={event.id} className={`p-3 sm:p-4 border rounded-lg ${event.id === editingEventId ? 'border-primary shadow-md' : 'border-border'}`}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-md sm:text-lg font-semibold text-primary truncate">{event.eventName}</h3>
+                        <h3 className="text-md sm:text-lg font-semibold text-foreground truncate">{event.eventName}</h3>
                         {isHappening && (
                           <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                              <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora

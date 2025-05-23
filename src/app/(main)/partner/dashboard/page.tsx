@@ -350,7 +350,7 @@ export default function PartnerDashboardPage() {
       <div className="mb-6 sm:mb-8">
         <Card className="border-primary/50 shadow-lg shadow-primary/15">
           <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-xl text-primary flex items-center">
+            <CardTitle className="text-xl text-foreground flex items-center">
               <Eye className="w-6 h-6 mr-3" />
               Preview do Local
             </CardTitle>
@@ -384,7 +384,7 @@ export default function PartnerDashboardPage() {
             )}
             {venueData.musicStyles && venueData.musicStyles.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">Estilos Musicais:</h4>
+                <h4 className="text-sm font-medium text-foreground mb-1">Estilos Musicais:</h4>
                 <div className="flex flex-wrap gap-1">
                   {venueData.musicStyles.map(style => (
                     <Badge key={style} variant="outline" className="text-xs border-accent text-accent">{musicStyleLabels[style]}</Badge>
@@ -400,7 +400,7 @@ export default function PartnerDashboardPage() {
             )}
             {(venueData.instagramUrl || venueData.facebookUrl || venueData.youtubeUrl || venueData.phone) && (
               <div className="pt-3 mt-3 border-t border-border/50">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Contatos e Redes:</h4>
+                <h4 className="text-sm font-medium text-foreground mb-2">Contatos e Redes:</h4>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                   {venueData.phone && (
                     <a
@@ -432,7 +432,7 @@ export default function PartnerDashboardPage() {
               </div>
             )}
              <div className="pt-3 mt-3 border-t border-border/50">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">Próximos Eventos (Exemplo):</h4>
+                <h4 className="text-sm font-medium text-foreground mb-2">Próximos Eventos (Exemplo):</h4>
                 <p className="text-xs text-muted-foreground italic">
                     A lista de eventos dinâmicos aparecerá aqui para os usuários.
                     Este é um preview estático.
@@ -453,7 +453,7 @@ export default function PartnerDashboardPage() {
 
       <div className="space-y-6 sm:space-y-8">
         <header className="mb-2 text-center lg:text-left">
-          <h1 className="text-3xl sm:text-4xl font-bold text-primary">{venueData.venueName}</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{venueData.venueName}</h1>
           <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center lg:justify-start px-2">
               <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-primary/70 shrink-0"/>
               <span className="truncate">{fullAddress}</span>
@@ -466,7 +466,7 @@ export default function PartnerDashboardPage() {
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Gerenciar Eventos
               </CardTitle>
@@ -484,7 +484,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Estatísticas Gerais
               </CardTitle>
@@ -492,7 +492,7 @@ export default function PartnerDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-4 p-4 sm:p-6 pt-0 sm:pt-0">
               <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Avaliação Geral do Local:</p>
+                  <p className="text-sm font-medium text-foreground">Avaliação Geral do Local:</p>
                   {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 ? (
                       <div className="flex items-center gap-2">
                           <StarRating rating={venueData.averageVenueRating} readOnly size={20} />
@@ -503,11 +503,11 @@ export default function PartnerDashboardPage() {
                   )}
               </div>
               <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Total de Avaliações Recebidas:</p>
+                  <p className="text-sm font-medium text-foreground">Total de Avaliações Recebidas:</p>
                   <p className="text-lg font-semibold text-primary">{venueData.venueRatingCount || 0}</p>
               </div>
               <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Total de Check-ins no Local:</p>
+                  <p className="text-sm font-medium text-foreground">Total de Check-ins no Local:</p>
                   {loadingCheckIns ? (
                       <Loader2 className="w-5 h-5 text-primary animate-spin" />
                   ) : (
@@ -518,7 +518,7 @@ export default function PartnerDashboardPage() {
                   )}
               </div>
               <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Total de Favoritos:</p>
+                  <p className="text-sm font-medium text-foreground">Total de Favoritos:</p>
                   {loadingFavorites ? (
                       <Loader2 className="w-5 h-5 text-primary animate-spin" />
                   ) : (
@@ -550,7 +550,7 @@ export default function PartnerDashboardPage() {
           
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <Brain className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Análise de Feedback (IA)
               </CardTitle>
@@ -618,7 +618,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                 <Settings className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                 Configurações da Conta e Pagamentos
               </CardTitle>
@@ -637,7 +637,7 @@ export default function PartnerDashboardPage() {
 
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                       <QrCode className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                       QR Codes de Eventos
                   </CardTitle>
@@ -656,7 +656,7 @@ export default function PartnerDashboardPage() {
           
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
-                  <CardTitle className="flex items-center text-lg sm:text-xl text-primary">
+                  <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
                       <Gift className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                       Resgatar Cupons
                   </CardTitle>

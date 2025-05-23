@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import type { NextPage } from 'next';
@@ -206,7 +205,7 @@ const PartnerRatingsPage: NextPage = () => {
             <StarIcon className="w-6 h-6 sm:w-7 sm:h-7 mr-2 sm:mr-3" />
             Avaliações
           </CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
+          <CardDescription className="text-xs sm:text-sm text-muted-foreground">
             Veja as avaliações e comentários dos usuários para seus eventos e a avaliação geral do seu local (média das avaliações de todos os seus eventos).
           </CardDescription>
         </CardHeader>
@@ -275,7 +274,7 @@ const PartnerRatingsPage: NextPage = () => {
                                 {eventRatings.map(rating => (
                                     <Card key={rating.id} className="bg-card/70 p-3 sm:p-4">
                                         <div className="flex justify-between items-center mb-1">
-                                            <CardTitle className="text-sm sm:text-base text-foreground/80">{rating.userName}</CardTitle>
+                                            <CardTitle className="text-sm sm:text-base text-foreground">{rating.userName}</CardTitle>
                                             <StarRating rating={rating.rating} readOnly size={16} />
                                         </div>
                                          <p className="text-xs text-muted-foreground mb-2">
