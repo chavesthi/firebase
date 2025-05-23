@@ -80,7 +80,7 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 // IMPORTANT: For LIVE mode, these MUST be LIVE keys/IDs. For TEST mode, they MUST be TEST keys/IDs.
 // Ensure this Price ID corresponds to the correct mode of your Stripe Extension.
 // This ID should match the Price ID of your "Fervo Partner Monthly" plan in your Stripe dashboard.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RQg8lL8kxrPyagwkovn2XEe"; // Example: price_xxxxxxxxxxxxxx
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RS1BNL8kxrPyagwpFpPX8xp"; // Updated Price ID
 // Ensure this Product ID matches the Product for the Price ID above.
 export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SLMs2b92CI9P8w"; // Updated Product ID
 
