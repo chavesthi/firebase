@@ -137,29 +137,39 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
         return;
       }
 
-      if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt && userData.trialExpiredNotified !== true) {
-        
+      if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt) {
         const subscriptionsRef = collection(firestore, `customers/${user.uid}/subscriptions`);
         const q = query(subscriptionsRef, where('status', 'in', ['trialing', 'active']));
         const subscriptionSnap = await getDocs(q);
 
-        if (subscriptionSnap.empty) { 
+        if (subscriptionSnap.empty) { // No active Stripe subscription
             const createdAtDate = (userData.createdAt as Timestamp).toDate();
             const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); 
             const now = new Date();
 
-            if (now > trialEndDate) {
-            toast({
-                title: "Período de Teste Expirado",
-                description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
-                duration: 10000, 
-                action: (
-                <Button variant="outline" size="sm" onClick={() => router.push('/partner/settings')}>
-                    Assinar Agora
-                </Button>
-                ),
-            });
-            await updateDoc(userDocRef, { trialExpiredNotified: true });
+            if (now > trialEndDate) { // Trial has expired
+                if (userData.trialExpiredNotified !== true) {
+                    toast({
+                        title: "Período de Teste Expirado",
+                        description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
+                        duration: 10000, 
+                        action: (
+                        <Button variant="outline" size="sm" onClick={() => router.push('/partner/settings')}>
+                            Assinar Agora
+                        </Button>
+                        ),
+                    });
+                    await updateDoc(userDocRef, { trialExpiredNotified: true });
+                }
+            } else { // Still within trial period
+                const daysRemaining = Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysRemaining > 0) {
+                     toast({
+                        title: "Período de Teste Ativo",
+                        description: `Você tem ${daysRemaining} dia(s) restante(s) no seu período de teste gratuito.`,
+                        duration: 5000,
+                    });
+                }
             }
         }
       }
@@ -458,3 +468,4 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     </Tabs>
   );
 }
+

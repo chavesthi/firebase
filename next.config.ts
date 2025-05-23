@@ -1,8 +1,6 @@
+import type { NextConfig } from 'next';
 
-import type {NextConfig} from 'next';
-
-const nextConfig: NextConfig = {
-  /* config options here */
+const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -23,18 +21,22 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-      { // Added for Firebase Storage
+      {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
         port: '',
         pathname: '/**',
       },
-      // Add other image domains if needed, e.g., for user-uploaded content
     ],
   },
   env: {
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0",
-  }
-};
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: 'AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0',
+  },
+  experimental: {
+    allowedDevOrigins: [
+      'https://9003-firebase-studio-1746595136928.cluster-m7tpz3bmgjgoqrktlvd4ykrc2m.cloudworkstations.dev',
+    ],
+  },
+} as NextConfig | any; // <- Tipagem ajustada para aceitar experimental extra
 
 export default nextConfig;
