@@ -108,7 +108,7 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false,
+              stripeSubscriptionActive: false, // Default to false, will be updated by customer listener
               photoURL: userData.photoURL || user.photoURL || null,
             };
 
@@ -122,11 +122,11 @@ const useAuthAndUserSubscription = () => {
                         isActive = true;
                     }
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
-                    setLoading(false);
+                    setLoading(false); // Ensure loading is set to false after subscription status is determined
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
-                    setLoading(false);
+                    setLoading(false); // Also set loading to false on error
                 });
             } else {
                 setAppUser(baseAppUser);
@@ -265,8 +265,9 @@ export default function MainAppLayout({
       }
 
 
-      if (appUser.role === UserRole.PARTNER && trialExpiredRecentlyOrActiveSub) {
-        // Do nothing if partner has active sub or trial just expired (toast handled by login form)
+      if (appUser.role === UserRole.PARTNER && trialExpiredRecentlyOrActiveSub && !appUser.stripeSubscriptionActive) {
+        // If partner's trial recently expired (and they were notified) AND they don't have an active sub,
+        // the toast from login-form.tsx should handle it. Don't show a generic greeting.
       } else {
         const now = new Date();
         const hour = now.getHours();
@@ -292,13 +293,15 @@ export default function MainAppLayout({
             greetingTitle = `${greetingPrefix}, ${appUser.venueName || appUser.name}!`;
             greetingDescription = "Qual Evento Vai Rolar Hoje?";
         }
-
-        toast({
-          title: greetingTitle,
-          description: greetingDescription,
-          variant: "default",
-          duration: 3000,
-        });
+        
+        if (greetingTitle){
+            toast({
+              title: greetingTitle,
+              description: greetingDescription,
+              variant: "default",
+              duration: 3000,
+            });
+        }
       }
     }
     prevAppUserRef.current = appUser;
@@ -635,20 +638,10 @@ export default function MainAppLayout({
       if (appUser.questionnaireCompleted) {
         renderChildrenContent = true;
       } else {
-        return (
-          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-            <Loader2 className="w-10 h-10 animate-spin text-primary" />
-            <p className="ml-2">Redirecionando para questionário...</p>
-          </div>
-        );
+        // Do not render children if questionnaire is not complete and not on an auth/shared page
       }
     } else {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="ml-2">Verificando autenticação...</p>
-        </div>
-      );
+      // Do not render children if no appUser and not on an auth/shared page
     }
   }
 
@@ -856,7 +849,12 @@ export default function MainAppLayout({
         </header>
       )}
       <main className="flex-1">
-        {renderChildrenContent ? children : null }
+        {renderChildrenContent ? children : (
+          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+             <p className="ml-2">Carregando...</p>
+          </div>
+        )}
       </main>
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal
@@ -868,3 +866,5 @@ export default function MainAppLayout({
     </div>
   );
 }
+
+        
