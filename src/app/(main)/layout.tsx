@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -31,19 +31,19 @@ interface UserVenueCoins {
 
 interface Notification {
   id: string;
-  partnerId?: string; 
-  eventId?: string; 
+  partnerId?: string;
+  eventId?: string;
   venueName?: string;
   eventName?: string;
   message: string;
-  createdAt: FirebaseTimestamp; 
+  createdAt: FirebaseTimestamp;
   read: boolean;
   venueType?: VenueType;
   musicStyles?: MusicStyle[];
 }
 
 interface FavoriteVenueNotificationSettings {
-  [venueId: string]: boolean; 
+  [venueId: string]: boolean;
 }
 
 interface AppUser {
@@ -59,15 +59,15 @@ interface AppUser {
   notifications?: Notification[];
   favoriteVenueIds?: string[];
   favoriteVenueNotificationSettings?: FavoriteVenueNotificationSettings;
-  venueName?: string; 
+  venueName?: string;
   address?: {
     city?: string;
     state?: string;
   };
-  createdAt?: FirebaseTimestamp; 
-  trialExpiredNotified?: boolean; 
+  createdAt?: FirebaseTimestamp;
+  trialExpiredNotified?: boolean;
   stripeSubscriptionActive?: boolean;
-  photoURL?: string | null; // Added photoURL
+  photoURL?: string | null;
 }
 
 const activeEventNotificationListeners: Record<string, () => void> = {};
@@ -108,8 +108,8 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false, 
-              photoURL: userData.photoURL || user.photoURL || null, // Prioritize Firestore, then Auth
+              stripeSubscriptionActive: false,
+              photoURL: userData.photoURL || user.photoURL || null,
             };
 
             if (userData.role === UserRole.PARTNER) {
@@ -122,7 +122,7 @@ const useAuthAndUserSubscription = () => {
                         isActive = true;
                     }
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
-                    setLoading(false); 
+                    setLoading(false);
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
@@ -151,7 +151,7 @@ const useAuthAndUserSubscription = () => {
               createdAt: undefined,
               trialExpiredNotified: false,
               stripeSubscriptionActive: false,
-              photoURL: user.photoURL || null, // Get from auth provider if new doc
+              photoURL: user.photoURL || null,
             });
             setLoading(false);
           }
@@ -180,7 +180,7 @@ const useAuthAndUserSubscription = () => {
            delete activeEventNotificationListeners[key];
       }
     };
-  }, [pathname, toast]); 
+  }, [pathname, toast]);
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -222,7 +222,7 @@ export default function MainAppLayout({
 
     const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEventPage = pathname.startsWith('/shared-event');
-    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons'); 
+    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/user/help');
 
     if (!appUser) {
       if (!isAuthPage && !isSharedEventPage && !isGeneralUserAccessiblePage) {
@@ -252,7 +252,7 @@ export default function MainAppLayout({
     if (!loading && prevAppUserRef.current === null && appUser !== null && appUser.questionnaireCompleted) {
       let trialExpiredRecentlyOrActiveSub = false;
       if (appUser.role === UserRole.PARTNER) {
-        if (appUser.stripeSubscriptionActive) { 
+        if (appUser.stripeSubscriptionActive) {
             trialExpiredRecentlyOrActiveSub = true;
         } else if (appUser.createdAt && appUser.trialExpiredNotified === true) {
             const createdAtDate = appUser.createdAt.toDate();
@@ -627,7 +627,7 @@ export default function MainAppLayout({
   if (!loading) {
     const isAuthPg = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEvtPg = pathname.startsWith('/shared-event');
-    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons'); 
+    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/user/help');
 
     if (isAuthPg || isSharedEvtPg || isGeneralUserAccPg) {
       renderChildrenContent = true;
@@ -825,17 +825,21 @@ export default function MainAppLayout({
                     </>
                   )}
                   {appUser?.role === UserRole.PARTNER && (
+                    <>
                     <DropdownMenuItem onClick={() => router.push('/partner-questionnaire')}>
                       <Settings className="w-4 h-4 mr-2" />
                       Configurações do Local
                     </DropdownMenuItem>
-                  )}
-                  {appUser?.role === UserRole.PARTNER && (
                     <DropdownMenuItem onClick={() => router.push('/partner/settings')}>
                       <Settings className="w-4 h-4 mr-2" />
                       Configurações da Conta
                     </DropdownMenuItem>
+                    </>
                   )}
+                   <DropdownMenuItem onClick={() => router.push('/user/help')}>
+                      <HelpCircle className="w-4 h-4 mr-2" />
+                      Central de Ajuda
+                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                       {theme === 'dark' ? <Sun className="w-4 h-4 mr-2" /> : <Moon className="w-4 h-4 mr-2" />}
                       {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
