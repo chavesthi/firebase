@@ -18,7 +18,7 @@ const faqData = [
       },
       {
         question: "Como funcionam as FervoCoins?",
-        answer: "Você ganha FervoCoins ao compartilhar eventos de locais específicos. Cada 10 compartilhamentos de eventos de um mesmo local podem gerar um cupom para você usar nesse local.",
+        answer: "Você ganha FervoCoins ao compartilhar eventos de locais específicos. Cada 10 compartilhamentos de eventos de um mesmo local podem gerar um cupom para você usar nesse local. Você ganha 2 moedas por compartilhamento.",
       },
       {
         question: "Como uso um cupom?",
@@ -45,40 +45,8 @@ const faqData = [
         answer: "Acesse \"Meu Perfil\" no menu do usuário. Lá você pode atualizar sua idade, preferências de locais, estilos musicais, cidade e estado.",
       },
     ],
-  },
-  {
-    category: "Para Parceiros",
-    questions: [
-      {
-        question: "Como cadastro meu local?",
-        answer: "Ao criar uma conta de parceiro, você será guiado por um questionário para fornecer todos os detalhes do seu estabelecimento, incluindo nome, tipo, endereço, estilos musicais e contatos.",
-      },
-      {
-        question: "Como crio um evento?",
-        answer: "No seu painel de parceiro, vá para \"Gerenciar Eventos\". Lá você pode adicionar novos eventos, definir datas, horários, preços, visibilidade e se o compartilhamento do evento gera FervoCoins para os usuários.",
-      },
-      {
-        question: "Como gero um QR Code para check-in?",
-        answer: "Na seção \"Meus Eventos Cadastrados\" do seu painel de eventos, cada evento terá um ícone de QR Code. Clique nele para visualizar e ter a opção de imprimir o código de check-in específico daquele evento.",
-      },
-      {
-        question: "Como vejo as avaliações dos meus eventos?",
-        answer: "No seu painel de parceiro, acesse \"Avaliações e Comentários\". Lá você pode ver as notas e os comentários de cada evento individualmente, além da avaliação geral do seu local (que é a média das avaliações de todos os seus eventos).",
-      },
-      {
-        question: "Como funciona a análise de feedback com IA?",
-        answer: "No painel de parceiro, na seção \"Análise de Feedback (IA)\", você pode gerar um relatório. A IA analisará todas as avaliações e comentários dos seus eventos e fornecerá um resumo dos pontos positivos, aspectos a melhorar e sugestões acionáveis.",
-      },
-      {
-        question: "Como gerencio minha assinatura do Fervo App?",
-        answer: "Vá para \"Configurações da Conta e Pagamentos\" no seu painel de parceiro. Lá você encontrará opções para assinar ou gerenciar sua assinatura mensal do Fervo App.",
-      },
-      {
-        question: "Como valido um cupom de usuário?",
-        answer: "No seu painel de parceiro, acesse \"Resgatar Cupons\". Insira o código fornecido pelo usuário para validá-lo. Cupons resgatados aparecerão no relatório.",
-      },
-    ],
-  },
+  }
+  // Partner FAQ section removed
 ];
 
 const HelpPage: NextPage = () => {
