@@ -37,6 +37,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -325,7 +336,9 @@ const MapContentAndLogic = () => {
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
-  const [chatClearedTimestamp, setChatClearedTimestamp] = useState<number | null>(null);
+  const [isDeletingChat, setIsDeletingChat] = useState(false);
+  const [showClearChatDialog, setShowClearChatDialog] = useState(false);
+
 
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
   const barAudioRef = useRef<HTMLAudioElement>(null);
@@ -600,13 +613,13 @@ const MapContentAndLogic = () => {
   useEffect(() => {
     const playAudio = (audioRef: React.RefObject<HTMLAudioElement>) => {
       if (audioRef.current) {
+        audioRef.current.currentTime = 0; // Start from beginning
         audioRef.current.play().catch(error => console.warn("Error playing audio:", error));
       }
     };
     const pauseAudio = (audioRef: React.RefObject<HTMLAudioElement>) => {
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.currentTime = 0;
       }
     };
 
@@ -619,7 +632,6 @@ const MapContentAndLogic = () => {
     if (activeVenueTypeFilters.includes(VenueType.ADULT_ENTERTAINMENT)) playAudio(adultEntertainmentAudioRef);
     else pauseAudio(adultEntertainmentAudioRef);
 
-    // Cleanup: pause all music if component unmounts or filters change drastically
     return () => {
       pauseAudio(nightclubAudioRef);
       pauseAudio(barAudioRef);
@@ -656,14 +668,18 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground";
+    let colorClass = "text-foreground"; // Default color
 
-    if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
-    else if (type === VenueType.BAR) colorClass = "text-accent";
-    else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
-    else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
-    else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
-    else if (type === VenueType.LGBT) colorClass = "text-orange-500";
+    if (activeVenueTypeFilters.includes(type)) { // If filter is active, use secondary color
+      colorClass = "text-secondary";
+    } else { // Otherwise, use specific type color or default
+      if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
+      else if (type === VenueType.BAR) colorClass = "text-accent";
+      else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
+      else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
+      else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
+      else if (type === VenueType.LGBT) colorClass = "text-orange-500";
+    }
 
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
   };
@@ -948,6 +964,37 @@ const MapContentAndLogic = () => {
     setIsPurchaseTicketModalOpen(true);
   };
 
+  const handleClearChat = async () => {
+    if (!chatRoomId || !currentUser) {
+      toast({ title: "Erro", description: "Não foi possível identificar a sala de chat.", variant: "destructive" });
+      return;
+    }
+    setIsDeletingChat(true);
+    try {
+      const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
+      const messagesSnapshot = await getDocs(messagesRef);
+      if (messagesSnapshot.empty) {
+        toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
+        setIsDeletingChat(false);
+        setShowClearChatDialog(false);
+        return;
+      }
+
+      const batch = writeBatch(firestore);
+      messagesSnapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      toast({ title: "Chat Limpo!", description: "Todas as mensagens desta sala foram apagadas.", variant: "default" });
+    } catch (error) {
+      console.error("Error deleting chat messages:", error);
+      toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens.", variant: "destructive" });
+    } finally {
+      setIsDeletingChat(false);
+      setShowClearChatDialog(false);
+    }
+  };
+
 
   if (!userLocation) {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" /> Carregando sua localização...</div>;
@@ -984,9 +1031,9 @@ const MapContentAndLogic = () => {
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
-      <audio ref={nightclubAudioRef} src="/audio/night-club-music-196359.mp3" loop preload="auto" />
-      <audio ref={barAudioRef} src="/audio/general-chatter-in-bar-14816.mp3" loop preload="auto" />
-      <audio ref={adultEntertainmentAudioRef} src="/audio/Sound Effcet Sexy Sax - Efeitos Sonoros.mp3" loop preload="auto" />
+      <audio ref={nightclubAudioRef} src="/audio/night-club-music-196359.mp3" preload="auto" />
+      <audio ref={barAudioRef} src="/audio/general-chatter-in-bar-14816.mp3" preload="auto" />
+      <audio ref={adultEntertainmentAudioRef} src="/audio/Sound Effcet Sexy Sax - Efeitos Sonoros.mp3" preload="auto" />
       <Card
         className={cn(
           "absolute z-20 top-4 left-4 w-11/12 max-w-xs sm:w-80 md:w-96 bg-background/80 backdrop-blur-md shadow-xl transition-transform duration-300 ease-in-out border-primary/50",
@@ -1008,7 +1055,7 @@ const MapContentAndLogic = () => {
                   key={option.value}
                   variant={activeVenueTypeFilters.includes(option.value) ? "secondary" : "outline"}
                   onClick={() => toggleVenueTypeFilter(option.value)}
-                  className={`w-full justify-start ${activeVenueTypeFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
+                  className={`w-full justify-start ${activeVenueTypeFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-secondary hover:text-secondary-foreground hover:border-secondary/50'}`}
                   aria-pressed={activeVenueTypeFilters.includes(option.value)}
                 >
                   <VenueIconDisplayForFilter type={option.value} />
@@ -1024,7 +1071,7 @@ const MapContentAndLogic = () => {
                   key={option.value}
                   variant={activeMusicStyleFilters.includes(option.value) ? "secondary" : "outline"}
                   onClick={() => toggleMusicStyleFilter(option.value)}
-                  className={`w-full justify-start ${activeMusicStyleFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-primary/10 hover:border-primary/50'}`}
+                  className={`w-full justify-start ${activeMusicStyleFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-secondary hover:text-secondary-foreground hover:border-secondary/50'}`}
                   aria-pressed={activeMusicStyleFilters.includes(option.value)}
                 >
                   <Music2 className="w-5 h-5 text-primary/70" />
@@ -1514,15 +1561,33 @@ const MapContentAndLogic = () => {
                   >
                       {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
                   </Button>
-                  <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setChatClearedTimestamp(Date.now())}
-                      className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
-                      title="Limpar Chat (apenas visualização)"
-                  >
-                      <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
-                  </Button>
+                  <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
+                    <AlertDialogTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
+                            title="Limpar Chat (apaga todas as mensagens)"
+                        >
+                            <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Limpar Histórico do Chat?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação apagará permanentemente todas as mensagens nesta sala de chat ({chatRoomDisplayName}) para todos os participantes. Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeletingChat}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearChat} disabled={isDeletingChat} className="bg-destructive hover:bg-destructive/90">
+                            {isDeletingChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Sim, Apagar Tudo
+                        </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                   <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
                       <XCircleIcon className="h-5 w-5"/>
                   </Button>
@@ -1550,7 +1615,7 @@ const MapContentAndLogic = () => {
                             chatRoomId={chatRoomId}
                             currentUserId={currentUser.uid}
                             isChatSoundMuted={isChatSoundMuted}
-                            chatClearedTimestamp={chatClearedTimestamp}
+                            chatClearedTimestamp={null} // Removed chatClearedTimestamp from props as deletion is now permanent
                         />
                     </CardContent>
                     <div className="p-3 sm:p-4 border-t border-border bg-card">
@@ -1594,5 +1659,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
-

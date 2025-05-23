@@ -23,10 +23,10 @@ interface ChatMessageListProps {
   chatRoomId: string;
   currentUserId: string;
   isChatSoundMuted: boolean;
-  chatClearedTimestamp: number | null;
+  chatClearedTimestamp: number | null; // This prop is kept for potential future use but current clear logic deletes from DB
 }
 
-export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, chatClearedTimestamp }: ChatMessageListProps) {
+export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted }: ChatMessageListProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -45,10 +45,6 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, c
       querySnapshot.forEach((doc) => {
         fetchedMessages.push({ id: doc.id, ...doc.data() } as ChatMessage);
       });
-
-      if (chatClearedTimestamp !== null) {
-        fetchedMessages = fetchedMessages.filter(msg => msg.timestamp.toMillis() > chatClearedTimestamp);
-      }
       
       setMessages(fetchedMessages);
       setIsLoading(false);
@@ -68,7 +64,7 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, c
     });
 
     return () => unsubscribe();
-  }, [chatRoomId, chatClearedTimestamp]); // Add chatClearedTimestamp to dependencies
+  }, [chatRoomId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -104,8 +100,7 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, c
       <div className="flex flex-col justify-center items-center h-full">
         <MessageSquare className="w-16 h-16 text-muted-foreground/50 mb-4" />
         <p className="text-muted-foreground text-center">
-          {chatClearedTimestamp ? "Chat limpo." : "Nenhuma mensagem ainda."}<br/>
-          {chatClearedTimestamp ? "Novas mensagens aparecerão aqui." : "Seja o primeiro a iniciar a conversa!"}
+          Nenhuma mensagem ainda.<br/>Seja o primeiro a iniciar a conversa!
         </p>
       </div>
     );
@@ -126,7 +121,7 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, c
             <Avatar className="w-8 h-8 sm:w-10 sm:h-10 border-2 border-primary/50">
               <AvatarImage src={msg.userPhotoURL || undefined} alt={msg.userName} data-ai-hint="user avatar" />
               <AvatarFallback className="text-xs sm:text-sm bg-muted text-muted-foreground">
-                {msg.userName ? msg.userName.charAt(0).toUpperCase() : <UserCircle className="w-4 h-4 sm:w-5 sm:w-5" />}
+                {msg.userName ? msg.userName.charAt(0).toUpperCase() : <UserCircle className="w-4 h-4 sm:w-5 sm:h-5" />}
               </AvatarFallback>
             </Avatar>
             <div className={cn(
@@ -152,4 +147,3 @@ export function ChatMessageList({ chatRoomId, currentUserId, isChatSoundMuted, c
     </div>
   );
 }
-
