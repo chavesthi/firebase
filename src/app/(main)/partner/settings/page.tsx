@@ -393,11 +393,12 @@ export default function PartnerSettingsPage() {
       batch.delete(partnerDocRef);
   
       // 5. Delete Stripe customer data (via extension, usually by deleting customers/{userId} doc)
+      // This also attempts to cancel any active subscriptions via the Stripe extension's triggers.
       const stripeCustomerDocRef = doc(firestore, `customers/${partnerIdToDelete}`);
-      batch.delete(stripeCustomerDocRef); // This should trigger extension's delete function
+      batch.delete(stripeCustomerDocRef); 
 
       await batch.commit();
-      toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações e ingressos associados foram removidos.", duration: 4000 });
+      toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações, ingressos e dados de cliente Stripe associados foram removidos.", duration: 4000 });
   
       // Cleanup references in other users' documents
       const usersCollectionRef = collection(firestore, "users");
@@ -689,8 +690,8 @@ export default function PartnerSettingsPage() {
                             <Image 
                                 src="/images/stripe.png" 
                                 alt="Pagamentos processados por Stripe" 
-                                width={100} 
-                                height={40}
+                                width={300} 
+                                height={120}
                                 data-ai-hint="payment gateway logo"
                             />
                         </div>
