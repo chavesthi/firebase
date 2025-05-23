@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore';
-import Image from 'next/image';
+import Image from 'next/image'; // Ensure Image is imported
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { auth, firestore } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import { STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY, PAGBANK_PRE_APPROVAL_CODE } from "@/lib/constants";
+import { STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY } from "@/lib/constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -178,7 +178,7 @@ export default function PartnerSettingsPage() {
 
   // Calculate trial end date
   useEffect(() => {
-    if (partnerCreatedAt && (!activeSubscription || activeSubscription.status !== 'active')) {
+    if (partnerCreatedAt && (!activeSubscription || (activeSubscription.status !== 'active' && activeSubscription.status !== 'trialing'))) {
       const createdAtDate = partnerCreatedAt.toDate();
       const trialEndDate = addDays(createdAtDate, 15);
       const now = new Date();
@@ -676,14 +676,25 @@ export default function PartnerSettingsPage() {
                     </div>
                 )}
                  {!loadingSubscription && (!activeSubscription || (activeSubscription.status !== 'active' && activeSubscription.status !== 'trialing')) && (
-                    <Button 
-                        onClick={handleStartSubscriptionCheckout} 
-                        className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-                        disabled={isSubmittingCheckout}
-                    >
-                         {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                        Assinar Plano Fervo (R$ 69,90) por mês
-                    </Button>
+                    <>
+                        <Button 
+                            onClick={handleStartSubscriptionCheckout} 
+                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+                            disabled={isSubmittingCheckout}
+                        >
+                            {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
+                            Assinar Plano Fervo (R$ 69,90) por mês
+                        </Button>
+                        <div className="mt-2 flex justify-center">
+                            <Image 
+                                src="/images/stripe.png" 
+                                alt="Pagamentos processados por Stripe" 
+                                width={100} 
+                                height={40}
+                                data-ai-hint="payment gateway logo"
+                            />
+                        </div>
+                    </>
                 )}
                  <p className="text-xs text-center text-muted-foreground mt-2">
                     Pagamentos processados de forma segura pelo Stripe.
