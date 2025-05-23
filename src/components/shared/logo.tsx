@@ -15,8 +15,8 @@ export function Logo({
   className,
   iconClassName,
   logoSrc = "/images/fervoapp_logo_512x512.png",
-  logoWidth = 100,  // Changed from 50
-  logoHeight = 100, // Changed from 50
+  logoWidth = 80,  // Changed from 100
+  logoHeight = 80, // Changed from 100
 }: LogoProps) {
   return (
     <Link href="/" className={cn("flex items-center gap-2 text-foreground", className)} aria-label="Fervo App Home">
