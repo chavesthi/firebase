@@ -100,7 +100,8 @@ const tipsArray = [
   "Dica: Responda aos feedbacks (mesmo que internamente) para planejar ações futuras.",
   "Dica: Ofereça cupons ou pequenas recompensas para quem fizer check-in ou compartilhar seus eventos.",
   "Dica: Verifique regularmente as estatísticas para acompanhar o engajamento com seu local e eventos.",
-  "Dica: Um vídeo de apresentação no seu perfil pode aumentar muito o interesse dos usuários!"
+  "Dica: Um vídeo de apresentação no seu perfil pode aumentar muito o interesse dos usuários!",
+  "Dica: Considere adicionar um vídeo ao seu perfil ou até mesmo um link de uma live do YouTube quando um evento estiver acontecendo. Isso pode atrair muito o interesse dos usuários!"
 ];
 
 const engagementMessagesArray = [
@@ -374,6 +375,7 @@ export default function PartnerDashboardPage() {
 
   const fullAddress = venueData.address ? `${venueData.address.street}, ${venueData.address.number || 'S/N'}, ${venueData.address.city} - ${venueData.address.state}, ${venueData.address.cep}` : 'Endereço não disponível';
   const VenueIcon = venueData.venueType ? venueTypeIcons[venueData.venueType] : MapPin;
+  const showVideo = venueData.youtubeUrl && getYouTubeEmbedUrl(venueData.youtubeUrl);
 
 
   return (
@@ -411,23 +413,22 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm text-muted-foreground">Como os usuários veem seu estabelecimento no Fervo App.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 p-4 sm:p-6 pt-0 sm:pt-0">
-             {venueData.photoURL && (
+             {showVideo ? (
+                <div className="relative w-full rounded-lg overflow-hidden shadow-md" style={{ paddingTop: '56.25%' }}>
+                  <iframe
+                    src={getYouTubeEmbedUrl(venueData.youtubeUrl)!}
+                    title="YouTube video player"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="absolute top-0 left-0 w-full h-full"
+                  />
+                </div>
+             ) : venueData.photoURL && (
                  <div className="aspect-video w-full rounded-lg overflow-hidden shadow-md relative bg-muted mb-4">
                     <Image src={venueData.photoURL} alt={`Foto de ${venueData.venueName}`} layout="fill" objectFit="cover" data-ai-hint="venue building" />
                 </div>
              )}
-            {getYouTubeEmbedUrl(venueData.youtubeUrl) && (
-              <div className="relative w-full rounded-lg overflow-hidden shadow-md" style={{ paddingTop: '56.25%' }}>
-                <iframe
-                  src={getYouTubeEmbedUrl(venueData.youtubeUrl)!}
-                  title="YouTube video player"
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  className="absolute top-0 left-0 w-full h-full"
-                />
-              </div>
-            )}
             <h3 className="text-lg font-semibold text-foreground pt-2">{venueData.venueName}</h3>
             {venueData.venueType && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -739,3 +740,4 @@ export default function PartnerDashboardPage() {
     </div>
   );
 }
+
