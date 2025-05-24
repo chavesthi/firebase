@@ -393,7 +393,16 @@ export default function PartnerSettingsPage() {
       batch.delete(partnerDocRef);
   
       // 5. Delete Stripe customer data (via extension, usually by deleting customers/{userId} doc)
+      // This might also involve calling Stripe API to cancel subscriptions if the extension doesn't handle it on customer deletion
       const stripeCustomerDocRef = doc(firestore, `customers/${partnerIdToDelete}`);
+      // Before deleting, check if there's a subscription to cancel if the extension doesn't do it automatically
+      const subscriptionsRef = collection(firestore, `customers/${partnerIdToDelete}/subscriptions`);
+      const activeSubscriptionsSnap = await getDocs(query(subscriptionsRef, where('status', 'in', ['active', 'trialing'])));
+      if (!activeSubscriptionsSnap.empty) {
+          // Ideally, trigger a cancellation through Stripe API or the extension's mechanism
+          // For now, we'll just delete the customer doc, but Stripe subscription might remain active
+          console.warn(`Partner ${partnerIdToDelete} has active Stripe subscriptions. Ensure they are cancelled in Stripe.`);
+      }
       batch.delete(stripeCustomerDocRef); 
 
       await batch.commit();
@@ -653,6 +662,7 @@ export default function PartnerSettingsPage() {
                         <p className="text-muted-foreground">Verificando status da assinatura...</p>
                     </div>
                 )}
+                
                 {!loadingSubscription && activeSubscription && (activeSubscription.status === 'active' || activeSubscription.status === 'trialing') && (
                     <div className="p-4 border rounded-md bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700">
                         <p className="text-green-700 dark:text-green-400 font-semibold">
@@ -676,26 +686,25 @@ export default function PartnerSettingsPage() {
                     </div>
                 )}
                  {!loadingSubscription && (!activeSubscription || (activeSubscription.status !== 'active' && activeSubscription.status !== 'trialing')) && (
-                    <>
-                        <Button 
-                            onClick={handleStartSubscriptionCheckout} 
-                            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-                            disabled={isSubmittingCheckout}
-                        >
-                            {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                            Assinar Plano Fervo (R$ 69,90) por mês
-                        </Button>
-                        <div className="mt-2 flex justify-center">
-                            <Image 
-                                src="/images/stripe.png" 
-                                alt="Pagamentos processados por Stripe" 
-                                width={300} 
-                                height={120}
-                                data-ai-hint="payment gateway logo"
-                            />
-                        </div>
-                    </>
+                    <Button 
+                        onClick={handleStartSubscriptionCheckout} 
+                        className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+                        disabled={isSubmittingCheckout}
+                    >
+                        {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
+                        Assinar Plano Fervo (R$ 69,90 por mês)
+                    </Button>
                 )}
+                
+                <div className="mt-2 flex justify-center">
+                    <Image 
+                        src="/images/stripe.png" 
+                        alt="Pagamentos processados por Stripe" 
+                        width={300} 
+                        height={120}
+                        data-ai-hint="payment gateway logo"
+                    />
+                </div>
                  <p className="text-xs text-center text-muted-foreground mt-2">
                     Pagamentos processados de forma segura pelo Stripe.
                 </p>
