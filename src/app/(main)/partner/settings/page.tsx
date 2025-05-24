@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, Timestamp, orderBy, addDoc } from 'firebase/firestore'; // Added addDoc
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, onSnapshot, Timestamp, orderBy, addDoc, collectionGroup } from 'firebase/firestore';
 import Image from 'next/image';
 import { ref as storageRefStandard, deleteObject } from "firebase/storage";
 
@@ -222,9 +222,13 @@ export default function PartnerSettingsPage() {
                 } else if (data?.error) {
                     unsubscribe(); 
                     console.error("Stripe Checkout Session Error (full object):", data.error);
-                    const errorMessage = typeof data.error === 'object' && data.error.message 
-                                         ? data.error.message 
-                                         : "Falha ao criar sessão de checkout. Verifique os logs do servidor para mais detalhes.";
+                    let errorMessage = "Falha ao criar sessão de checkout. Verifique os logs do servidor para mais detalhes.";
+                    if (typeof data.error === 'object' && data.error.message) {
+                        errorMessage = data.error.message;
+                    } else if (typeof data.error === 'object' && Object.keys(data.error).length === 0) {
+                        // Handle case where data.error is an empty object
+                        errorMessage = "Falha ao criar sessão de checkout. Ocorreu um erro no servidor sem mensagem detalhada. Verifique os logs das Firebase Functions e a configuração da extensão Stripe.";
+                    }
                     toast({ title: "Erro ao Iniciar Checkout", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
                 }
@@ -367,32 +371,32 @@ export default function PartnerSettingsPage() {
 
     setIsDeletingAccount(true);
     try {
+      console.log("Attempting to reauthenticate partner for deletion:", currentUser.uid);
       const credential = EmailAuthProvider.credential(currentUser.email, deletePasswordInput);
       await reauthenticateWithCredential(currentUser, credential);
+      console.log("Partner reauthenticated successfully.");
 
       const partnerIdToDelete = currentUser.uid;
       const batch = writeBatch(firestore);
 
       console.log("Starting account deletion for partner:", partnerIdToDelete);
+      
       const partnerDocRef = doc(firestore, "users", partnerIdToDelete);
       console.log("Partner document reference:", partnerDocRef.path);
-
-      const partnerUserSnap = await getDoc(partnerDocRef);
-      if (partnerUserSnap.exists()) {
-          const partnerData = partnerUserSnap.data();
-          if (partnerData.photoURL && partnerData.photoURL.includes("firebasestorage.googleapis.com")) {
-              try {
-                  console.log("Attempting to delete partner profile picture:", partnerData.photoURL);
+      
+      // Try to delete profile picture from Storage
+      try {
+          const partnerUserSnap = await getDoc(partnerDocRef);
+          if (partnerUserSnap.exists()) {
+              const partnerData = partnerUserSnap.data();
+              if (partnerData.photoURL && partnerData.photoURL.includes("firebasestorage.googleapis.com")) {
+                  console.log("Attempting to delete partner profile picture from Storage:", partnerData.photoURL);
                   await deleteObject(storageRefStandard(storage, partnerData.photoURL));
-                  console.log("Partner profile picture deleted from storage.");
-              } catch (e: any) {
-                  if (e.code !== 'storage/object-not-found') {
-                    console.warn("Could not delete partner profile picture on account deletion (may not exist or other error):", e);
-                  } else {
-                    console.log("Partner profile picture not found in storage, no deletion needed.");
-                  }
+                  console.log("Partner profile picture deleted from Storage.");
               }
           }
+      } catch (storageError) {
+          console.warn("Could not delete partner profile picture during account deletion (may not exist or other error):", storageError);
       }
 
 
@@ -414,12 +418,7 @@ export default function PartnerSettingsPage() {
 
 
       console.log("Marking partner user document for deletion:", partnerDocRef.path);
-      if (partnerDocRef) { 
-           batch.delete(partnerDocRef);
-      } else {
-          console.error("CRITICAL: partnerDocRef was unexpectedly undefined before batch.delete call in handleDeleteAccount.");
-          throw new Error("Referência do documento do parceiro não encontrada para exclusão.");
-      }
+      batch.delete(partnerDocRef);
 
 
       const stripeCustomerDocRef = doc(firestore, `customers/${partnerIdToDelete}`);
@@ -436,6 +435,7 @@ export default function PartnerSettingsPage() {
       console.log("Firestore batch commit successful for initial deletions.");
       toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações e dados de cliente Stripe associados foram removidos.", duration: 4000 });
 
+      // Cleanup references in other users' documents
       const usersCollectionRef = collection(firestore, "users");
       const usersSnapshotForCleanup = await getDocs(usersCollectionRef);
       const cleanupBatch = writeBatch(firestore);
@@ -447,6 +447,7 @@ export default function PartnerSettingsPage() {
         let userUpdateNeeded = false;
         const updates: { [key: string]: any } = {};
 
+        // Remove from venueCoins
         if (userData.venueCoins && typeof userData.venueCoins[partnerIdToDelete] === 'number') {
           const updatedVenueCoins = { ...userData.venueCoins };
           delete updatedVenueCoins[partnerIdToDelete];
@@ -454,16 +455,19 @@ export default function PartnerSettingsPage() {
           userUpdateNeeded = true;
         }
 
+        // Remove from favoriteVenueIds
         if (userData.favoriteVenueIds && userData.favoriteVenueIds.includes(partnerIdToDelete)) {
           updates.favoriteVenueIds = userData.favoriteVenueIds.filter((id: string) => id !== partnerIdToDelete);
           userUpdateNeeded = true;
         }
+        // Remove from favoriteVenueNotificationSettings
         if (userData.favoriteVenueNotificationSettings && userData.favoriteVenueNotificationSettings[partnerIdToDelete] !== undefined) {
           const updatedSettings = { ...userData.favoriteVenueNotificationSettings };
           delete updatedSettings[partnerIdToDelete];
           updates.favoriteVenueNotificationSettings = updatedSettings;
           userUpdateNeeded = true;
         }
+        // Remove notifications related to this partner or their events
         if (userData.notifications && Array.isArray(userData.notifications)) {
           updates.notifications = userData.notifications.filter((n: any) => n.partnerId !== partnerIdToDelete && (!n.eventId || !eventsSnapshot.docs.some(e => e.id === n.eventId)));
           if (updates.notifications.length < userData.notifications.length) {
@@ -512,7 +516,7 @@ export default function PartnerSettingsPage() {
   if (loading) {
     return (
       <div className="container flex items-center justify-center min-h-[calc(100vh-4rem)] mx-auto px-4">
-        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <Loader2 className="w-12 h-12 text-foreground animate-spin" />
         <p className="ml-4 text-lg text-foreground">Carregando configurações...</p>
       </div>
     );
@@ -521,12 +525,12 @@ export default function PartnerSettingsPage() {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
         <div className="flex items-center justify-between mb-4 sm:mb-6 max-w-2xl mx-auto">
-            <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
+            <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-foreground text-foreground hover:bg-muted text-xs sm:text-sm">
                 <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
                 Painel
             </Button>
         </div>
-      <Card className="max-w-2xl mx-auto border-primary/70 shadow-lg shadow-primary/20">
+      <Card className="max-w-2xl mx-auto border-border shadow-lg ">
         <CardHeader className="text-center p-4 sm:p-6">
           <CardTitle className="text-2xl sm:text-3xl text-foreground">Configurações da Conta e Pagamentos</CardTitle>
           <CardDescription className="text-sm sm:text-base text-muted-foreground">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
@@ -555,7 +559,7 @@ export default function PartnerSettingsPage() {
                     name="contactName"
                     control={control}
                     render={({ field }) => (
-                      <Input id="contactName" {...field} className={cn(errors.contactName && 'border-red-500 focus-visible:ring-red-500')} />
+                      <Input id="contactName" {...field} className={cn(errors.contactName && 'border-destructive focus-visible:ring-destructive')} />
                     )}
                   />
                   {errors.contactName && <p className="mt-1 text-sm text-destructive">{errors.contactName.message}</p>}
@@ -566,7 +570,7 @@ export default function PartnerSettingsPage() {
                     name="companyName"
                     control={control}
                     render={({ field }) => (
-                      <Input id="companyName" {...field} className={cn(errors.companyName && 'border-red-500 focus-visible:ring-red-500')} />
+                      <Input id="companyName" {...field} className={cn(errors.companyName && 'border-destructive focus-visible:ring-destructive')} />
                     )}
                   />
                    {errors.companyName && <p className="mt-1 text-sm text-destructive">{errors.companyName.message}</p>}
@@ -577,7 +581,7 @@ export default function PartnerSettingsPage() {
                     name="email"
                     control={control}
                     render={({ field }) => (
-                       <Input id="email" type="email" {...field} className={cn(errors.email && 'border-red-500 focus-visible:ring-red-500')} />
+                       <Input id="email" type="email" {...field} className={cn(errors.email && 'border-destructive focus-visible:ring-destructive')} />
                     )}
                   />
                   {errors.email && <p className="mt-1 text-sm text-destructive">{errors.email.message}</p>}
@@ -618,7 +622,7 @@ export default function PartnerSettingsPage() {
                                 type={showPassword ? "text" : "password"}
                                 placeholder="Deixe em branco para não alterar"
                                 {...field}
-                                className={cn(errors.couponReportClearPassword && 'border-red-500 focus-visible:ring-red-500')}
+                                className={cn(errors.couponReportClearPassword && 'border-destructive focus-visible:ring-destructive')}
                             />
                             )}
                         />
@@ -648,7 +652,7 @@ export default function PartnerSettingsPage() {
                                 type={showConfirmPassword ? "text" : "password"}
                                 placeholder="Confirme a senha"
                                 {...field}
-                                className={cn(errors.confirmCouponReportClearPassword && 'border-red-500 focus-visible:ring-red-500')}
+                                className={cn(errors.confirmCouponReportClearPassword && 'border-destructive focus-visible:ring-destructive')}
                             />
                             )}
                         />
@@ -775,4 +779,3 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
-
