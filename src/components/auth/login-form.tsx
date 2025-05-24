@@ -12,12 +12,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { UserRole } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, LogIn, UserPlus, MailQuestion } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; 
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; 
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore'; 
+import { auth, firestore, googleAuthProvider } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail, type UserCredential } from 'firebase/auth';
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
@@ -34,8 +45,13 @@ const signupSchema = z.object({
   path: ["confirmPassword"],
 });
 
+const resetPasswordSchema = z.object({
+  email: z.string().email({ message: 'Por favor, insira um e-mail válido.' }),
+});
+
 type LoginFormInputs = z.infer<typeof loginSchema>;
 type SignupFormInputs = z.infer<typeof signupSchema>;
+type ResetPasswordFormInputs = z.infer<typeof resetPasswordSchema>;
 
 interface LoginFormProps {
   onLoginSuccess?: () => void;
@@ -57,11 +73,12 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); 
+  const [formMode, setFormMode] = useState<'login' | 'signup'>('login');
   const router = useRouter();
   const { toast } = useToast();
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
-
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isForgotPasswordDialogOpen, setIsForgotPasswordDialogOpen] = useState(false);
 
   const loginMethods = useForm<LoginFormInputs>({
     resolver: zodResolver(loginSchema),
@@ -69,6 +86,10 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
 
   const signupMethods = useForm<SignupFormInputs>({
     resolver: zodResolver(signupSchema),
+  });
+
+  const resetPasswordMethods = useForm<ResetPasswordFormInputs>({
+    resolver: zodResolver(resetPasswordSchema),
   });
 
   const handleSuccessfulAuth = async (userCredential: UserCredential, role: UserRole, isGoogleSignIn: boolean = false, googleName?: string) => {
@@ -89,12 +110,12 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
       userNameForGreeting = isGoogleSignIn ? (googleName || user.displayName || (role === UserRole.USER ? "Usuário" : "Parceiro")) : signupMethods.getValues("name");
       const initialUserData: any = {
         uid: user.uid,
-        name: userNameForGreeting, // This will be establishment name for partners from signup
+        name: userNameForGreeting,
         email: user.email,
         role: role,
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
-        trialExpiredNotified: false, 
+        trialExpiredNotified: false,
       };
       if (role === UserRole.USER) {
         initialUserData.venueCoins = {};
@@ -104,8 +125,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
         initialUserData.lastNotificationCheckTimestamp = null;
         initialUserData.photoURL = user.photoURL || null;
       } else if (role === UserRole.PARTNER) {
-        // photoURL for partner is handled in partner-questionnaire
-        initialUserData.photoURL = null; 
+        initialUserData.photoURL = null;
       }
       await setDoc(userDocRef, initialUserData);
 
@@ -122,7 +142,6 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
       userRoleInDbForRedirect = userData.role || UserRole.USER;
       questionnaireCompletedForRedirect = userData.questionnaireCompleted || false;
 
-      // Ensure photoURL is updated if user logs in with Google and has a new photo (only for UserRole.USER)
       if (role === UserRole.USER && isGoogleSignIn && user.photoURL && userData.photoURL !== user.photoURL) {
         await updateDoc(userDocRef, { photoURL: user.photoURL });
       }
@@ -143,17 +162,17 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
         const q = query(subscriptionsRef, where('status', 'in', ['trialing', 'active']));
         const subscriptionSnap = await getDocs(q);
 
-        if (subscriptionSnap.empty) { // No active Stripe subscription
+        if (subscriptionSnap.empty) {
             const createdAtDate = (userData.createdAt as Timestamp).toDate();
-            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); 
+            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000);
             const now = new Date();
 
-            if (now > trialEndDate) { // Trial has expired
+            if (now > trialEndDate) {
                 if (userData.trialExpiredNotified !== true) {
                     toast({
                         title: "Período de Teste Expirado",
                         description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
-                        duration: 10000, 
+                        duration: 10000,
                         action: (
                         <Button variant="outline" size="sm" onClick={() => router.push('/partner/settings')}>
                             Assinar Agora
@@ -162,7 +181,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
                     });
                     await updateDoc(userDocRef, { trialExpiredNotified: true });
                 }
-            } else { // Still within trial period
+            } else {
                 const daysRemaining = Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                 if (daysRemaining > 0) {
                      toast({
@@ -195,7 +214,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
 
 
   const onLoginSubmit: SubmitHandler<LoginFormInputs> = async (data) => {
-    loginMethods.formState.isSubmitting; 
+    loginMethods.formState.isSubmitting;
     try {
       const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
       await handleSuccessfulAuth(userCredential, activeRole);
@@ -219,7 +238,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   };
 
   const onSignupSubmit: SubmitHandler<SignupFormInputs> = async (data) => {
-    signupMethods.formState.isSubmitting; 
+    signupMethods.formState.isSubmitting;
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       await handleSuccessfulAuth(userCredential, activeRole, false, data.name);
@@ -265,18 +284,45 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     }
   };
 
+  const handlePasswordReset: SubmitHandler<ResetPasswordFormInputs> = async (data) => {
+    setIsResettingPassword(true);
+    try {
+      await sendPasswordResetEmail(auth, data.email);
+      toast({
+        title: "E-mail Enviado!",
+        description: "Se uma conta existir para este e-mail, um link de redefinição de senha foi enviado.",
+        variant: "default",
+      });
+      resetPasswordMethods.reset();
+      setIsForgotPasswordDialogOpen(false);
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      let errorMessage = "Falha ao enviar e-mail de redefinição. Tente novamente.";
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = "Nenhuma conta encontrada com este e-mail.";
+      }
+      toast({
+        title: "Erro na Redefinição",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
 
   const cardStyles = 'border-primary/80 [--card-glow:hsl(var(--primary))] [--card-glow-soft:hsla(var(--primary),0.2)]';
   const buttonStyles = 'bg-primary hover:bg-primary/90 text-primary-foreground';
   const commonLabelStyle = "text-primary/80";
-  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive"; 
+  const commonErrorBorderStyle = "border-destructive focus-visible:ring-destructive";
 
   const userTabStyle = activeRole === UserRole.USER
     ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]"
     : "hover:bg-primary/10";
   const partnerTabStyle = activeRole === UserRole.PARTNER
-    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]" 
-    : "hover:bg-primary/10"; 
+    ? "data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-[0_0_10px_hsl(var(--primary))]"
+    : "hover:bg-primary/10";
 
   return (
     <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as UserRole)} className="w-full">
@@ -350,9 +396,47 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
               >
                 <GoogleIcon className="mr-2"/> {isGoogleSigningIn ? 'Conectando com Google...' : 'Entrar com Google'}
               </Button>
-              <Button variant="link" type="button" onClick={() => setFormMode('signup')} className="p-0 h-auto text-primary/80 hover:text-primary">
-                Não tem uma conta? Cadastre-se
-              </Button>
+              <div className="flex justify-between w-full text-sm">
+                <Button variant="link" type="button" onClick={() => setFormMode('signup')} className="p-0 h-auto text-primary/80 hover:text-primary">
+                  Não tem uma conta? Cadastre-se
+                </Button>
+                <AlertDialog open={isForgotPasswordDialogOpen} onOpenChange={setIsForgotPasswordDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="link" type="button" className="p-0 h-auto text-primary/80 hover:text-primary">
+                      Esqueceu sua senha?
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <form onSubmit={resetPasswordMethods.handleSubmit(handlePasswordReset)}>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Redefinir Senha</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Digite seu e-mail para enviarmos um link de redefinição de senha.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <div className="my-4">
+                        <Label htmlFor="reset-email" className="text-primary/80">E-mail</Label>
+                        <Input
+                          id="reset-email"
+                          type="email"
+                          placeholder="seuemail@exemplo.com"
+                          {...resetPasswordMethods.register('email')}
+                          className={cn(resetPasswordMethods.formState.errors.email && commonErrorBorderStyle)}
+                        />
+                        {resetPasswordMethods.formState.errors.email && (
+                          <p className="mt-1 text-sm text-destructive">{resetPasswordMethods.formState.errors.email.message}</p>
+                        )}
+                      </div>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel type="button" onClick={() => resetPasswordMethods.reset()}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction type="submit" disabled={isResettingPassword} className={buttonStyles}>
+                          {isResettingPassword ? 'Enviando...' : 'Enviar Link'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </form>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </CardFooter>
           </Card>
         </form>
@@ -471,4 +555,3 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     </Tabs>
   );
 }
-
