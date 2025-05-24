@@ -9,13 +9,14 @@ import { auth, firestore } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { doc, onSnapshot, collection, getDocs, query, where, collectionGroup, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
-import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb, Brain, Eye, MessageSquare, Instagram, Facebook, Youtube, ExternalLink } from 'lucide-react';
+import { Edit, PlusCircle, CalendarDays, BarChart3, Settings, MapPin, Star, Loader2, QrCode, Gift, ScrollText, CheckCircle, Users, Heart, Lightbulb, Brain, Eye, MessageSquare, Instagram, Facebook, Youtube, ExternalLink, Megaphone } from 'lucide-react';
 import type { Location } from '@/services/geocoding';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS } from '@/lib/constants';
 import { StarRating } from '@/components/ui/star-rating';
 import { analyzeVenueFeedback, type AnalyzeVenueFeedbackInput, type AnalyzeVenueFeedbackOutput, type FeedbackItem } from '@/ai/flows/analyze-venue-feedback-flow';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from '@/components/ui/badge';
+import Image from 'next/image';
 import {
   IconBar,
   IconNightclub,
@@ -45,6 +46,7 @@ interface VenueData {
   questionnaireCompleted?: boolean;
   averageVenueRating?: number;
   venueRatingCount?: number;
+  photoURL?: string | null;
 }
 
 interface EventRatingData {
@@ -68,7 +70,7 @@ const getYouTubeEmbedUrl = (url?: string): string | null => {
     console.warn("Could not parse YouTube URL for embed: ", url, e);
     return null;
   }
-  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0` : null; 
+  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0` : null;
 };
 
 const venueTypeIcons: Record<VenueType, React.ElementType> = {
@@ -90,6 +92,25 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
   return acc;
 }, {} as Record<MusicStyle, string>);
 
+const tipsArray = [
+  "Dica: Use a 'Análise de Feedback (IA)' para entender melhor seus clientes e identificar pontos de melhoria!",
+  "Dica: Mantenha seus eventos sempre atualizados para atrair mais público!",
+  "Dica: Gere QR Codes para seus eventos e incentive o check-in. Isso habilita avaliações e te dá mais dados!",
+  "Dica: Compartilhe o link do seu perfil Fervo App nas suas redes sociais!",
+  "Dica: Responda aos feedbacks (mesmo que internamente) para planejar ações futuras.",
+  "Dica: Ofereça cupons ou pequenas recompensas para quem fizer check-in ou compartilhar seus eventos.",
+  "Dica: Verifique regularmente as estatísticas para acompanhar o engajamento com seu local e eventos.",
+  "Dica: Um vídeo de apresentação no seu perfil pode aumentar muito o interesse dos usuários!"
+];
+
+const engagementMessagesArray = [
+  "Peça aos seus clientes para baixarem o Fervo App! Mais downloads significam mais visibilidade, check-ins e feedbacks para você!",
+  "Incentive seus frequentadores a usar o Fervo App para avaliar seus eventos. O feedback deles é valioso!",
+  "Com o Fervo App, seus clientes ficam por dentro de toda a sua programação e novidades. Divulgue!",
+  "Mais clientes no Fervo App = Mais pessoas descobrindo seus eventos e seu local. Espalhe a notícia!",
+  "Lembre seus clientes: no Fervo App eles podem favoritar seu local e receber notificações de novos eventos!"
+];
+
 
 export default function PartnerDashboardPage() {
   const { toast } = useToast();
@@ -105,6 +126,15 @@ export default function PartnerDashboardPage() {
   const [aiAnalysisResult, setAiAnalysisResult] = useState<AnalyzeVenueFeedbackOutput | null>(null);
   const [isAnalyzingFeedback, setIsAnalyzingFeedback] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [currentTip, setCurrentTip] = useState('');
+  const [currentEngagementMessage, setCurrentEngagementMessage] = useState('');
+
+
+  useEffect(() => {
+    setCurrentTip(tipsArray[Math.floor(Math.random() * tipsArray.length)]);
+    setCurrentEngagementMessage(engagementMessagesArray[Math.floor(Math.random() * engagementMessagesArray.length)]);
+  }, []);
+
 
   useEffect(() => {
     let unsubscribeSnapshot: (() => void) | null = null;
@@ -112,7 +142,6 @@ export default function PartnerDashboardPage() {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (user) {
         setCurrentUser(user);
-        // setLoading(true); // Initial loading state is true by default
 
         const userDocRef = doc(firestore, "users", user.uid);
         unsubscribeSnapshot = onSnapshot(userDocRef, (userDocSnap) => {
@@ -130,8 +159,7 @@ export default function PartnerDashboardPage() {
               router.push('/partner-questionnaire');
               setLoading(false);
             } else {
-              // Validate critical data before setting venueData
-              if (!rawData.venueName || !rawData.venueType || !rawData.address || typeof rawData.address !== 'object' || 
+              if (!rawData.venueName || !rawData.venueType || !rawData.address || typeof rawData.address !== 'object' ||
                   !rawData.address.street || !rawData.address.city || !rawData.address.state || !rawData.address.cep || !rawData.address.country ||
                   !rawData.location || typeof rawData.location.lat !== 'number' || typeof rawData.location.lng !== 'number') {
                 console.error("Partner data is incomplete despite questionnaireCompleted=true. UID:", user.uid, "Data:", rawData);
@@ -147,7 +175,7 @@ export default function PartnerDashboardPage() {
                 musicStyles: rawData.musicStyles || [],
                 address: {
                     street: rawData.address.street,
-                    number: rawData.address.number || '', // Ensure number is at least an empty string
+                    number: rawData.address.number || '',
                     city: rawData.address.city,
                     state: rawData.address.state,
                     cep: rawData.address.cep,
@@ -161,6 +189,7 @@ export default function PartnerDashboardPage() {
                 questionnaireCompleted: rawData.questionnaireCompleted,
                 averageVenueRating: rawData.averageVenueRating || 0,
                 venueRatingCount: rawData.venueRatingCount || 0,
+                photoURL: rawData.photoURL || null,
               });
               setLoading(false);
             }
@@ -274,7 +303,7 @@ export default function PartnerDashboardPage() {
         where('partnerId', '==', currentUser.uid)
       );
       const ratingsSnapshot = await getDocs(ratingsQuery);
-      
+
       const feedbackItems: FeedbackItem[] = [];
       if (ratingsSnapshot.empty) {
         setAnalysisError("Nenhum feedback de evento encontrado para análise.");
@@ -286,7 +315,7 @@ export default function PartnerDashboardPage() {
       const eventDetailsPromises = ratingsSnapshot.docs.map(async (ratingDoc) => {
         const ratingData = ratingDoc.data() as EventRatingData;
         let eventName = "Evento Desconhecido";
-        const eventId = ratingDoc.data().eventId; 
+        const eventId = ratingDoc.data().eventId;
         if (eventId) {
           try {
             const eventDocRef = doc(firestore, `users/${currentUser.uid}/events/${eventId}`);
@@ -301,10 +330,10 @@ export default function PartnerDashboardPage() {
         return {
           rating: ratingData.rating,
           comment: ratingData.comment,
-          eventName: eventName, 
+          eventName: eventName,
         };
       });
-      
+
       const resolvedFeedbackItems = await Promise.all(eventDetailsPromises);
       feedbackItems.push(...resolvedFeedbackItems);
 
@@ -344,9 +373,34 @@ export default function PartnerDashboardPage() {
   }
 
   const fullAddress = venueData.address ? `${venueData.address.street}, ${venueData.address.number || 'S/N'}, ${venueData.address.city} - ${venueData.address.state}, ${venueData.address.cep}` : 'Endereço não disponível';
+  const VenueIcon = venueData.venueType ? venueTypeIcons[venueData.venueType] : MapPin;
+
 
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
+      <header className="mb-6 text-center lg:text-left">
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{venueData.venueName}</h1>
+        <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center lg:justify-start px-2">
+            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-primary/70 shrink-0"/>
+            <span className="truncate">{fullAddress}</span>
+        </p>
+        <Button variant="outline" size="sm" className="mt-4 border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm" onClick={() => router.push('/partner-questionnaire')}>
+            <Edit className="w-3 h-3 mr-1.5" /> Editar Info. do Local
+        </Button>
+      </header>
+
+       {currentEngagementMessage && (
+        <Card className="mb-6 sm:mb-8 border-accent/70 shadow-lg shadow-accent/20 bg-card">
+          <CardHeader className="flex flex-row items-center gap-3 p-4 sm:p-6">
+            <Megaphone className="w-8 h-8 text-accent flex-shrink-0" />
+            <div>
+              <CardTitle className="text-md sm:text-lg text-accent">Engaje Seus Clientes!</CardTitle>
+              <CardDescription className="text-xs sm:text-sm text-muted-foreground">{currentEngagementMessage}</CardDescription>
+            </div>
+          </CardHeader>
+        </Card>
+      )}
+
       <div className="mb-6 sm:mb-8">
         <Card className="border-primary/50 shadow-lg shadow-primary/15">
           <CardHeader className="p-4 sm:p-6">
@@ -357,6 +411,11 @@ export default function PartnerDashboardPage() {
             <CardDescription className="text-xs sm:text-sm text-muted-foreground">Como os usuários veem seu estabelecimento no Fervo App.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 p-4 sm:p-6 pt-0 sm:pt-0">
+             {venueData.photoURL && (
+                 <div className="aspect-video w-full rounded-lg overflow-hidden shadow-md relative bg-muted mb-4">
+                    <Image src={venueData.photoURL} alt={`Foto de ${venueData.venueName}`} layout="fill" objectFit="cover" data-ai-hint="venue building" />
+                </div>
+             )}
             {getYouTubeEmbedUrl(venueData.youtubeUrl) && (
               <div className="relative w-full rounded-lg overflow-hidden shadow-md" style={{ paddingTop: '56.25%' }}>
                 <iframe
@@ -372,13 +431,13 @@ export default function PartnerDashboardPage() {
             <h3 className="text-lg font-semibold text-foreground pt-2">{venueData.venueName}</h3>
             {venueData.venueType && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {React.createElement(venueTypeIcons[venueData.venueType] || MapPin, { className: "w-5 h-5 text-secondary" })}
+                {React.createElement(VenueIcon || MapPin, { className: "w-5 h-5 text-secondary" })}
                 <span>{venueTypeLabels[venueData.venueType] || venueData.venueType}</span>
               </div>
             )}
             {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 && (
               <div className="flex items-center gap-2">
-                <StarRating rating={venueData.averageVenueRating} readOnly size={18} />
+                <StarRating rating={venueData.averageVenueRating} readOnly size={18} fillColor='hsl(var(--primary))' />
                 <span className="text-sm text-foreground">({venueData.averageVenueRating.toFixed(1)})</span>
               </div>
             )}
@@ -423,7 +482,7 @@ export default function PartnerDashboardPage() {
                       <Facebook className="w-5 h-5" />
                     </a>
                   )}
-                  {venueData.youtubeUrl && (
+                  {venueData.youtubeUrl && !getYouTubeEmbedUrl(venueData.youtubeUrl) && ( // Show only if not embedded
                     <a href={venueData.youtubeUrl} target="_blank" rel="noopener noreferrer" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                       <Youtube className="w-5 h-5" />
                     </a>
@@ -452,17 +511,6 @@ export default function PartnerDashboardPage() {
       </div>
 
       <div className="space-y-6 sm:space-y-8">
-        <header className="mb-2 text-center lg:text-left">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{venueData.venueName}</h1>
-          <p className="mt-2 text-sm sm:text-lg text-muted-foreground flex items-center justify-center lg:justify-start px-2">
-              <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 text-primary/70 shrink-0"/>
-              <span className="truncate">{fullAddress}</span>
-          </p>
-          <Button variant="outline" size="sm" className="mt-4 border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm" onClick={() => router.push('/partner-questionnaire')}>
-              <Edit className="w-3 h-3 mr-1.5" /> Editar Info. do Local
-          </Button>
-        </header>
-
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
@@ -495,7 +543,7 @@ export default function PartnerDashboardPage() {
                   <p className="text-sm font-medium text-foreground">Avaliação Geral do Local:</p>
                   {venueData.averageVenueRating !== undefined && venueData.venueRatingCount !== undefined && venueData.venueRatingCount > 0 ? (
                       <div className="flex items-center gap-2">
-                          <StarRating rating={venueData.averageVenueRating} readOnly size={20} />
+                          <StarRating rating={venueData.averageVenueRating} readOnly size={20} fillColor='hsl(var(--primary))'/>
                           <span className="text-sm text-foreground">({venueData.averageVenueRating.toFixed(1)})</span>
                       </div>
                   ) : (
@@ -547,7 +595,7 @@ export default function PartnerDashboardPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
             <CardHeader className="p-4 sm:p-6">
               <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
@@ -610,7 +658,7 @@ export default function PartnerDashboardPage() {
                 onClick={handleGenerateFeedbackAnalysis}
                 disabled={isAnalyzingFeedback}
               >
-                {isAnalyzingFeedback ? <Loader2 className="w-5 h-5 mr-2 animate-spin"/> : <Brain className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />} 
+                {isAnalyzingFeedback ? <Loader2 className="w-5 h-5 mr-2 animate-spin"/> : <Brain className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />}
                 {aiAnalysisResult ? 'Analisar Novamente' : 'Analisar Feedback com IA'}
               </Button>
             </CardFooter>
@@ -647,13 +695,13 @@ export default function PartnerDashboardPage() {
                   <Button
                   variant="outline"
                   className="w-full border-primary text-primary hover:bg-primary/10 text-sm sm:text-base"
-                  onClick={() => router.push('/partner/events')} 
+                  onClick={() => router.push('/partner/events')}
                   >
                   Ver Eventos e QR Codes
                   </Button>
               </CardContent>
           </Card>
-          
+
           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
               <CardHeader className="p-4 sm:p-6">
                   <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
@@ -672,6 +720,20 @@ export default function PartnerDashboardPage() {
                   </Button>
               </CardContent>
           </Card>
+
+           <Card className="border-primary/50 shadow-lg shadow-primary/15 hover:shadow-primary/30 transition-shadow">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center text-lg sm:text-xl text-foreground">
+                <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3 text-yellow-400" />
+                Dicas Fervo App
+              </CardTitle>
+              <CardDescription className="text-xs sm:text-sm text-muted-foreground">Aproveite ao máximo nossa plataforma!</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+              <p className="text-sm text-foreground/90 italic">"{currentTip || 'Carregando dica...'}"</p>
+            </CardContent>
+          </Card>
+
         </div>
       </div>
     </div>
