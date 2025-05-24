@@ -8,8 +8,10 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, addDoc, Timestamp, orderBy } from 'firebase/firestore';
-import Image from 'next/image';
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, Timestamp } from 'firebase/firestore';
+import Image from 'next/image'; // Added Image import
+import { ref as storageRefStandard, deleteObject } from "firebase/storage";
+
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2, ExternalLink, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore } from '@/lib/firebase';
+import { auth, firestore, storage } from '@/lib/firebase'; // Added storage
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY } from "@/lib/constants";
@@ -60,10 +62,20 @@ type PartnerSettingsFormInputs = z.infer<typeof partnerSettingsSchema>;
 
 interface StripeSubscription {
     id: string;
-    status: 'trialing' | 'active' | 'canceled' | 'incomplete' | 'past_due' | 'unpaid';
+    status: 'trialing' | 'active' | 'canceled' | 'incomplete' | 'past_due' | 'unpaid' | string; // Allow other statuses
     trial_end?: Timestamp;
     current_period_end?: Timestamp;
     created: Timestamp;
+    // Add other fields as needed from your Firestore structure
+    price?: {
+        id?: string;
+        product?: {
+            id?: string;
+            name?: string;
+        };
+    };
+    cancel_at_period_end?: boolean;
+    ended_at?: Timestamp | null;
 }
 
 export default function PartnerSettingsPage() {
@@ -154,6 +166,8 @@ export default function PartnerSettingsPage() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
         if (!snapshot.empty) {
+            // Assuming there's only one active/trialing subscription, take the first.
+            // You might need more sophisticated logic if multiple subscriptions are possible.
             const subData = snapshot.docs[0].data() as StripeSubscription;
             setActiveSubscription(subData);
         } else {
@@ -178,9 +192,11 @@ export default function PartnerSettingsPage() {
       if (now <= trialEndDate) {
         setTrialEndDateString(formatDate(trialEndDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }));
       } else {
+        // Trial has ended, clear the message
         setTrialEndDateString(null);
       }
     } else {
+      // User is subscribed or partnerCreatedAt is not yet loaded
       setTrialEndDateString(null);
     }
   }, [partnerCreatedAt, activeSubscription]);
@@ -197,22 +213,25 @@ export default function PartnerSettingsPage() {
         const newSessionDoc = await addDoc(checkoutSessionRef, {
             client: 'web',
             mode: 'subscription',
-            price: STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY,
+            price: STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY, // Make sure this is your LIVE Price ID
             success_url: window.location.origin + '/partner/dashboard?subscription_checkout=success',
             cancel_url: window.location.origin + '/partner/settings?subscription_checkout=cancelled',
+            // To use Stripe's trial management with the extension, you'd typically set trial_from_plan: true
+            // on the Price in Stripe, or pass trial_period_days here if the extension supports it directly.
+            // For this flow, we assume the Price ID itself is configured for a trial or direct payment.
         });
 
         const unsubscribe = onSnapshot(doc(firestore, `customers/${currentUser.uid}/checkout_sessions/${newSessionDoc.id}`),
             (snap) => {
                 const data = snap.data();
                 if (data?.url) {
-                    unsubscribe();
+                    unsubscribe(); // Stop listening once we have the URL
                     window.location.assign(data.url);
                 } else if (data?.error) {
-                    unsubscribe();
+                    unsubscribe(); // Stop listening on error
                     console.error("Stripe Checkout Session Error (full object):", data.error);
-                    const errorMessage = typeof data.error === 'object' && data.error.message
-                                         ? data.error.message
+                    const errorMessage = typeof data.error === 'object' && data.error.message 
+                                         ? data.error.message 
                                          : "Falha ao criar sessão de checkout. Verifique os logs do servidor para mais detalhes.";
                     toast({ title: "Erro ao Iniciar Checkout", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
@@ -222,6 +241,7 @@ export default function PartnerSettingsPage() {
                 console.error("Error listening to checkout session:", error);
                 toast({ title: "Erro no Checkout", description: "Ocorreu um problema ao iniciar o pagamento.", variant: "destructive" });
                 setIsSubmittingCheckout(false);
+                 if (unsubscribe) unsubscribe(); // Ensure listener is cleaned up on error too
             }
         );
 
@@ -230,11 +250,13 @@ export default function PartnerSettingsPage() {
         toast({ title: "Erro ao Preparar Pagamento", description: "Não foi possível iniciar o processo de assinatura.", variant: "destructive" });
         setIsSubmittingCheckout(false);
     }
+    // Note: setIsSubmittingCheckout(false) should ideally be called after redirection or on error from the listener.
+    // If redirection is fast, it might not be an issue, but for longer processes or if user closes tab, state might be stuck.
   };
 
   const handleManageSubscription = async () => {
     if (!currentUser) return;
-    setIsSubmittingCheckout(true);
+    setIsSubmittingCheckout(true); // Re-use the same loading state for simplicity
     try {
         const portalSessionRef = collection(firestore, `customers/${currentUser.uid}/portals`);
         const newPortalDoc = await addDoc(portalSessionRef, {
@@ -252,7 +274,7 @@ export default function PartnerSettingsPage() {
                     console.error("Stripe Portal Session Error (full object):", data.error);
                     const errorMessage = typeof data.error === 'object' && data.error.message
                                         ? data.error.message
-                                        : "Ocorreu um erro desconhecido ao abrir o portal.";
+                                        : "Ocorreu um erro desconhecido ao abrir o portal de gerenciamento.";
                     toast({ title: "Erro ao Abrir Portal", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
                 }
@@ -261,6 +283,7 @@ export default function PartnerSettingsPage() {
                 console.error("Error listening to portal session:", error);
                 toast({ title: "Erro no Portal", description: "Ocorreu um problema ao abrir o portal de gerenciamento.", variant: "destructive" });
                 setIsSubmittingCheckout(false);
+                 if (unsubscribe) unsubscribe();
             }
         );
     } catch (error) {
@@ -290,6 +313,8 @@ export default function PartnerSettingsPage() {
           dataToUpdate.couponReportClearPassword = data.couponReportClearPassword;
           toast({ title: "Senha do Relatório Definida", description: "Senha para limpar relatório de cupons foi definida/atualizada.", variant: "default" });
       } else if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
+         // This case is handled by zod schema refinement, but an extra client-side check can be here if needed.
+         // The form won't submit if this refinement fails.
          toast({ title: "Erro na Senha", description: "As senhas do relatório não coincidem ou são muito curtas.", variant: "destructive" });
          return;
       }
@@ -298,11 +323,11 @@ export default function PartnerSettingsPage() {
       await updateDoc(userDocRef, dataToUpdate);
 
       let emailUpdateMessage = "";
-      if (data.email !== initialEmail) {
+      if (data.email !== initialEmail && currentUser.email !== data.email) { // Check if email actually changed
         if (window.confirm(`Deseja realmente alterar seu e-mail de login de ${initialEmail} para ${data.email}? Esta ação pode exigir reverificação.`)) {
           try {
             await updateEmail(currentUser, data.email);
-            setInitialEmail(data.email);
+            setInitialEmail(data.email); // Update local state for initialEmail
             emailUpdateMessage = "Seu e-mail de login foi alterado com sucesso.";
           } catch (authError: any) {
             console.error("Error updating auth email:", authError);
@@ -313,10 +338,12 @@ export default function PartnerSettingsPage() {
               authErrorMessage = "Este e-mail já está em uso por outra conta.";
             }
             toast({ title: "Erro ao Atualizar E-mail", description: authErrorMessage, variant: "destructive", duration: 7000 });
-            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
-             return;
+            // Reset email field to initialEmail if update fails
+            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); 
+            return;
           }
         } else {
+           // User cancelled email change, reset email field to initialEmail
            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
            emailUpdateMessage = "Alteração de e-mail cancelada.";
         }
@@ -328,6 +355,7 @@ export default function PartnerSettingsPage() {
         variant: "default",
       });
 
+      // Reset password fields after successful submission
       reset({ ...data, email: data.email, couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
 
 
@@ -343,8 +371,8 @@ export default function PartnerSettingsPage() {
 
 
   const handleDeleteAccount = async () => {
-    if (!currentUser || !currentUser.email) {
-      toast({ title: "Erro", description: "Parceiro não autenticado corretamente.", variant: "destructive" });
+    if (!currentUser?.email) { // Check currentUser and currentUser.email
+      toast({ title: "Erro", description: "Parceiro não autenticado corretamente ou e-mail não disponível.", variant: "destructive" });
       return;
     }
     if (!deletePasswordInput) {
@@ -360,17 +388,23 @@ export default function PartnerSettingsPage() {
       const partnerIdToDelete = currentUser.uid;
       const batch = writeBatch(firestore);
 
-      const partnerUserDocRef = doc(firestore, "users", partnerIdToDelete);
-      const partnerUserSnap = await getDoc(partnerUserDocRef);
+      console.log("Starting account deletion for partner:", partnerIdToDelete);
+      const partnerDocRef = doc(firestore, "users", partnerIdToDelete);
+      console.log("Partner document reference:", partnerDocRef.path);
+
+      const partnerUserSnap = await getDoc(partnerDocRef);
       if (partnerUserSnap.exists()) {
           const partnerData = partnerUserSnap.data();
           if (partnerData.photoURL && partnerData.photoURL.includes("firebasestorage.googleapis.com")) {
               try {
-                  await deleteObject(storageRef(storage, partnerData.photoURL));
+                  console.log("Attempting to delete partner profile picture:", partnerData.photoURL);
+                  await deleteObject(storageRefStandard(storage, partnerData.photoURL)); // Use storageRefStandard alias
                   console.log("Partner profile picture deleted from storage.");
               } catch (e: any) {
                   if (e.code !== 'storage/object-not-found') {
-                    console.warn("Old partner profile picture couldn't be deleted on account deletion:", e);
+                    console.warn("Could not delete partner profile picture on account deletion (may not exist or other error):", e);
+                  } else {
+                    console.log("Partner profile picture not found in storage, no deletion needed.");
                   }
               }
           }
@@ -385,14 +419,23 @@ export default function PartnerSettingsPage() {
         checkInsSnapshot.forEach(checkInDoc => batch.delete(checkInDoc.ref));
         batch.delete(eventDoc.ref);
       }
+      console.log(`Marked ${eventsSnapshot.size} events and their check-ins for deletion.`);
+
 
       const ratingsQuery = query(collectionGroup(firestore, 'eventRatings'), where('partnerId', '==', partnerIdToDelete));
       const ratingsSnapshot = await getDocs(ratingsQuery);
       ratingsSnapshot.forEach(ratingDoc => batch.delete(ratingDoc.ref));
+      console.log(`Marked ${ratingsSnapshot.size} event ratings for deletion.`);
 
-      // purchasedTickets logic removed
+      // Delete the main partner document from 'users' collection
+      console.log("Marking partner user document for deletion:", partnerDocRef.path);
+      if (partnerDocRef) { // Extra check, though it should be defined
+           batch.delete(partnerDocRef);
+      } else {
+          console.error("CRITICAL: partnerDocRef was unexpectedly undefined before batch.delete call in handleDeleteAccount.");
+          throw new Error("Referência do documento do parceiro não encontrada para exclusão.");
+      }
 
-      batch.delete(partnerDocRef);
 
       const stripeCustomerDocRef = doc(firestore, `customers/${partnerIdToDelete}`);
       const subscriptionsRef = collection(firestore, `customers/${partnerIdToDelete}/subscriptions`);
@@ -400,17 +443,18 @@ export default function PartnerSettingsPage() {
       if (!activeSubscriptionsSnap.empty) {
           console.warn(`Partner ${partnerIdToDelete} has active Stripe subscriptions. These should be cancelled via the Stripe dashboard or an appropriate backend mechanism if the extension doesn't handle it on customer deletion.`);
       }
-      // The Firebase Stripe Extension might automatically delete subscriptions when the customer doc is deleted.
-      // If not, manual cancellation in Stripe Dashboard or a separate backend function would be needed.
-      // For now, we proceed with deleting the customer document which might trigger the extension's cleanup.
-      batch.delete(stripeCustomerDocRef);
+      batch.delete(stripeCustomerDocRef); // Delete the Stripe customer mapping
+      console.log("Marked Stripe customer document for deletion.");
+
 
       await batch.commit();
+      console.log("Firestore batch commit successful for initial deletions.");
       toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações e dados de cliente Stripe associados foram removidos.", duration: 4000 });
 
       const usersCollectionRef = collection(firestore, "users");
       const usersSnapshotForCleanup = await getDocs(usersCollectionRef);
       const cleanupBatch = writeBatch(firestore);
+      let cleanupActionsCount = 0;
 
       usersSnapshotForCleanup.forEach(userDocSnap => {
         const userData = userDocSnap.data();
@@ -444,12 +488,20 @@ export default function PartnerSettingsPage() {
 
         if (userUpdateNeeded) {
           cleanupBatch.update(doc(firestore, "users", userId), updates);
+          cleanupActionsCount++;
         }
       });
-      await cleanupBatch.commit();
+      if(cleanupActionsCount > 0) {
+          await cleanupBatch.commit();
+          console.log(`Cleanup batch committed for ${cleanupActionsCount} user documents.`);
+      } else {
+          console.log("No user documents required cleanup for partner deletion references.");
+      }
       toast({ title: "Limpeza de Dados de Usuários Iniciada", description: "Tentando remover referências ao local dos dados dos usuários.", duration: 4000 });
 
       await deleteFirebaseAuthUser(currentUser);
+      console.log("Firebase Auth user deleted.");
+
 
       toast({ title: "Conta Excluída", description: "Sua conta de parceiro e dados associados foram excluídos. A limpeza completa de dados de outros usuários pode levar algum tempo ou requerer processos de backend.", variant: "default", duration: 9000 });
       router.push('/login');
@@ -498,15 +550,15 @@ export default function PartnerSettingsPage() {
         <form onSubmit={handleSubmit(onSettingsSubmit)}>
           <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
             <div className="flex flex-col items-center space-y-2">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted overflow-hidden">
                 {currentUser?.photoURL ? (
                     <Image src={currentUser.photoURL} alt={watchedName || "Foto do Parceiro"} width={96} height={96} className="rounded-full object-cover w-full h-full" data-ai-hint="partner avatar"/>
                 ) : watchedName ? (
-                  <span className="text-2xl sm:text-3xl text-primary font-semibold">
+                  <span className="text-2xl sm:text-3xl text-foreground font-semibold">
                     {watchedName.charAt(0).toUpperCase()}
                   </span>
                 ) : (
-                  <UserCircle className="w-14 h-14 sm:w-16 sm:h-16 text-primary" />
+                  <UserCircle className="w-14 h-14 sm:w-16 sm:h-16 text-foreground" />
                 )}
               </div>
             </div>
@@ -670,10 +722,10 @@ export default function PartnerSettingsPage() {
                             Plano {activeSubscription.status === 'trialing' ? 'de Teste ' : ''}Ativo!
                         </p>
                         {activeSubscription.trial_end && activeSubscription.status === 'trialing' && (
-                            <p className="text-xs text-muted-foreground">Seu teste termina em: {new Date(activeSubscription.trial_end.seconds * 1000).toLocaleDateString()}</p>
+                            <p className="text-xs text-muted-foreground">Seu teste termina em: {formatDate(activeSubscription.trial_end.toDate(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
                         )}
                         {activeSubscription.current_period_end && activeSubscription.status === 'active' && (
-                             <p className="text-xs text-muted-foreground">Próxima renovação em: {new Date(activeSubscription.current_period_end.seconds * 1000).toLocaleDateString()}</p>
+                             <p className="text-xs text-muted-foreground">Próxima renovação em: {formatDate(activeSubscription.current_period_end.toDate(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
                         )}
                         <Button
                             onClick={handleManageSubscription}
@@ -721,7 +773,7 @@ export default function PartnerSettingsPage() {
                     As FervoCoins que usuários possuem no seu local serão redistribuídas para outros locais.
                     Notificações sobre seu local ou eventos serão removidas dos usuários.
                 </p>
-                <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialog open={showDeleteDialog} onOpenChange={(open) => { if (!open) { setDeletePasswordInput(''); setShowDeletePasswordInput(false); } setShowDeleteDialog(open); }}>
                     <AlertDialogTrigger asChild>
                         <Button variant="destructive" className="w-full sm:w-auto" disabled={isSubmitting || isDeletingAccount}>
                             <Trash2 className="w-4 h-4 mr-2" /> Excluir Minha Conta de Parceiro
@@ -739,3 +791,5 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
+    
