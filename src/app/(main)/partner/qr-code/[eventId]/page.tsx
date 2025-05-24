@@ -2,25 +2,23 @@
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState, use, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
+import { useEffect, useState, useRef } from 'react'; // Removed 'use' import as it's not needed here
+import { useRouter, useParams } from 'next/navigation'; // Added useParams
+import { doc, getDoc, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { firestore, auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Loader2, ArrowLeft, Printer, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-// Card components might not be needed for the A4 layout directly but keep if used for structure
-// import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Logo } from '@/components/shared/logo'; // Import Logo component
+import { Logo } from '@/components/shared/logo';
 
 interface EventDetails {
   id: string;
   eventName: string;
-  startDateTime: Timestamp;
+  startDateTime: FirebaseTimestamp;
   partnerId: string;
   checkInToken?: string;
 }
@@ -29,14 +27,19 @@ interface PartnerDetails {
   venueName: string;
 }
 
-interface EventQrCodePageProps {
-  params: { eventId: string };
-}
+// Props are no longer needed as params are accessed via hook
+// interface EventQrCodePageProps {
+//   params: { eventId: string };
+// }
 
-const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
+const EventQrCodePage: NextPage = () => {
   const router = useRouter();
+  const params = useParams(); // Use the useParams hook
   const { toast } = useToast();
-  const eventIdParam = params.eventId; // Directly access params in RSC/Client Component boundary
+  
+  // Get eventId from the hook's result
+  const eventIdParam = typeof params.eventId === 'string' ? params.eventId : null;
+
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [partnerDetails, setPartnerDetails] = useState<PartnerDetails | null>(null);
@@ -48,7 +51,8 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
 
   const PRINT_QR_SIZE = 400; // Larger QR code size for printing
 
-  const eventId = typeof eventIdParam === 'string' ? eventIdParam : null;
+  // eventId is now derived from eventIdParam
+  const eventId = eventIdParam;
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -95,7 +99,7 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
           throw new Error('Este evento não possui um token de check-in configurado.');
         }
 
-        const eventEndDateTime = data.endDateTime as Timestamp;
+        const eventEndDateTime = data.endDateTime as FirebaseTimestamp;
         if (eventEndDateTime.toDate() < new Date()) {
           throw new Error('Este evento já terminou e o QR code não está mais disponível.');
         }
@@ -310,5 +314,3 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
 };
 
 export default EventQrCodePage;
-
-    
