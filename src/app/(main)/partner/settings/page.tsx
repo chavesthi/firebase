@@ -37,25 +37,22 @@ import { format as formatDate, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 
-// Schema for partner settings form
 const partnerSettingsSchema = z.object({
   contactName: z.string().min(3, { message: 'Nome do contato deve ter pelo menos 3 caracteres.' }),
   companyName: z.string().min(3, { message: 'Nome da empresa deve ter pelo menos 3 caracteres.' }),
   email: z.string().email({ message: 'E-mail inválido.' }),
   notificationsEnabled: z.boolean().default(true),
-  // Optional password fields for coupon report clearing
   couponReportClearPassword: z.string().optional(),
   confirmCouponReportClearPassword: z.string().optional(),
 }).refine(data => {
-    // If one password field is filled, the other must be too, and they must match
     if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
         return data.couponReportClearPassword === data.confirmCouponReportClearPassword &&
                (data.couponReportClearPassword?.length ?? 0) >= 6;
     }
-    return true; // If both are empty, it's valid
+    return true;
 }, {
     message: "Senhas não coincidem ou são muito curtas (mínimo 6 caracteres). Ambas devem ser preenchidas ou ambas vazias.",
-    path: ["confirmCouponReportClearPassword"], // Apply error message to the confirmation field
+    path: ["confirmCouponReportClearPassword"],
 });
 
 
@@ -88,7 +85,7 @@ export default function PartnerSettingsPage() {
   const [deletePasswordInput, setDeletePasswordInput] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [showDeletePasswordInput, setShowDeletePasswordInput] = useState(false);
-  
+
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, reset, watch } = useForm<PartnerSettingsFormInputs>({
     resolver: zodResolver(partnerSettingsSchema),
@@ -104,7 +101,6 @@ export default function PartnerSettingsPage() {
 
   const watchedName = watch('contactName');
 
-  // Fetch current user and settings
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -124,9 +120,8 @@ export default function PartnerSettingsPage() {
               confirmCouponReportClearPassword: '',
             });
             setPartnerCreatedAt(userData.createdAt as Timestamp || null);
-            // Stripe subscription status will be fetched in another effect
           } else {
-            reset({ 
+            reset({
               contactName: user.displayName || '',
               companyName: '',
               email: user.email || '',
@@ -148,7 +143,6 @@ export default function PartnerSettingsPage() {
     return () => unsubscribeAuth();
   }, [router, reset, toast]);
 
-  // Fetch/Listen to Stripe subscription status
   useEffect(() => {
     if (!currentUser) {
         setLoadingSubscription(false);
@@ -176,7 +170,6 @@ export default function PartnerSettingsPage() {
     return () => unsubscribe();
   }, [currentUser, toast]);
 
-  // Calculate trial end date
   useEffect(() => {
     if (partnerCreatedAt && (!activeSubscription || (activeSubscription.status !== 'active' && activeSubscription.status !== 'trialing'))) {
       const createdAtDate = partnerCreatedAt.toDate();
@@ -185,10 +178,10 @@ export default function PartnerSettingsPage() {
       if (now <= trialEndDate) {
         setTrialEndDateString(formatDate(trialEndDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }));
       } else {
-        setTrialEndDateString(null); // Trial has passed
+        setTrialEndDateString(null);
       }
     } else {
-      setTrialEndDateString(null); // Has active sub or no creation date
+      setTrialEndDateString(null);
     }
   }, [partnerCreatedAt, activeSubscription]);
 
@@ -204,22 +197,22 @@ export default function PartnerSettingsPage() {
         const newSessionDoc = await addDoc(checkoutSessionRef, {
             client: 'web',
             mode: 'subscription',
-            price: STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY, 
+            price: STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY,
             success_url: window.location.origin + '/partner/dashboard?subscription_checkout=success',
             cancel_url: window.location.origin + '/partner/settings?subscription_checkout=cancelled',
         });
 
-        const unsubscribe = onSnapshot(doc(firestore, `customers/${currentUser.uid}/checkout_sessions/${newSessionDoc.id}`), 
+        const unsubscribe = onSnapshot(doc(firestore, `customers/${currentUser.uid}/checkout_sessions/${newSessionDoc.id}`),
             (snap) => {
                 const data = snap.data();
                 if (data?.url) {
-                    unsubscribe(); 
+                    unsubscribe();
                     window.location.assign(data.url);
                 } else if (data?.error) {
-                    unsubscribe(); 
+                    unsubscribe();
                     console.error("Stripe Checkout Session Error (full object):", data.error);
-                    const errorMessage = typeof data.error === 'object' && data.error.message 
-                                         ? data.error.message 
+                    const errorMessage = typeof data.error === 'object' && data.error.message
+                                         ? data.error.message
                                          : "Falha ao criar sessão de checkout. Verifique os logs do servidor para mais detalhes.";
                     toast({ title: "Erro ao Iniciar Checkout", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
@@ -257,8 +250,8 @@ export default function PartnerSettingsPage() {
                 } else if (data?.error) {
                     unsubscribe();
                     console.error("Stripe Portal Session Error (full object):", data.error);
-                    const errorMessage = typeof data.error === 'object' && data.error.message 
-                                        ? data.error.message 
+                    const errorMessage = typeof data.error === 'object' && data.error.message
+                                        ? data.error.message
                                         : "Ocorreu um erro desconhecido ao abrir o portal.";
                     toast({ title: "Erro ao Abrir Portal", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
@@ -277,7 +270,6 @@ export default function PartnerSettingsPage() {
     }
   };
 
-  // Handle form submission for settings
   const onSettingsSubmit: SubmitHandler<PartnerSettingsFormInputs> = async (data) => {
     if (!currentUser) {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
@@ -289,7 +281,7 @@ export default function PartnerSettingsPage() {
 
       const dataToUpdate: { [key: string]: any } = {
         name: data.contactName,
-        venueName: data.companyName, 
+        venueName: data.companyName,
         notificationsEnabled: data.notificationsEnabled,
         settingsUpdatedAt: serverTimestamp(),
       };
@@ -348,7 +340,7 @@ export default function PartnerSettingsPage() {
       });
     }
   };
-  
+
 
   const handleDeleteAccount = async () => {
     if (!currentUser || !currentUser.email) {
@@ -359,73 +351,80 @@ export default function PartnerSettingsPage() {
       toast({ title: "Senha Necessária", description: "Por favor, insira sua senha para excluir a conta.", variant: "destructive" });
       return;
     }
-  
+
     setIsDeletingAccount(true);
     try {
       const credential = EmailAuthProvider.credential(currentUser.email, deletePasswordInput);
       await reauthenticateWithCredential(currentUser, credential);
-  
+
       const partnerIdToDelete = currentUser.uid;
       const batch = writeBatch(firestore);
-  
-      // 1. Delete partner's events and their check-ins
+
+      const partnerUserDocRef = doc(firestore, "users", partnerIdToDelete);
+      const partnerUserSnap = await getDoc(partnerUserDocRef);
+      if (partnerUserSnap.exists()) {
+          const partnerData = partnerUserSnap.data();
+          if (partnerData.photoURL && partnerData.photoURL.includes("firebasestorage.googleapis.com")) {
+              try {
+                  await deleteObject(storageRef(storage, partnerData.photoURL));
+                  console.log("Partner profile picture deleted from storage.");
+              } catch (e: any) {
+                  if (e.code !== 'storage/object-not-found') {
+                    console.warn("Old partner profile picture couldn't be deleted on account deletion:", e);
+                  }
+              }
+          }
+      }
+
+
       const eventsRef = collection(firestore, `users/${partnerIdToDelete}/events`);
       const eventsSnapshot = await getDocs(eventsRef);
       for (const eventDoc of eventsSnapshot.docs) {
         const checkInsRef = collection(firestore, `users/${partnerIdToDelete}/events/${eventDoc.id}/checkIns`);
         const checkInsSnapshot = await getDocs(checkInsRef);
         checkInsSnapshot.forEach(checkInDoc => batch.delete(checkInDoc.ref));
-        batch.delete(eventDoc.ref); // Delete the event itself
+        batch.delete(eventDoc.ref);
       }
-  
-      // 2. Delete event ratings associated with the partner
+
       const ratingsQuery = query(collectionGroup(firestore, 'eventRatings'), where('partnerId', '==', partnerIdToDelete));
       const ratingsSnapshot = await getDocs(ratingsQuery);
       ratingsSnapshot.forEach(ratingDoc => batch.delete(ratingDoc.ref));
-  
-      // 3. Delete purchased tickets associated with the partner's events
-      const ticketsQuery = query(collection(firestore, 'purchasedTickets'), where('partnerId', '==', partnerIdToDelete));
-      const ticketsSnapshot = await getDocs(ticketsQuery);
-      ticketsSnapshot.forEach(ticketDoc => batch.delete(ticketDoc.ref));
-  
-      // 4. Delete the partner's main user document
-      const partnerDocRef = doc(firestore, "users", partnerIdToDelete);
+
+      // purchasedTickets logic removed
+
       batch.delete(partnerDocRef);
-  
-      // 5. Delete Stripe customer data (via extension, usually by deleting customers/{userId} doc)
-      // This might also involve calling Stripe API to cancel subscriptions if the extension doesn't handle it on customer deletion
+
       const stripeCustomerDocRef = doc(firestore, `customers/${partnerIdToDelete}`);
-      // Before deleting, check if there's a subscription to cancel if the extension doesn't do it automatically
       const subscriptionsRef = collection(firestore, `customers/${partnerIdToDelete}/subscriptions`);
       const activeSubscriptionsSnap = await getDocs(query(subscriptionsRef, where('status', 'in', ['active', 'trialing'])));
       if (!activeSubscriptionsSnap.empty) {
-          // Ideally, trigger a cancellation through Stripe API or the extension's mechanism
-          // For now, we'll just delete the customer doc, but Stripe subscription might remain active
-          console.warn(`Partner ${partnerIdToDelete} has active Stripe subscriptions. Ensure they are cancelled in Stripe.`);
+          console.warn(`Partner ${partnerIdToDelete} has active Stripe subscriptions. These should be cancelled via the Stripe dashboard or an appropriate backend mechanism if the extension doesn't handle it on customer deletion.`);
       }
-      batch.delete(stripeCustomerDocRef); 
+      // The Firebase Stripe Extension might automatically delete subscriptions when the customer doc is deleted.
+      // If not, manual cancellation in Stripe Dashboard or a separate backend function would be needed.
+      // For now, we proceed with deleting the customer document which might trigger the extension's cleanup.
+      batch.delete(stripeCustomerDocRef);
 
       await batch.commit();
-      toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações, ingressos e dados de cliente Stripe associados foram removidos.", duration: 4000 });
-  
-      // Cleanup references in other users' documents
+      toast({ title: "Dados do Firestore Excluídos", description: "Eventos, check-ins, avaliações e dados de cliente Stripe associados foram removidos.", duration: 4000 });
+
       const usersCollectionRef = collection(firestore, "users");
       const usersSnapshotForCleanup = await getDocs(usersCollectionRef);
       const cleanupBatch = writeBatch(firestore);
-  
+
       usersSnapshotForCleanup.forEach(userDocSnap => {
         const userData = userDocSnap.data();
         const userId = userDocSnap.id;
         let userUpdateNeeded = false;
         const updates: { [key: string]: any } = {};
-  
+
         if (userData.venueCoins && typeof userData.venueCoins[partnerIdToDelete] === 'number') {
           const updatedVenueCoins = { ...userData.venueCoins };
           delete updatedVenueCoins[partnerIdToDelete];
           updates.venueCoins = updatedVenueCoins;
           userUpdateNeeded = true;
         }
-  
+
         if (userData.favoriteVenueIds && userData.favoriteVenueIds.includes(partnerIdToDelete)) {
           updates.favoriteVenueIds = userData.favoriteVenueIds.filter((id: string) => id !== partnerIdToDelete);
           userUpdateNeeded = true;
@@ -442,20 +441,20 @@ export default function PartnerSettingsPage() {
             userUpdateNeeded = true;
           }
         }
-  
+
         if (userUpdateNeeded) {
           cleanupBatch.update(doc(firestore, "users", userId), updates);
         }
       });
       await cleanupBatch.commit();
       toast({ title: "Limpeza de Dados de Usuários Iniciada", description: "Tentando remover referências ao local dos dados dos usuários.", duration: 4000 });
-  
+
       await deleteFirebaseAuthUser(currentUser);
-  
+
       toast({ title: "Conta Excluída", description: "Sua conta de parceiro e dados associados foram excluídos. A limpeza completa de dados de outros usuários pode levar algum tempo ou requerer processos de backend.", variant: "default", duration: 9000 });
       router.push('/login');
       setShowDeleteDialog(false);
-  
+
     } catch (error: any) {
       console.error("Error deleting partner account:", error);
       let message = "Erro ao excluir conta.";
@@ -470,8 +469,8 @@ export default function PartnerSettingsPage() {
       setDeletePasswordInput('');
     }
   };
-  
-  
+
+
 
   if (loading) {
     return (
@@ -495,12 +494,14 @@ export default function PartnerSettingsPage() {
           <CardTitle className="text-2xl sm:text-3xl text-foreground">Configurações da Conta e Pagamentos</CardTitle>
           <CardDescription className="text-sm sm:text-base text-muted-foreground">Gerencie as informações e preferências da sua conta de parceiro.</CardDescription>
         </CardHeader>
-        
+
         <form onSubmit={handleSubmit(onSettingsSubmit)}>
           <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
             <div className="flex flex-col items-center space-y-2">
               <div className="w-20 h-20 sm:w-24 sm:h-24 border-2 border-primary rounded-full flex items-center justify-center bg-muted">
-                {watchedName ? (
+                {currentUser?.photoURL ? (
+                    <Image src={currentUser.photoURL} alt={watchedName || "Foto do Parceiro"} width={96} height={96} className="rounded-full object-cover w-full h-full" data-ai-hint="partner avatar"/>
+                ) : watchedName ? (
                   <span className="text-2xl sm:text-3xl text-primary font-semibold">
                     {watchedName.charAt(0).toUpperCase()}
                   </span>
@@ -563,7 +564,7 @@ export default function PartnerSettingsPage() {
                 </div>
                  {errors.notificationsEnabled && <p className="mt-1 text-sm text-destructive">{errors.notificationsEnabled.message}</p>}
             </div>
-            
+
             <div className="space-y-4">
                 <h3 className="text-lg font-medium text-foreground">Senha para Limpar Relatório de Cupons</h3>
                 <p className="text-xs text-muted-foreground">Defina uma senha (mínimo 6 caracteres) que será solicitada para limpar o histórico de cupons resgatados. Deixe em branco se não desejar definir/alterar.</p>
@@ -662,7 +663,7 @@ export default function PartnerSettingsPage() {
                         <p className="text-muted-foreground">Verificando status da assinatura...</p>
                     </div>
                 )}
-                
+
                 {!loadingSubscription && activeSubscription && (activeSubscription.status === 'active' || activeSubscription.status === 'trialing') && (
                     <div className="p-4 border rounded-md bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700">
                         <p className="text-green-700 dark:text-green-400 font-semibold">
@@ -674,9 +675,9 @@ export default function PartnerSettingsPage() {
                         {activeSubscription.current_period_end && activeSubscription.status === 'active' && (
                              <p className="text-xs text-muted-foreground">Próxima renovação em: {new Date(activeSubscription.current_period_end.seconds * 1000).toLocaleDateString()}</p>
                         )}
-                        <Button 
-                            onClick={handleManageSubscription} 
-                            variant="outline" 
+                        <Button
+                            onClick={handleManageSubscription}
+                            variant="outline"
                             className="w-full mt-3 border-primary text-primary hover:bg-primary/10"
                             disabled={isSubmittingCheckout}
                         >
@@ -686,8 +687,8 @@ export default function PartnerSettingsPage() {
                     </div>
                 )}
                  {!loadingSubscription && (!activeSubscription || (activeSubscription.status !== 'active' && activeSubscription.status !== 'trialing')) && (
-                    <Button 
-                        onClick={handleStartSubscriptionCheckout} 
+                    <Button
+                        onClick={handleStartSubscriptionCheckout}
                         className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
                         disabled={isSubmittingCheckout}
                     >
@@ -695,12 +696,12 @@ export default function PartnerSettingsPage() {
                         Assinar Plano Fervo (R$ 69,90 por mês)
                     </Button>
                 )}
-                
+
                 <div className="mt-2 flex justify-center">
-                    <Image 
-                        src="/images/stripe.png" 
-                        alt="Pagamentos processados por Stripe" 
-                        width={300} 
+                    <Image
+                        src="/images/stripe.png"
+                        alt="Pagamentos processados por Stripe"
+                        width={300}
                         height={120}
                         data-ai-hint="payment gateway logo"
                     />
@@ -708,7 +709,7 @@ export default function PartnerSettingsPage() {
                  <p className="text-xs text-center text-muted-foreground mt-2">
                     Pagamentos processados de forma segura pelo Stripe.
                 </p>
-               
+
             </div>
 
             <Separator className="border-primary/20" />
@@ -738,4 +739,3 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
-

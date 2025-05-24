@@ -4,75 +4,58 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // User documents
+    // Users collection
     match /users/{userId} {
-      allow create: if request.auth != null; // Allow any authenticated user to create their profile initially
-      allow read: if true; // Allow anyone to read user profiles (e.g., for names in chat, partner info)
-      allow update: if request.auth != null && request.auth.uid == userId; // Only user can update their own profile
-      allow delete: if request.auth != null && request.auth.uid == userId; // Only user can delete their own profile
+      allow create: if request.auth != null; // Allow authenticated users to create their own user document
+      allow read: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(userId)).data.role == 'partner'); // Users can read their own data, anyone can read partner's public data
+      allow update: if request.auth != null && request.auth.uid == userId; // Users can update their own data
+      allow delete: if request.auth != null && request.auth.uid == userId; // Users can delete their own account data
 
-      // Partner specific subcollections
+      // Subcollection for partner events
       match /events/{eventId} {
-        allow read: if true; // Events can be read publicly
-        allow create, update, delete: if request.auth != null && request.auth.uid == userId; // Only partner can manage their events
+        allow create, update, delete: if request.auth != null && request.auth.uid == userId && get(/databases/$(database)/documents/users/$(userId)).data.role == 'partner'; // Only partner who owns the user doc can manage events
+        allow read: if true; // Allow anyone to read event details
 
-        match /checkIns/{checkInId} {
-            allow read, create: if request.auth != null; // Authenticated users (partners or users) can create/read check-ins
-            // Add specific rules for update/delete if needed, e.g., only partner can delete a check-in
+        // Sub-subcollection for event check-ins
+        match /checkIns/{checkInUserId} {
+          allow create: if request.auth != null && request.auth.uid == checkInUserId; // Users can check themselves in
+          allow read: if request.auth != null && (request.auth.uid == userId || request.auth.uid == checkInUserId) ; // Partner can read check-ins for their events, user can read their own
         }
       }
-      
-      // User specific subcollections
-       match /checkedInEvents/{eventId} {
-        allow read, create, update: if request.auth != null && request.auth.uid == userId; // User manages their check-ins
+
+      // Subcollection for user's checked-in events (for rating purposes)
+      match /checkedInEvents/{eventId} {
+        allow create, update, read: if request.auth != null && request.auth.uid == userId; // User can manage their own list of checked-in events
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Subcollection for user's coupons
       match /coupons/{couponId} {
-        allow read, create, update, delete: if request.auth != null && request.auth.uid == userId; // User manages their coupons
+        allow create, read, update: if request.auth != null && request.auth.uid == userId; // User can manage their own coupons
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
     }
 
-    // Event ratings
-    match /eventRatings/{ratingId} {
-      allow create: if request.auth != null; // Authenticated user can create a rating
-      allow read: if true; // Ratings can be read publicly (e.g., average on event display)
-      // Allow update/delete only by the user who created it
-      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    // EventRatings collection (ratings are per event, associated with a partner)
+    match /eventRatings/{ratingId} { // ratingId is typically eventId_userId
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid; // User can create their own rating
+      allow read: if true; // Anyone can read ratings (for displaying average on event)
+      allow update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid; // User can update/delete their own rating
     }
 
-    // Purchased tickets
-    match /purchasedTickets/{ticketId} {
-        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid; // User can purchase their own ticket
-        allow read: if request.auth != null && 
-                      (request.auth.uid == resource.data.userId || request.auth.uid == resource.data.partnerId); // User can read their tickets, partner can read tickets for their events
-        allow update: if request.auth != null && request.auth.uid == resource.data.partnerId; // Only partner can update ticket status (e.g., validate)
-        // Delete might be restricted or allowed for admins/partners
-    }
+    // purchasedTickets collection removed as functionality is removed
 
-    // Chat Rooms
-    match /chatRooms/{roomId} {
-      allow read, write: if request.auth != null; // Allow authenticated users to read/write in chat rooms (e.g. create if not exists implicitly)
-      
-      match /messages/{messageId} {
-        allow read: if request.auth != null && exists(/databases/$(database)/documents/chatRooms/$(roomId));
-        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-        // Users can only delete their own messages
-        allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      }
-    }
-
-
-    // Stripe Extension Collections (adjust based on extension's actual security rule recommendations)
-    // Typically, the extension's functions handle writes, users might read their own customer/subscription data.
+    // Stripe extension collections
     match /customers/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
-      
+
       match /checkout_sessions/{id} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
       match /subscriptions/{id} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
-      match /payments/{id} {
+       match /payments/{id} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
       match /portals/{id} {
@@ -80,9 +63,17 @@ service cloud.firestore {
       }
     }
 
-    // Fallback for any other collections - deny by default
-    match /{document=**} {
-      allow read, write: if false;
+    // ChatRooms collection
+    match /chatRooms/{roomId} {
+      allow read: if request.auth != null; // Authenticated users can list/read chat rooms
+      allow create: if request.auth != null; // Authenticated users can create chat rooms (implicitly by sending first message)
+      
+      match /messages/{messageId} {
+        allow read: if request.auth != null && exists(/databases/$(database)/documents/chatRooms/$(roomId));
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        // Allow users to delete their own messages
+        allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      }
     }
   }
 }

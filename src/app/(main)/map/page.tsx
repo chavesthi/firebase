@@ -46,12 +46,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Removed AlertDialogTrigger as it's not used here directly
+} from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from '@/components/shared/logo';
-import { PurchaseTicketModal } from '@/components/tickets/purchase-ticket-modal';
+// PurchaseTicketModal import removed
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatInputForm } from '@/components/chat/chat-input-form';
 
@@ -168,13 +168,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; 
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))';
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
-  
+
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'white'; 
+    effectiveBlinkHighlightColor = 'white';
   }
 
 
@@ -318,9 +318,7 @@ const MapContentAndLogic = () => {
   const searchParams = useSearchParams();
   const isPreviewMode = searchParams.get('isPreview') === 'true';
 
-  const [isPurchaseTicketModalOpen, setIsPurchaseTicketModalOpen] = useState(false);
-  const [ticketPurchaseDetails, setTicketPurchaseDetails] = useState<{ eventId: string; eventName: string; partnerId: string; partnerVenueName: string} | null>(null);
-
+  // State related to ticket purchase modal removed
 
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
   const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({});
@@ -336,6 +334,8 @@ const MapContentAndLogic = () => {
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
   const [chatClearedTimestamp, setChatClearedTimestamp] = useState<number | null>(null);
+  const [showClearChatDialog, setShowClearChatDialog] = useState(false);
+  const [isDeletingChat, setIsDeletingChat] = useState(false);
 
 
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
@@ -365,7 +365,7 @@ const MapContentAndLogic = () => {
               };
               setCurrentAppUser(profile);
               setChatUserProfile(profile);
-              
+
               if (userData.address?.city && userData.address?.state) {
                 const city = userData.address.city.toUpperCase().replace(/\s+/g, '_');
                 const state = userData.address.state.toUpperCase().replace(/\s+/g, '_');
@@ -450,12 +450,12 @@ const MapContentAndLogic = () => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          setUserLocation(loc); 
-          setActualUserLocation(loc); 
+          setUserLocation(loc);
+          setActualUserLocation(loc);
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; 
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
           setUserLocation(defaultLoc);
           setActualUserLocation(null);
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
@@ -543,7 +543,7 @@ const MapContentAndLogic = () => {
             setUserLocation(venueToSelect.location);
           }
         } else {
-          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); 
+          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
           router.replace('/map', { scroll: false });
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
@@ -611,7 +611,7 @@ const MapContentAndLogic = () => {
   useEffect(() => {
     const playAudio = (audioRef: React.RefObject<HTMLAudioElement>) => {
       if (audioRef.current) {
-        audioRef.current.currentTime = 0; 
+        audioRef.current.currentTime = 0;
         audioRef.current.play().catch(error => console.warn("Error playing audio:", error));
       }
     };
@@ -666,11 +666,11 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; 
+    let colorClass = "text-foreground";
 
-    if (activeVenueTypeFilters.includes(type)) { 
+    if (activeVenueTypeFilters.includes(type)) {
       colorClass = "text-secondary";
-    } else { 
+    } else {
       if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
       else if (type === VenueType.BAR) colorClass = "text-accent";
       else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
@@ -771,7 +771,7 @@ const MapContentAndLogic = () => {
       return;
     }
 
-    if (isEventPast(eventEndDateTime)) { 
+    if (isEventPast(eventEndDateTime)) {
         toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
         return;
     }
@@ -869,7 +869,7 @@ const MapContentAndLogic = () => {
               userId: currentUser.uid,
               couponCode: couponCode,
               description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
-              eventName: eventDataForShare.eventName, 
+              eventName: eventDataForShare.eventName,
               createdAt: serverTimestamp(),
               status: 'active',
               validAtPartnerId: partnerId,
@@ -947,24 +947,32 @@ const MapContentAndLogic = () => {
     }
   };
 
-  const openPurchaseTicketModal = (event: VenueEvent) => {
-    if (!selectedVenue) return;
-    if (event.ticketPurchaseUrl) { 
-        window.open(event.ticketPurchaseUrl, '_blank', 'noopener,noreferrer');
+  const handleClearChat = async () => {
+      if (!currentUser || !chatRoomId) {
+        toast({ title: "Erro", description: "Não foi possível identificar o chat.", variant: "destructive" });
         return;
-    }
-    setTicketPurchaseDetails({
-        eventId: event.id,
-        eventName: event.eventName,
-        partnerId: selectedVenue.id,
-        partnerVenueName: selectedVenue.name,
-    });
-    setIsPurchaseTicketModalOpen(true);
-  };
-
-  const handleClearChat = () => {
-    setChatClearedTimestamp(Date.now());
-    toast({ title: "Chat Limpo", description: "As mensagens anteriores foram ocultadas para esta sessão.", variant: "default" });
+      }
+      setIsDeletingChat(true);
+      try {
+        const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
+        const messagesSnapshot = await getDocs(messagesRef);
+        if (messagesSnapshot.empty) {
+            toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
+            setShowClearChatDialog(false);
+            setIsDeletingChat(false);
+            return;
+        }
+        const batch = writeBatch(firestore);
+        messagesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        toast({ title: "Chat Limpo!", description: "Todas as mensagens desta sala foram apagadas para todos.", variant: "default" });
+        setShowClearChatDialog(false);
+      } catch (error) {
+          console.error("Error deleting chat messages:", error);
+          toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens.", variant: "destructive"});
+      } finally {
+          setIsDeletingChat(false);
+      }
   };
 
 
@@ -997,8 +1005,8 @@ const MapContentAndLogic = () => {
     );
   }
 
-  const chatRoomDisplayName = chatUserProfile?.address?.city && chatUserProfile?.address?.state 
-    ? `${chatUserProfile.address.city}, ${chatUserProfile.address.state}` 
+  const chatRoomDisplayName = chatUserProfile?.address?.city && chatUserProfile?.address?.state
+    ? `${chatUserProfile.address.city}, ${chatUserProfile.address.state}`
     : "Chat Geral";
 
   return (
@@ -1072,11 +1080,11 @@ const MapContentAndLogic = () => {
                  <Logo iconClassName="text-primary h-8 w-auto" className="bg-background/80 p-1.5 rounded-md shadow-lg" />
             )}
         </div>
-        
+
         {currentAppUser && currentAppUser.role === UserRole.USER && (
             <Button
                 variant="default"
-                size="lg" 
+                size="lg"
                 className={cn(
                     "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
                     "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
@@ -1086,7 +1094,7 @@ const MapContentAndLogic = () => {
                 title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
             >
                 {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-                <span className="hidden sm:inline">Fervo Chat</span>
+                <span className="sm:inline">Fervo Chat</span>
                 <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
             </Button>
         )}
@@ -1276,7 +1284,7 @@ const MapContentAndLogic = () => {
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && ( 
+                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && (
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1363,8 +1371,7 @@ const MapContentAndLogic = () => {
                               )}
                               {event.description && <p className="mt-1.5 text-xs text-foreground/80">{event.description}</p>}
 
-                              {currentUser && currentAppUser?.role === UserRole.USER && !eventHasEnded && (
-                                event.ticketPurchaseUrl ? (
+                              {currentUser && currentAppUser?.role === UserRole.USER && !eventHasEnded && event.ticketPurchaseUrl && (
                                   <Button
                                     asChild
                                     className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
@@ -1375,16 +1382,6 @@ const MapContentAndLogic = () => {
                                       Compre Aqui o Seu Ingresso Saia Na frente!!!
                                     </a>
                                   </Button>
-                                ) : event.pricingType !== PricingType.FREE ? ( 
-                                  <Button
-                                    className="w-full mt-3 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
-                                    size="sm"
-                                    onClick={() => openPurchaseTicketModal(event)}
-                                  >
-                                    <Ticket className="w-3.5 h-3.5 mr-1.5" />
-                                    Compre Aqui o Seu Ingresso Saia Na frente!!!
-                                  </Button>
-                                ) : null
                               )}
 
 
@@ -1414,11 +1411,11 @@ const MapContentAndLogic = () => {
                                     size="sm"
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
-                                        if(currentlyRatingEventId !== event.id) { 
+                                        if(currentlyRatingEventId !== event.id) {
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id); 
+                                        setCurrentlyRatingEventId(event.id);
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1498,20 +1495,7 @@ const MapContentAndLogic = () => {
           </SheetContent>
         </Sheet>
       )}
-      {ticketPurchaseDetails && currentUser && (
-        <PurchaseTicketModal
-            isOpen={isPurchaseTicketModalOpen}
-            onClose={() => {
-                setIsPurchaseTicketModalOpen(false);
-                setTicketPurchaseDetails(null);
-            }}
-            eventId={ticketPurchaseDetails.eventId}
-            eventName={ticketPurchaseDetails.eventName}
-            partnerId={ticketPurchaseDetails.partnerId}
-            partnerVenueName={ticketPurchaseDetails.partnerVenueName}
-            currentUser={currentUser}
-        />
-      )}
+      {/* PurchaseTicketModal and its trigger removed */}
 
       {isChatWidgetOpen && currentUser && chatUserProfile && (
          <Card className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 w-[calc(100%-2rem)] sm:w-96 max-h-[70vh] sm:max-h-[60vh] z-50 flex flex-col shadow-2xl border-primary/50 bg-background/90 backdrop-blur-md">
@@ -1533,15 +1517,33 @@ const MapContentAndLogic = () => {
                   >
                       {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
                   </Button>
-                   <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleClearChat}
-                        className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
-                        title="Limpar mensagens desta sessão"
-                    >
-                        <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
-                    </Button>
+                   <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
+                        <AlertDialogTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
+                                title="Limpar mensagens da sala"
+                            >
+                                <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar Limpeza do Chat</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Tem certeza que deseja apagar TODAS as mensagens desta sala de chat ({chatRoomDisplayName})? Esta ação é permanente e afetará todos os usuários.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isDeletingChat}>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleClearChat} disabled={isDeletingChat} className="bg-destructive hover:bg-destructive/90">
+                                    {isDeletingChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    Apagar Todas as Mensagens
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                   <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
                       <XCircleIcon className="h-5 w-5"/>
                   </Button>
@@ -1562,14 +1564,14 @@ const MapContentAndLogic = () => {
                         Completar Perfil Agora
                     </Button>
                 </CardContent>
-            ) : chatRoomId && chatUserProfile && currentUser ? ( 
+            ) : chatRoomId && chatUserProfile && currentUser ? (
                 <>
                     <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
                         <ChatMessageList
                             chatRoomId={chatRoomId}
                             currentUserId={currentUser.uid}
                             isChatSoundMuted={isChatSoundMuted}
-                            chatClearedTimestamp={chatClearedTimestamp} 
+                            chatClearedTimestamp={null} // Pass null as we now permanently delete
                         />
                     </CardContent>
                     <div className="p-3 sm:p-4 border-t border-border bg-card">
@@ -1595,7 +1597,7 @@ const MapContentAndLogic = () => {
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE"; 
+  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE";
 
   if (!apiKey || apiKey === genericPlaceholder ) {
     return (

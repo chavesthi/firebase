@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, deleteDoc as deleteFirestoreDoc, serverTimestamp, collection, where, query, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc as deleteFirestoreDoc, serverTimestamp, collection, where, query, getDocs, writeBatch, collectionGroup } from 'firebase/firestore';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import Image from 'next/image';
 import AvatarEditor from 'react-avatar-editor';
@@ -60,14 +60,13 @@ const userProfileSchema = z.object({
   city: z.string().min(2, { message: "Nome da cidade inválido." }).optional().or(z.literal(undefined).or(z.literal(''))),
   state: z.string().min(2, { message: "Nome do estado inválido." }).optional().or(z.literal(undefined).or(z.literal(''))),
 }).refine(data => {
-  // If one of city/state is filled, the other must be too for address to be considered complete for chat
   if ((data.city && !data.state) || (!data.city && data.state)) {
     return false;
   }
   return true;
 }, {
   message: "Para usar o chat, Cidade e Estado devem ser preenchidos.",
-  path: ["city"], // Show error near city, or choose a general one
+  path: ["city"],
 });
 
 
@@ -83,17 +82,17 @@ const UserProfilePage: NextPage = () => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  const [currentPhotoURL, setCurrentPhotoURL] = useState<string | null>(null); 
-  const [editorFile, setEditorFile] = useState<File | null>(null); 
+
+  const [currentPhotoURL, setCurrentPhotoURL] = useState<string | null>(null);
+  const [editorFile, setEditorFile] = useState<File | null>(null);
   const [editorScale, setEditorScale] = useState(1.2);
   const [editorRotation, setEditorRotation] = useState(0);
   const editorRef = useRef<AvatarEditor | null>(null);
-  
+
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -110,7 +109,7 @@ const UserProfilePage: NextPage = () => {
       state: undefined,
     },
   });
-  
+
   const watchedName = watch('name');
 
   useEffect(() => {
@@ -133,9 +132,7 @@ const UserProfilePage: NextPage = () => {
             });
             setCurrentPhotoURL(userData.photoURL || user.photoURL || null);
           } else {
-            // This case might occur if user document creation failed after auth
-            // Or if this is the first time profile page is visited after simple auth
-            reset({ 
+            reset({
               name: user.displayName || '',
               age: undefined,
               preferredVenueTypes: [],
@@ -165,58 +162,69 @@ const UserProfilePage: NextPage = () => {
         return;
       }
       setEditorFile(file);
-      setEditorScale(1.2); 
-      setEditorRotation(0); 
+      setEditorScale(1.2);
+      setEditorRotation(0);
     }
   };
 
   const saveProfileChanges = async (data: UserProfileFormInputs) => {
     if (!currentUser) return;
-    
-    let finalPhotoURL = currentPhotoURL; 
+
+    let finalPhotoURL = currentPhotoURL;
+    console.log("Initial finalPhotoURL:", finalPhotoURL);
+
 
     if (editorFile && editorRef.current) {
       setIsUploading(true);
       setUploadProgress(0);
+      console.log("Editor file selected, starting crop and upload process.");
 
       const canvas = editorRef.current.getImageScaledToCanvas();
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, editorFile.type, 0.90)); 
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, editorFile.type, 0.90));
 
       if (!blob) {
         toast({ title: "Erro ao Processar Imagem", description: "Não foi possível obter a imagem recortada.", variant: "destructive" });
         setIsUploading(false);
         return;
       }
-      
+
       const croppedImageFile = blobToFile(blob, editorFile.name);
-      const imagePath = `fotosperfilusuario/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`; 
+      const imagePath = `fotosperfilusuario/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`;
       const imageStorageRef = storageRef(storage, imagePath);
+      console.log("Attempting to upload to path:", imagePath);
       const uploadTask = uploadBytesResumable(imageStorageRef, croppedImageFile);
 
       try {
         if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com") && currentPhotoURL !== finalPhotoURL) {
+            console.log("Attempting to delete old profile picture:", currentPhotoURL);
             const oldImageRefTry = storageRef(storage, currentPhotoURL);
             try {
                 await deleteObject(oldImageRefTry);
+                console.log("Old profile picture deleted successfully.");
             } catch (deleteError: any) {
                 if (deleteError.code !== 'storage/object-not-found') {
                     console.warn("Could not delete old profile picture from storage:", deleteError);
+                } else {
+                    console.log("Old profile picture not found in storage, no deletion needed.");
                 }
             }
         }
-        
+
         await new Promise<void>((resolve, reject) => {
           uploadTask.on('state_changed',
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
               setUploadProgress(progress);
+              console.log('Upload is ' + progress + '% done');
             },
             (error) => {
-              console.error("Upload failed:", error);
+              console.error("Firebase Storage Upload Error:", error);
               reject(error);
             },
             async () => {
+              console.log("Upload successful, getting download URL.");
               finalPhotoURL = await getDownloadURL(uploadTask.snapshot.ref);
+              console.log("New photo URL:", finalPhotoURL);
               resolve();
             }
           );
@@ -224,11 +232,16 @@ const UserProfilePage: NextPage = () => {
       } catch (error) {
         toast({ title: "Falha no Upload", description: "Não foi possível enviar a imagem.", variant: "destructive" });
         setIsUploading(false);
-        return; 
+        return;
       } finally {
-        setIsUploading(false);
+        // This will be reached regardless of the try block's outcome regarding the promise
       }
+    } else {
+         console.log("No new editor file, keeping current photoURL:", currentPhotoURL);
     }
+
+
+    setIsUploading(false); // Ensure this is set after upload logic, even if no new file
 
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
@@ -237,27 +250,24 @@ const UserProfilePage: NextPage = () => {
         age: data.age,
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
-        // questionnaireCompleted is true if age is set, address is separate for chat
-        questionnaireCompleted: !!data.age, 
-        photoURL: finalPhotoURL, 
+        questionnaireCompleted: !!data.age,
+        photoURL: finalPhotoURL,
         updatedAt: serverTimestamp(),
       };
 
       if (data.city && data.state) {
         dataToUpdate.address = { city: data.city, state: data.state };
       } else {
-        // If city or state is cleared, remove the address object or set to null
-        // This ensures that if a user clears their address, it's reflected
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists() && userDocSnap.data().address) {
              dataToUpdate.address = null;
         }
       }
-
+      console.log("Data to update in Firestore:", dataToUpdate);
       await updateDoc(userDocRef, dataToUpdate);
 
-      setCurrentPhotoURL(finalPhotoURL); 
-      setEditorFile(null); 
+      setCurrentPhotoURL(finalPhotoURL);
+      setEditorFile(null);
 
       toast({
         title: "Perfil Atualizado!",
@@ -284,20 +294,17 @@ const UserProfilePage: NextPage = () => {
     try {
       const credential = EmailAuthProvider.credential(currentUser.email, deletePassword);
       await reauthenticateWithCredential(currentUser, credential);
-      
+
       const userIdToDelete = currentUser.uid;
       const batch = writeBatch(firestore);
 
-      // 1. Delete profile picture from Storage
       if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com")) {
-        try { await deleteObject(storageRef(storage, currentPhotoURL)); } 
+        try { await deleteObject(storageRef(storage, currentPhotoURL)); }
         catch (e) { console.warn("Old photo couldn't be deleted on account deletion:", e); }
       }
 
-      // 2. Delete user's main document
       batch.delete(doc(firestore, "users", userIdToDelete));
-      
-      // 3. Delete user's subcollections (example: checkedInEvents, coupons)
+
       const checkedInEventsRef = collection(firestore, `users/${userIdToDelete}/checkedInEvents`);
       const checkedInEventsSnap = await getDocs(checkedInEventsRef);
       checkedInEventsSnap.forEach(doc => batch.delete(doc.ref));
@@ -305,24 +312,19 @@ const UserProfilePage: NextPage = () => {
       const couponsRef = collection(firestore, `users/${userIdToDelete}/coupons`);
       const couponsSnap = await getDocs(couponsRef);
       couponsSnap.forEach(doc => batch.delete(doc.ref));
-      
-      // 4. Delete event ratings made by this user
+
       const ratingsQuery = query(collectionGroup(firestore, 'eventRatings'), where('userId', '==', userIdToDelete));
       const ratingsSnapshot = await getDocs(ratingsQuery);
       ratingsSnapshot.forEach(ratingDoc => batch.delete(ratingDoc.ref));
 
-      // 5. Delete purchased tickets by this user
-      const ticketsQuery = query(collection(firestore, 'purchasedTickets'), where('userId', '==', userIdToDelete));
-      const ticketsSnapshot = await getDocs(ticketsQuery);
-      ticketsSnapshot.forEach(ticketDoc => batch.delete(ticketDoc.ref));
+      // Removed purchasedTickets logic
 
       await batch.commit();
-      
-      // 6. Delete Firebase Auth user
+
       await deleteUser(currentUser);
 
       toast({ title: "Conta Excluída", description: "Sua conta e todos os seus dados foram removidos.", variant: "default", duration: 7000 });
-      router.push('/login'); 
+      router.push('/login');
     } catch (error: any) {
       let message = "Erro ao excluir conta.";
       if (error.code === 'auth/wrong-password') message = "Senha incorreta.";
@@ -330,7 +332,7 @@ const UserProfilePage: NextPage = () => {
       toast({ title: "Falha ao Excluir", description: message, variant: "destructive" });
     } finally {
       setIsDeleting(false);
-      setDeletePassword(''); 
+      setDeletePassword('');
       setShowDeleteDialog(false);
     }
   };
@@ -357,11 +359,11 @@ const UserProfilePage: NextPage = () => {
                   <AvatarEditor
                     ref={editorRef}
                     image={editorFile}
-                    width={200} 
-                    height={200} 
-                    border={25} 
-                    borderRadius={125} 
-                    color={[0, 0, 0, 0.6]} 
+                    width={200}
+                    height={200}
+                    border={25}
+                    borderRadius={125}
+                    color={[0, 0, 0, 0.6]}
                     scale={editorScale}
                     rotate={editorRotation}
                     className="rounded-full"
@@ -372,7 +374,7 @@ const UserProfilePage: NextPage = () => {
                   <UserCircle className="w-full h-full text-primary/40" data-ai-hint="avatar placeholder" />
                 )}
               </div>
-              
+
               {!editorFile && (
                 <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isFormSubmitting || isDeleting}>
                   <UploadCloud className="w-4 h-4 mr-2" /> {currentPhotoURL ? "Alterar Foto" : "Enviar Foto"}
@@ -494,4 +496,3 @@ const UserProfilePage: NextPage = () => {
 };
 
 export default UserProfilePage;
-
