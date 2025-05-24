@@ -8,8 +8,8 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, Timestamp } from 'firebase/firestore';
-import Image from 'next/image'; // Added Image import
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, Timestamp, orderBy } from 'firebase/firestore'; // Added orderBy
+import Image from 'next/image';
 import { ref as storageRefStandard, deleteObject } from "firebase/storage";
 
 
@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { UserCircle, ArrowLeft, Save, Loader2, Eye, EyeOff, CreditCard, Trash2, ExternalLink, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore, storage } from '@/lib/firebase'; // Added storage
+import { auth, firestore, storage } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY } from "@/lib/constants";
@@ -62,11 +62,10 @@ type PartnerSettingsFormInputs = z.infer<typeof partnerSettingsSchema>;
 
 interface StripeSubscription {
     id: string;
-    status: 'trialing' | 'active' | 'canceled' | 'incomplete' | 'past_due' | 'unpaid' | string; // Allow other statuses
+    status: 'trialing' | 'active' | 'canceled' | 'incomplete' | 'past_due' | 'unpaid' | string;
     trial_end?: Timestamp;
     current_period_end?: Timestamp;
     created: Timestamp;
-    // Add other fields as needed from your Firestore structure
     price?: {
         id?: string;
         product?: {
@@ -166,8 +165,6 @@ export default function PartnerSettingsPage() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
         if (!snapshot.empty) {
-            // Assuming there's only one active/trialing subscription, take the first.
-            // You might need more sophisticated logic if multiple subscriptions are possible.
             const subData = snapshot.docs[0].data() as StripeSubscription;
             setActiveSubscription(subData);
         } else {
@@ -192,11 +189,9 @@ export default function PartnerSettingsPage() {
       if (now <= trialEndDate) {
         setTrialEndDateString(formatDate(trialEndDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }));
       } else {
-        // Trial has ended, clear the message
         setTrialEndDateString(null);
       }
     } else {
-      // User is subscribed or partnerCreatedAt is not yet loaded
       setTrialEndDateString(null);
     }
   }, [partnerCreatedAt, activeSubscription]);
@@ -213,22 +208,19 @@ export default function PartnerSettingsPage() {
         const newSessionDoc = await addDoc(checkoutSessionRef, {
             client: 'web',
             mode: 'subscription',
-            price: STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY, // Make sure this is your LIVE Price ID
+            price: STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY,
             success_url: window.location.origin + '/partner/dashboard?subscription_checkout=success',
             cancel_url: window.location.origin + '/partner/settings?subscription_checkout=cancelled',
-            // To use Stripe's trial management with the extension, you'd typically set trial_from_plan: true
-            // on the Price in Stripe, or pass trial_period_days here if the extension supports it directly.
-            // For this flow, we assume the Price ID itself is configured for a trial or direct payment.
         });
 
         const unsubscribe = onSnapshot(doc(firestore, `customers/${currentUser.uid}/checkout_sessions/${newSessionDoc.id}`),
             (snap) => {
                 const data = snap.data();
                 if (data?.url) {
-                    unsubscribe(); // Stop listening once we have the URL
+                    unsubscribe(); 
                     window.location.assign(data.url);
                 } else if (data?.error) {
-                    unsubscribe(); // Stop listening on error
+                    unsubscribe(); 
                     console.error("Stripe Checkout Session Error (full object):", data.error);
                     const errorMessage = typeof data.error === 'object' && data.error.message 
                                          ? data.error.message 
@@ -241,7 +233,7 @@ export default function PartnerSettingsPage() {
                 console.error("Error listening to checkout session:", error);
                 toast({ title: "Erro no Checkout", description: "Ocorreu um problema ao iniciar o pagamento.", variant: "destructive" });
                 setIsSubmittingCheckout(false);
-                 if (unsubscribe) unsubscribe(); // Ensure listener is cleaned up on error too
+                 if (unsubscribe) unsubscribe(); 
             }
         );
 
@@ -250,13 +242,11 @@ export default function PartnerSettingsPage() {
         toast({ title: "Erro ao Preparar Pagamento", description: "Não foi possível iniciar o processo de assinatura.", variant: "destructive" });
         setIsSubmittingCheckout(false);
     }
-    // Note: setIsSubmittingCheckout(false) should ideally be called after redirection or on error from the listener.
-    // If redirection is fast, it might not be an issue, but for longer processes or if user closes tab, state might be stuck.
   };
 
   const handleManageSubscription = async () => {
     if (!currentUser) return;
-    setIsSubmittingCheckout(true); // Re-use the same loading state for simplicity
+    setIsSubmittingCheckout(true); 
     try {
         const portalSessionRef = collection(firestore, `customers/${currentUser.uid}/portals`);
         const newPortalDoc = await addDoc(portalSessionRef, {
@@ -313,8 +303,6 @@ export default function PartnerSettingsPage() {
           dataToUpdate.couponReportClearPassword = data.couponReportClearPassword;
           toast({ title: "Senha do Relatório Definida", description: "Senha para limpar relatório de cupons foi definida/atualizada.", variant: "default" });
       } else if (data.couponReportClearPassword || data.confirmCouponReportClearPassword) {
-         // This case is handled by zod schema refinement, but an extra client-side check can be here if needed.
-         // The form won't submit if this refinement fails.
          toast({ title: "Erro na Senha", description: "As senhas do relatório não coincidem ou são muito curtas.", variant: "destructive" });
          return;
       }
@@ -323,11 +311,11 @@ export default function PartnerSettingsPage() {
       await updateDoc(userDocRef, dataToUpdate);
 
       let emailUpdateMessage = "";
-      if (data.email !== initialEmail && currentUser.email !== data.email) { // Check if email actually changed
+      if (data.email !== initialEmail && currentUser.email !== data.email) { 
         if (window.confirm(`Deseja realmente alterar seu e-mail de login de ${initialEmail} para ${data.email}? Esta ação pode exigir reverificação.`)) {
           try {
             await updateEmail(currentUser, data.email);
-            setInitialEmail(data.email); // Update local state for initialEmail
+            setInitialEmail(data.email); 
             emailUpdateMessage = "Seu e-mail de login foi alterado com sucesso.";
           } catch (authError: any) {
             console.error("Error updating auth email:", authError);
@@ -338,12 +326,10 @@ export default function PartnerSettingsPage() {
               authErrorMessage = "Este e-mail já está em uso por outra conta.";
             }
             toast({ title: "Erro ao Atualizar E-mail", description: authErrorMessage, variant: "destructive", duration: 7000 });
-            // Reset email field to initialEmail if update fails
             reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' }); 
             return;
           }
         } else {
-           // User cancelled email change, reset email field to initialEmail
            reset({ ...data, email: initialEmail || '', couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
            emailUpdateMessage = "Alteração de e-mail cancelada.";
         }
@@ -355,7 +341,6 @@ export default function PartnerSettingsPage() {
         variant: "default",
       });
 
-      // Reset password fields after successful submission
       reset({ ...data, email: data.email, couponReportClearPassword: '', confirmCouponReportClearPassword: '' });
 
 
@@ -371,7 +356,7 @@ export default function PartnerSettingsPage() {
 
 
   const handleDeleteAccount = async () => {
-    if (!currentUser?.email) { // Check currentUser and currentUser.email
+    if (!currentUser?.email) { 
       toast({ title: "Erro", description: "Parceiro não autenticado corretamente ou e-mail não disponível.", variant: "destructive" });
       return;
     }
@@ -398,7 +383,7 @@ export default function PartnerSettingsPage() {
           if (partnerData.photoURL && partnerData.photoURL.includes("firebasestorage.googleapis.com")) {
               try {
                   console.log("Attempting to delete partner profile picture:", partnerData.photoURL);
-                  await deleteObject(storageRefStandard(storage, partnerData.photoURL)); // Use storageRefStandard alias
+                  await deleteObject(storageRefStandard(storage, partnerData.photoURL));
                   console.log("Partner profile picture deleted from storage.");
               } catch (e: any) {
                   if (e.code !== 'storage/object-not-found') {
@@ -427,9 +412,9 @@ export default function PartnerSettingsPage() {
       ratingsSnapshot.forEach(ratingDoc => batch.delete(ratingDoc.ref));
       console.log(`Marked ${ratingsSnapshot.size} event ratings for deletion.`);
 
-      // Delete the main partner document from 'users' collection
+
       console.log("Marking partner user document for deletion:", partnerDocRef.path);
-      if (partnerDocRef) { // Extra check, though it should be defined
+      if (partnerDocRef) { 
            batch.delete(partnerDocRef);
       } else {
           console.error("CRITICAL: partnerDocRef was unexpectedly undefined before batch.delete call in handleDeleteAccount.");
@@ -443,7 +428,7 @@ export default function PartnerSettingsPage() {
       if (!activeSubscriptionsSnap.empty) {
           console.warn(`Partner ${partnerIdToDelete} has active Stripe subscriptions. These should be cancelled via the Stripe dashboard or an appropriate backend mechanism if the extension doesn't handle it on customer deletion.`);
       }
-      batch.delete(stripeCustomerDocRef); // Delete the Stripe customer mapping
+      batch.delete(stripeCustomerDocRef); 
       console.log("Marked Stripe customer document for deletion.");
 
 
@@ -748,7 +733,6 @@ export default function PartnerSettingsPage() {
                         Assinar Plano Fervo (R$ 69,90 por mês)
                     </Button>
                 )}
-
                 <div className="mt-2 flex justify-center">
                     <Image
                         src="/images/stripe.png"
@@ -781,7 +765,7 @@ export default function PartnerSettingsPage() {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                         <AlertDialogHeader><AlertDialogTitle className="text-destructive">Excluir Conta de Parceiro Permanentemente?</AlertDialogTitle><AlertDialogDescription>Esta ação é irreversível. Todos os seus dados como parceiro serão removidos. As FervoCoins associadas ao seu local serão redistribuídas para os usuários. Notificações sobre seu local ou eventos serão removidas dos usuários. Para continuar, por favor, insira sua senha.</AlertDialogDescription></AlertDialogHeader>
-                        <div className="space-y-2 py-2"><Label htmlFor="deletePartnerPassword">Senha</Label><div className="relative"><Input id="deletePartnerPassword" type={showDeletePasswordInput ? "text" : "password"} value={deletePasswordInput} onChange={(e) => setDeletePasswordInput(e.target.value)} placeholder="Sua senha atual" className={cn(deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && 'border-yellow-500')} /><Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-primary" onClick={() => setShowDeletePasswordInput(!showDeletePasswordInput)} aria-label={showDeletePasswordInput ? "Esconder senha" : "Mostrar senha"}>{showDeletePasswordInput ? <EyeOff size={18} /> : <Eye size={18} />}</Button></div>{deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && (<p className="text-xs text-yellow-600">A senha deve ter pelo menos 6 caracteres.</p>)}</div>
+                        <div className="space-y-2 py-2"><Label htmlFor="deletePartnerPassword" className="text-foreground">Senha</Label><div className="relative"><Input id="deletePartnerPassword" type={showDeletePasswordInput ? "text" : "password"} value={deletePasswordInput} onChange={(e) => setDeletePasswordInput(e.target.value)} placeholder="Sua senha atual" className={cn(deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && 'border-yellow-500')} /><Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setShowDeletePasswordInput(!showDeletePasswordInput)}>{showDeletePasswordInput ? <EyeOff size={18} /> : <Eye size={18} />}</Button></div>{deletePasswordInput.length > 0 && deletePasswordInput.length < 6 && (<p className="text-xs text-yellow-600">A senha deve ter pelo menos 6 caracteres.</p>)}</div>
                         <AlertDialogFooter><AlertDialogCancel onClick={() => { setDeletePasswordInput(''); setShowDeletePasswordInput(false);}}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteAccount} disabled={isDeletingAccount || deletePasswordInput.length < 6} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{isDeletingAccount ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Confirmar Exclusão da Conta</AlertDialogAction></AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
@@ -791,5 +775,3 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
-
-    
