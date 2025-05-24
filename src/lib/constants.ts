@@ -77,12 +77,12 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 
 
 // Stripe Constants for Partner Subscription (using Firebase Extension "firestore-stripe-payments")
-// IMPORTANT: For LIVE mode, these MUST be LIVE keys/IDs. For TEST mode, they MUST be TEST keys/IDs.
-// Ensure this Price ID corresponds to the correct mode of your Stripe Extension.
+// IMPORTANT: For LIVE mode, this MUST be a LIVE Price ID. For TEST mode, it MUST be a TEST Price ID.
+// Ensure this Price ID corresponds to the correct mode of your Stripe Extension and matches the Product ID below.
 // This ID should match the Price ID of your "Fervo Partner Monthly" plan in your Stripe dashboard.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RS1BNL8kxrPyagwpFpPX8xp"; // Updated Price ID
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RSMbbL8kxrPyagw39sXj3Ys"; // Updated Price ID
 // Ensure this Product ID matches the Product for the Price ID above.
-export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SLMs2b92CI9P8w"; // Updated Product ID
+export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SLMs2b92CI9P8w";
 
 // Stripe API Keys - Use environment variables for these in production!
 export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU";
@@ -90,8 +90,9 @@ export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "p
 // WARNING: It's highly recommended to use your full sk_live_... or sk_test_... secret key
 // for the Firebase Stripe Extension. A restricted key (rk_...) might not have sufficient permissions.
 // Monitor Firebase Function logs for Stripe API errors if payments fail.
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "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";
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "rk_test_51RMuSWL8kxrPyagwo2Ns8YZauzX14m3YcDldrbJoX8Ya1ndy8zcDhyTuVUFhXdsSSym7ExcXutUCrfioXQLkFsdC00VYu5BHEL";
 
 
 // PagBank (kept for reference if PagBank button is still used as alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";
+
