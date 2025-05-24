@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, updateEmail, EmailAuthProvider, reauthenticateWithCredential, deleteUser as deleteFirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, Timestamp, orderBy } from 'firebase/firestore'; // Added orderBy
+import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc as deleteFirestoreDoc, collection, getDocs, writeBatch, query, where, collectionGroup, onSnapshot, Timestamp, orderBy, addDoc } from 'firebase/firestore'; // Added addDoc
 import Image from 'next/image';
 import { ref as storageRefStandard, deleteObject } from "firebase/storage";
 
@@ -264,7 +264,7 @@ export default function PartnerSettingsPage() {
                     console.error("Stripe Portal Session Error (full object):", data.error);
                     const errorMessage = typeof data.error === 'object' && data.error.message
                                         ? data.error.message
-                                        : "Ocorreu um erro desconhecido ao abrir o portal de gerenciamento.";
+                                        : "Falha ao criar sessão de portal. Verifique os logs do servidor para mais detalhes.";
                     toast({ title: "Erro ao Abrir Portal", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
                 }
@@ -775,3 +775,4 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
