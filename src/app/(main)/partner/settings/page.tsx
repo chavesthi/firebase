@@ -189,10 +189,10 @@ export default function PartnerSettingsPage() {
       if (now <= trialEndDate) {
         setTrialEndDateString(formatDate(trialEndDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }));
       } else {
-        setTrialEndDateString(null);
+        setTrialEndDateString(null); // Trial has passed
       }
     } else {
-      setTrialEndDateString(null);
+      setTrialEndDateString(null); // Has active sub or no creation date
     }
   }, [partnerCreatedAt, activeSubscription]);
 
@@ -222,13 +222,11 @@ export default function PartnerSettingsPage() {
                 } else if (data?.error) {
                     unsubscribe(); 
                     console.error("Stripe Checkout Session Error (full object):", data.error);
-                    let errorMessage = "Falha ao criar sessão de checkout. Verifique os logs do servidor para mais detalhes.";
-                    if (typeof data.error === 'object' && data.error.message) {
-                        errorMessage = data.error.message;
-                    } else if (typeof data.error === 'object' && Object.keys(data.error).length === 0) {
-                        // Handle case where data.error is an empty object
-                        errorMessage = "Falha ao criar sessão de checkout. Ocorreu um erro no servidor sem mensagem detalhada. Verifique os logs das Firebase Functions e a configuração da extensão Stripe.";
-                    }
+                    const errorMessage = typeof data.error === 'object' && data.error.message 
+                                         ? data.error.message 
+                                         : (Object.keys(data.error || {}).length === 0 
+                                            ? "Falha ao criar sessão de checkout. Objeto de erro vazio. Verifique os logs das Firebase Functions e a configuração da extensão Stripe."
+                                            : "Falha ao criar sessão de checkout. Verifique os logs do servidor para mais detalhes.");
                     toast({ title: "Erro ao Iniciar Checkout", description: errorMessage, variant: "destructive" });
                     setIsSubmittingCheckout(false);
                 }
@@ -370,6 +368,7 @@ export default function PartnerSettingsPage() {
     }
 
     setIsDeletingAccount(true);
+    let partnerDocRef;
     try {
       console.log("Attempting to reauthenticate partner for deletion:", currentUser.uid);
       const credential = EmailAuthProvider.credential(currentUser.email, deletePasswordInput);
@@ -377,12 +376,11 @@ export default function PartnerSettingsPage() {
       console.log("Partner reauthenticated successfully.");
 
       const partnerIdToDelete = currentUser.uid;
+      partnerDocRef = doc(firestore, "users", partnerIdToDelete); // Assign here
       const batch = writeBatch(firestore);
 
       console.log("Starting account deletion for partner:", partnerIdToDelete);
       
-      const partnerDocRef = doc(firestore, "users", partnerIdToDelete);
-      console.log("Partner document reference:", partnerDocRef.path);
       
       // Try to delete profile picture from Storage
       try {
@@ -525,7 +523,7 @@ export default function PartnerSettingsPage() {
   return (
     <div className="container py-6 sm:py-8 mx-auto px-4">
         <div className="flex items-center justify-between mb-4 sm:mb-6 max-w-2xl mx-auto">
-            <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-foreground text-foreground hover:bg-muted text-xs sm:text-sm">
+            <Button variant="outline" onClick={() => router.push('/partner/dashboard')} className="border-primary text-primary hover:bg-primary/10 text-xs sm:text-sm">
                 <ArrowLeft className="w-4 h-4 mr-1 sm:mr-2" />
                 Painel
             </Button>
@@ -734,22 +732,23 @@ export default function PartnerSettingsPage() {
                         disabled={isSubmittingCheckout}
                     >
                         {isSubmittingCheckout ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                        Assinar Plano Fervo (R$ 69,90 por mês)
+                        Assinar Plano Fervo (R$ 89,90 por mês)
                     </Button>
                 )}
-                <div className="mt-2 flex justify-center">
-                    <Image
-                        src="/images/stripe.png"
-                        alt="Pagamentos processados por Stripe"
-                        width={300}
-                        height={120}
-                        data-ai-hint="payment gateway logo"
-                    />
-                </div>
+                 {(!loadingSubscription || (activeSubscription && (activeSubscription.status === 'active' || activeSubscription.status === 'trialing'))) && (
+                    <div className="mt-4 flex justify-center">
+                        <Image
+                            src="/images/stripe.png"
+                            alt="Pagamentos processados por Stripe"
+                            width={300}
+                            height={120}
+                            data-ai-hint="payment gateway logo"
+                        />
+                    </div>
+                 )}
                  <p className="text-xs text-center text-muted-foreground mt-2">
                     Pagamentos processados de forma segura pelo Stripe.
                 </p>
-
             </div>
 
             <Separator className="border-primary/20" />
@@ -779,3 +778,4 @@ export default function PartnerSettingsPage() {
     </div>
   );
 }
+
