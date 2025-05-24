@@ -91,9 +91,14 @@ export default function LoginPage() {
       <div className="w-full max-w-md p-px rounded-lg shadow-2xl bg-gradient-to-b from-primary/50 to-secondary/50"
            style={{'--card-glow-primary': 'hsl(var(--primary))', '--card-glow-secondary': 'hsl(var(--secondary))'} as React.CSSProperties}>
         <Card className="w-full bg-card/95 backdrop-blur-sm">
-          <CardHeader className="text-center px-4 sm:px-6 pt-6 sm:pt-8">
-            <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary login-title-aura-blink">Bem-vindo ao Fervo App!</CardTitle>
-            <CardDescription className="text-muted-foreground text-sm sm:text-base">
+          <CardHeader className="flex flex-col items-center px-4 sm:px-6 pt-6 sm:pt-8">
+            <div className="flex flex-row items-center justify-center gap-2">
+              <Logo logoHeight={30} logoWidth={30} />
+              <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary login-title-aura-blink">
+                Bem-vindo ao Fervo App!
+              </CardTitle>
+            </div>
+            <CardDescription className="text-muted-foreground text-sm sm:text-base mt-2 text-center">
               Encontre os melhores fervos ou cadastre seu estabelecimento.
             </CardDescription>
           </CardHeader>
