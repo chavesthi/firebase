@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
 import { doc, getDoc, updateDoc, deleteDoc as deleteFirestoreDoc, serverTimestamp, collection, where, query, getDocs, writeBatch, collectionGroup } from 'firebase/firestore';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref as storageRefStandard, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage"; // Renamed storageRef to storageRefStandard
 import Image from 'next/image';
 import AvatarEditor from 'react-avatar-editor';
 
@@ -65,7 +65,7 @@ const userProfileSchema = z.object({
   }
   return true;
 }, {
-  message: "Para usar o chat, Cidade e Estado devem ser preenchidos.",
+  message: "Para usar o chat, Cidade e Estado devem ser preenchidos juntos ou ambos vazios.",
   path: ["city"],
 });
 
@@ -132,6 +132,7 @@ const UserProfilePage: NextPage = () => {
             });
             setCurrentPhotoURL(userData.photoURL || user.photoURL || null);
           } else {
+             // If Firestore doc doesn't exist but user is authenticated (e.g., new Google sign-in)
             reset({
               name: user.displayName || '',
               age: undefined,
@@ -167,17 +168,17 @@ const UserProfilePage: NextPage = () => {
     }
   };
 
-  const saveProfileChanges = async (data: UserProfileFormInputs) => {
+  const onSubmit: SubmitHandler<UserProfileFormInputs> = async (data) => {
     if (!currentUser) return;
 
     let finalPhotoURL = currentPhotoURL;
-    console.log("Initial finalPhotoURL:", finalPhotoURL);
+    setIsUploading(true); // Set uploading to true at the beginning of the submit process
 
+    console.log("Profile save initiated. Initial photoURL:", currentPhotoURL);
 
     if (editorFile && editorRef.current) {
-      setIsUploading(true);
-      setUploadProgress(0);
       console.log("Editor file selected, starting crop and upload process.");
+      setUploadProgress(0);
 
       const canvas = editorRef.current.getImageScaledToCanvas();
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, editorFile.type, 0.90));
@@ -187,17 +188,18 @@ const UserProfilePage: NextPage = () => {
         setIsUploading(false);
         return;
       }
-
+      
       const croppedImageFile = blobToFile(blob, editorFile.name);
       const imagePath = `fotosperfilusuario/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`;
-      const imageStorageRef = storageRef(storage, imagePath);
-      console.log("Attempting to upload to path:", imagePath);
+      const imageStorageRef = storageRefStandard(storage, imagePath); // Use storageRefStandard
+      console.log("Attempting to upload to path:", imagePath, "with file:", croppedImageFile);
       const uploadTask = uploadBytesResumable(imageStorageRef, croppedImageFile);
 
       try {
-        if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com") && currentPhotoURL !== finalPhotoURL) {
+        // Delete old photo if it exists and is different and from Firebase Storage
+        if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com")) {
             console.log("Attempting to delete old profile picture:", currentPhotoURL);
-            const oldImageRefTry = storageRef(storage, currentPhotoURL);
+            const oldImageRefTry = storageRefStandard(storage, currentPhotoURL); // Use storageRefStandard
             try {
                 await deleteObject(oldImageRefTry);
                 console.log("Old profile picture deleted successfully.");
@@ -209,13 +211,13 @@ const UserProfilePage: NextPage = () => {
                 }
             }
         }
-
+        
         await new Promise<void>((resolve, reject) => {
           uploadTask.on('state_changed',
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
               console.log('Upload is ' + progress + '% done');
+              setUploadProgress(progress);
             },
             (error) => {
               console.error("Firebase Storage Upload Error:", error);
@@ -229,19 +231,16 @@ const UserProfilePage: NextPage = () => {
             }
           );
         });
-      } catch (error) {
-        toast({ title: "Falha no Upload", description: "Não foi possível enviar a imagem.", variant: "destructive" });
+      } catch (error: any) {
+        toast({ title: "Falha no Upload", description: error.message || "Não foi possível enviar a imagem.", variant: "destructive" });
         setIsUploading(false);
-        return;
-      } finally {
-        // This will be reached regardless of the try block's outcome regarding the promise
+        return; 
       }
     } else {
          console.log("No new editor file, keeping current photoURL:", currentPhotoURL);
     }
 
-
-    setIsUploading(false); // Ensure this is set after upload logic, even if no new file
+    setIsUploading(false);
 
     try {
       const userDocRef = doc(firestore, "users", currentUser.uid);
@@ -250,24 +249,26 @@ const UserProfilePage: NextPage = () => {
         age: data.age,
         preferredVenueTypes: data.preferredVenueTypes || [],
         preferredMusicStyles: data.preferredMusicStyles || [],
-        questionnaireCompleted: !!data.age,
-        photoURL: finalPhotoURL,
+        questionnaireCompleted: !!data.age, // Mark as completed if age is provided (core requirement)
+        photoURL: finalPhotoURL, // This will be the new URL or the existing one
         updatedAt: serverTimestamp(),
       };
 
       if (data.city && data.state) {
         dataToUpdate.address = { city: data.city, state: data.state };
       } else {
+        // If user clears city/state, ensure address field is removed or nulled
+        // Check if address exists before trying to nullify to avoid unnecessary writes
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists() && userDocSnap.data().address) {
-             dataToUpdate.address = null;
+             dataToUpdate.address = null; // Or firebase.firestore.FieldValue.delete()
         }
       }
       console.log("Data to update in Firestore:", dataToUpdate);
       await updateDoc(userDocRef, dataToUpdate);
 
-      setCurrentPhotoURL(finalPhotoURL);
-      setEditorFile(null);
+      setCurrentPhotoURL(finalPhotoURL); // Update local state for immediate UI reflection
+      setEditorFile(null); // Clear the editor file
 
       toast({
         title: "Perfil Atualizado!",
@@ -285,55 +286,90 @@ const UserProfilePage: NextPage = () => {
   };
 
   const handleDeleteAccount = async () => {
-    if (!currentUser || !currentUser.email) return;
-    if (!deletePassword) {
-      toast({ title: "Senha Necessária", description: "Insira sua senha.", variant: "destructive" });
+    if (!currentUser || !currentUser.email) {
+      toast({ title: "Erro", description: "Usuário não autenticado ou e-mail não disponível.", variant: "destructive" });
       return;
     }
+    if (!deletePassword) {
+      toast({ title: "Senha Necessária", description: "Insira sua senha para excluir a conta.", variant: "destructive" });
+      return;
+    }
+
     setIsDeleting(true);
+    console.log("Iniciando exclusão de conta para:", currentUser.uid);
+
     try {
+      console.log("Tentando reautenticar...");
       const credential = EmailAuthProvider.credential(currentUser.email, deletePassword);
       await reauthenticateWithCredential(currentUser, credential);
+      console.log("Reautenticação bem-sucedida.");
 
       const userIdToDelete = currentUser.uid;
       const batch = writeBatch(firestore);
 
+      // 1. Delete profile picture from Storage
       if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com")) {
-        try { await deleteObject(storageRef(storage, currentPhotoURL)); }
-        catch (e) { console.warn("Old photo couldn't be deleted on account deletion:", e); }
+        console.log("Tentando excluir foto do Storage:", currentPhotoURL);
+        try {
+          const photoRef = storageRefStandard(storage, currentPhotoURL); // Use storageRefStandard
+          await deleteObject(photoRef);
+          console.log("Foto do Storage excluída.");
+        } catch (storageError: any) {
+          // Log error but continue with deletion, as user might not have a photo or it might already be deleted
+          console.warn("Não foi possível excluir a foto do Storage (pode não existir):", storageError);
+        }
       }
 
-      batch.delete(doc(firestore, "users", userIdToDelete));
+      // 2. Delete user's document from 'users' collection
+      const userDocRef = doc(firestore, "users", userIdToDelete);
+      console.log("Marcando documento do usuário para exclusão:", userDocRef.path);
+      batch.delete(userDocRef);
 
+      // 3. Delete user's 'checkedInEvents' subcollection
       const checkedInEventsRef = collection(firestore, `users/${userIdToDelete}/checkedInEvents`);
       const checkedInEventsSnap = await getDocs(checkedInEventsRef);
-      checkedInEventsSnap.forEach(doc => batch.delete(doc.ref));
+      console.log(`Encontrados ${checkedInEventsSnap.size} documentos em checkedInEvents para excluir.`);
+      checkedInEventsSnap.forEach(docSnap => batch.delete(docSnap.ref));
 
+      // 4. Delete user's 'coupons' subcollection
       const couponsRef = collection(firestore, `users/${userIdToDelete}/coupons`);
       const couponsSnap = await getDocs(couponsRef);
-      couponsSnap.forEach(doc => batch.delete(doc.ref));
+      console.log(`Encontrados ${couponsSnap.size} cupons para excluir.`);
+      couponsSnap.forEach(docSnap => batch.delete(docSnap.ref));
 
+      // 5. Delete user's ratings from 'eventRatings' collectionGroup
       const ratingsQuery = query(collectionGroup(firestore, 'eventRatings'), where('userId', '==', userIdToDelete));
       const ratingsSnapshot = await getDocs(ratingsQuery);
+      console.log(`Encontradas ${ratingsSnapshot.size} avaliações de eventos para excluir.`);
       ratingsSnapshot.forEach(ratingDoc => batch.delete(ratingDoc.ref));
 
-      // Removed purchasedTickets logic
-
+      console.log("Executando batch do Firestore...");
       await batch.commit();
+      console.log("Batch do Firestore executado com sucesso.");
 
+      // 6. Delete Firebase Authentication user
+      console.log("Tentando excluir usuário do Firebase Auth...");
       await deleteUser(currentUser);
+      console.log("Usuário do Firebase Auth excluído.");
 
       toast({ title: "Conta Excluída", description: "Sua conta e todos os seus dados foram removidos.", variant: "default", duration: 7000 });
       router.push('/login');
+      setShowDeleteDialog(false); // Ensure dialog closes on success
+
     } catch (error: any) {
-      let message = "Erro ao excluir conta.";
-      if (error.code === 'auth/wrong-password') message = "Senha incorreta.";
-      else if (error.code === 'auth/requires-recent-login') message = "Requer login recente. Faça login novamente.";
-      toast({ title: "Falha ao Excluir", description: message, variant: "destructive" });
+      console.error("Erro ao excluir conta:", error);
+      let message = "Erro ao excluir conta. Tente novamente.";
+      if (error.code === 'auth/wrong-password') {
+        message = "Senha incorreta. Por favor, tente novamente.";
+      } else if (error.code === 'auth/requires-recent-login') {
+        message = "Esta operação é sensível e requer autenticação recente. Por favor, faça login novamente e tente excluir sua conta.";
+      }
+      toast({ title: "Falha ao Excluir Conta", description: message, variant: "destructive" });
     } finally {
       setIsDeleting(false);
       setDeletePassword('');
-      setShowDeleteDialog(false);
+      // Only close dialog if it's still meant to be open (i.e. not closed by success path)
+      // setShowDeleteDialog(false); // This might close it prematurely if an error occurred but user wants to retry password
     }
   };
 
@@ -351,7 +387,7 @@ const UserProfilePage: NextPage = () => {
         <CardHeader className="text-center p-4 sm:p-6">
           <CardTitle className="text-2xl sm:text-3xl text-primary">Meu Perfil</CardTitle>
         </CardHeader>
-        <form onSubmit={handleSubmit(saveProfileChanges)}>
+        <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-6 p-4 sm:p-6">
             <div className="flex flex-col items-center space-y-3">
               <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-2 border-primary bg-muted flex items-center justify-center overflow-hidden">
@@ -474,7 +510,7 @@ const UserProfilePage: NextPage = () => {
             </Button>
             <Separator className="my-2 border-primary/20" />
             <div className="w-full space-y-2">
-                <h3 className="text-md font-medium text-destructive text-center">Excluir Conta</h3>
+                <h3 className="text-md font-medium text-destructive text-center">Excluir Minha Conta</h3>
                 <AlertDialog open={showDeleteDialog} onOpenChange={(open) => { if (!open) { setDeletePassword(''); setShowPasswordInput(false); } setShowDeleteDialog(open); }}>
                     <AlertDialogTrigger asChild>
                         <Button variant="destructive" className="w-full" disabled={isDeleting || isFormSubmitting || isUploading}>
@@ -482,9 +518,42 @@ const UserProfilePage: NextPage = () => {
                         </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle className="text-destructive">Excluir Conta Permanentemente?</AlertDialogTitle><AlertDialogDescription>Esta ação é irreversível. Todos os seus dados (perfil, moedas, cupons, favoritos, check-ins, avaliações) serão removidos. Para continuar, insira sua senha.</AlertDialogDescription></AlertDialogHeader>
-                        <div className="space-y-2 py-2"><Label htmlFor="deletePassword">Senha</Label><div className="relative"><Input id="deletePassword" type={showPasswordInput ? "text" : "password"} value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Sua senha atual" className={cn(deletePassword.length > 0 && deletePassword.length < 6 && 'border-yellow-500')} /><Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setShowPasswordInput(!showPasswordInput)}>{showPasswordInput ? <EyeOff size={18} /> : <Eye size={18} />}</Button></div>{deletePassword.length > 0 && deletePassword.length < 6 && (<p className="text-xs text-yellow-600">A senha deve ter pelo menos 6 caracteres.</p>)}</div>
-                        <AlertDialogFooter><AlertDialogCancel onClick={() => { setDeletePassword(''); setShowPasswordInput(false);}}>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteAccount} disabled={isDeleting || deletePassword.length < 6} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Confirmar Exclusão</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="text-destructive">Excluir Conta Permanentemente?</AlertDialogTitle>
+                            <AlertDialogDescription>Esta ação é irreversível. Todos os seus dados (perfil, moedas, cupons, favoritos, check-ins, avaliações) serão removidos. Para continuar, insira sua senha.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="space-y-2 py-2">
+                            <Label htmlFor="deletePassword">Senha</Label>
+                            <div className="relative">
+                                <Input
+                                    id="deletePassword"
+                                    type={showPasswordInput ? "text" : "password"}
+                                    value={deletePassword}
+                                    onChange={(e) => setDeletePassword(e.target.value)}
+                                    placeholder="Sua senha atual"
+                                    className={cn(deletePassword.length > 0 && deletePassword.length < 6 && 'border-yellow-500')}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setShowPasswordInput(!showPasswordInput)}
+                                >
+                                    {showPasswordInput ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </Button>
+                            </div>
+                            {deletePassword.length > 0 && deletePassword.length < 6 && (
+                                <p className="text-xs text-yellow-600">A senha deve ter pelo menos 6 caracteres.</p>
+                            )}
+                        </div>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => { setDeletePassword(''); setShowPasswordInput(false); setShowDeleteDialog(false);}}>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteAccount} disabled={isDeleting || deletePassword.length < 6} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                Confirmar Exclusão
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
             </div>
@@ -496,3 +565,4 @@ const UserProfilePage: NextPage = () => {
 };
 
 export default UserProfilePage;
+
