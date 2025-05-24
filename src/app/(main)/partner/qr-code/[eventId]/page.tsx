@@ -34,10 +34,9 @@ interface EventQrCodePageProps {
 }
 
 const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
-  const resolvedParams = use(params as any);
   const router = useRouter();
   const { toast } = useToast();
-  const eventIdParam = resolvedParams.eventId;
+  const eventIdParam = params.eventId; // Directly access params in RSC/Client Component boundary
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [partnerDetails, setPartnerDetails] = useState<PartnerDetails | null>(null);
@@ -80,19 +79,6 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
       setEventLoading(true);
       setError(null);
       try {
-        // Fetch Partner Details first to get venueName
-        // Assuming the event's partnerId is the currentUser.uid if the partner is viewing their own QR code
-        const partnerDocRef = doc(firestore, 'users', currentUser.uid);
-        const partnerDocSnap = await getDoc(partnerDocRef);
-
-        if (!partnerDocSnap.exists() || partnerDocSnap.data()?.role !== 'partner') {
-          // This check is important: if the currentUser is not a partner, or doc doesn't exist
-          // they shouldn't be able to generate QR codes for other partners' events or non-existent ones.
-          // However, the event document itself contains the partnerId, so let's fetch event first, then partner.
-        }
-        // setPartnerDetails({ venueName: partnerDocSnap.data().venueName || 'Nome do Local Desconhecido' });
-
-        // Fetch Event Details
         const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
         const eventDocSnap = await getDoc(eventDocRef);
 
@@ -101,7 +87,6 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
         }
 
         const data = eventDocSnap.data();
-        // Verify current user is the owner of this event
         if (data.partnerId !== currentUser.uid) {
           throw new Error('Você não tem permissão para visualizar o QR code deste evento.');
         }
@@ -115,7 +100,6 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
           throw new Error('Este evento já terminou e o QR code não está mais disponível.');
         }
         
-        // Now fetch the specific partner details using data.partnerId
         const actualPartnerDocRef = doc(firestore, 'users', data.partnerId);
         const actualPartnerDocSnap = await getDoc(actualPartnerDocRef);
         if (!actualPartnerDocSnap.exists()) {
@@ -201,18 +185,18 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
         )}
       </div>
 
-      <div className="printable-a4-content flex flex-col items-center justify-between p-6 sm:p-8 md:p-12 text-center"> {/* Centered text for headers/footers */}
+      <div className="printable-a4-content flex flex-col items-center justify-between p-6 sm:p-8 md:p-12 text-center">
         <header className="w-full mb-4 md:mb-6">
           <div className="mb-4 md:mb-6 flex justify-center">
             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={80} logoHeight={80} data-ai-hint="app logo" />
           </div>
           {eventDetails && partnerDetails && (
             <>
-              <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-200">Check-in no Evento!</h1>
-              <p className="text-md md:text-lg text-gray-700 dark:text-gray-300 mt-2">
-                Este é o QR Code para fazer check-in no evento <strong className="text-gray-900 dark:text-gray-100">{eventDetails.eventName}</strong> no local <strong className="text-gray-900 dark:text-gray-100">{partnerDetails.venueName}</strong>.
+              <h1 className="text-xl md:text-2xl font-bold text-black">Check-in no Evento!</h1>
+              <p className="text-md md:text-lg text-black mt-2">
+                Este é o QR Code para fazer check-in no evento <strong className="text-black">{eventDetails.eventName}</strong> no local <strong className="text-black">{partnerDetails.venueName}</strong>.
               </p>
-              <p className="text-sm md:text-md text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-sm md:text-md text-gray-800 mt-1">
                 Data do Evento: {format(eventDetails.startDateTime.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
               </p>
             </>
@@ -229,7 +213,7 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
           {!error && eventDetails && eventDetails.checkInToken && (
             <div ref={qrCodeCanvasRef} className="p-3 md:p-4 bg-white rounded-lg shadow-lg border border-gray-300 inline-block">
               <QRCodeCanvas
-                id="qr-code-canvas-element" // Changed ID to be more specific
+                id="qr-code-canvas-element"
                 value={qrCodeValue}
                 size={PRINT_QR_SIZE}
                 level={"H"}
@@ -248,10 +232,10 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
         </section>
 
         <footer className="text-center w-full mt-4 md:mt-6">
-          <p className="text-md md:text-lg font-semibold text-gray-700 dark:text-gray-300">
+          <p className="text-md md:text-lg font-semibold text-black">
             Baixe o Fervo App para comentar, dar nota ao evento, ao local e muito mais!
           </p>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
+          <p className="text-xs sm:text-sm text-gray-700 mt-2">
             &copy; {new Date().getFullYear()} Fervo App. Todos os direitos reservados.
           </p>
         </footer>
@@ -262,6 +246,7 @@ const EventQrCodePage: NextPage<EventQrCodePageProps> = ({ params }) => {
           /* Full screen for viewing */
           width: 100%;
           min-height: 100vh;
+          /* Default text color set here, overridden by specific classes or print styles */
         }
         .printable-a4-content {
           /* A4 aspect ratio for screen preview, actual size handled by @media print */
