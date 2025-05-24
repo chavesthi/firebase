@@ -1,10 +1,9 @@
 
-
 'use client';
 
 import type { NextPage } from 'next';
 import { useEffect, useState } from 'react'; 
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { doc, getDoc, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
@@ -17,6 +16,7 @@ import { Logo } from '@/components/shared/logo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { APP_URL } from '@/lib/constants';
 
 interface EventDetails {
   eventName: string;
@@ -28,17 +28,14 @@ interface PartnerDetails {
   venueName: string;
 }
 
-interface SharedEventPageProps {
-  params: {
-    partnerId: string;
-    eventId: string;
-  };
-}
-
-const SharedEventPage: NextPage<SharedEventPageProps> = ({ params }) => {
+// Props no longer passed directly, params obtained via hook
+const SharedEventPage: NextPage = () => {
   const router = useRouter();
+  const params = useParams();
   const { toast } = useToast();
-  const { partnerId: partnerIdParam, eventId: eventIdParam } = params;
+  
+  const partnerIdParam = params.partnerId;
+  const eventIdParam = params.eventId;
 
   const partnerId = typeof partnerIdParam === 'string' ? partnerIdParam : null;
   const eventId = typeof eventIdParam === 'string' ? eventIdParam : null;
@@ -60,8 +57,8 @@ const SharedEventPage: NextPage<SharedEventPageProps> = ({ params }) => {
         const partnerDocRef = doc(firestore, 'users', partnerId);
         const partnerDocSnap = await getDoc(partnerDocRef);
 
-        if (!partnerDocSnap.exists()) {
-          throw new Error('Local não encontrado.');
+        if (!partnerDocSnap.exists() || partnerDocSnap.data()?.role !== 'partner') {
+          throw new Error('Local não encontrado ou inválido.');
         }
         const partnerData = partnerDocSnap.data();
         setPartnerDetails({ venueName: partnerData.venueName || 'Local Desconhecido' });
@@ -139,9 +136,14 @@ const SharedEventPage: NextPage<SharedEventPageProps> = ({ params }) => {
                   <MapPinIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-primary" />
                   <span>{partnerDetails.venueName}</span>
                 </div>
-                <p className="text-xs sm:text-sm text-center text-foreground/80">
-                  Para ver todos os detalhes, como preços, outros eventos no local, rotas e muito mais, baixe o Fervo App ou faça login!
-                </p>
+                <Button 
+                  asChild
+                  className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
+                >
+                  <Link href={`/map?venueId=${partnerId}&eventId=${eventId}`}>
+                    Ver no Fervo App
+                  </Link>
+                </Button>
               </div>
             )}
 
@@ -158,7 +160,7 @@ const SharedEventPage: NextPage<SharedEventPageProps> = ({ params }) => {
             <div className="flex flex-col items-center gap-3 sm:gap-4 pt-4 sm:flex-row sm:justify-center">
               <Button 
                 size="lg" 
-                className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
+                className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground text-sm sm:text-base"
                 onClick={() => {
                     toast({ title: "Em Breve!", description: "Links para download do app serão disponibilizados aqui.", duration: 3000});
                 }}
@@ -166,7 +168,7 @@ const SharedEventPage: NextPage<SharedEventPageProps> = ({ params }) => {
                 <Download className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Baixar o Fervo App
               </Button>
               <Link href="/login" passHref className="w-full sm:w-auto">
-                <Button size="lg" variant="outline" className="w-full border-accent text-accent hover:bg-accent/10 hover:text-accent text-sm sm:text-base">
+                <Button size="lg" variant="outline" className="w-full border-primary text-primary hover:bg-primary/10 hover:text-primary text-sm sm:text-base">
                   <LogInIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Já tenho conta!
                 </Button>
               </Link>
@@ -190,4 +192,3 @@ const SharedEventPage: NextPage<SharedEventPageProps> = ({ params }) => {
 };
 
 export default SharedEventPage;
-

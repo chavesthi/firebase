@@ -46,6 +46,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -540,16 +541,18 @@ const MapContentAndLogic = () => {
         if (venueToSelect) {
           setSelectedVenue(venueToSelect);
           if (venueToSelect.location) {
-            setUserLocation(venueToSelect.location);
+            setUserLocation(venueToSelect.location); // Center map on the selected venue
           }
         } else {
+          // If venue not found but was selected via query, deselect it.
           if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
-          router.replace('/map', { scroll: false });
+          router.replace('/map', { scroll: false }); // Clear query params
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
       }
     }
-  }, [searchParams, venues, router, toast, isPreviewMode, selectedVenue?.id]);
+  // Only re-run if searchParams, venues array, or selectedVenue.id changes. Avoid router and toast in deps if not needed for this specific logic.
+  }, [searchParams, venues, selectedVenue?.id, router, toast]);
 
 
   const fetchVenueEvents = async (venueId: string) => {
@@ -585,6 +588,7 @@ const MapContentAndLogic = () => {
     if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
+      // Reset rating form if venue changes or events are loaded
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
@@ -669,8 +673,9 @@ const MapContentAndLogic = () => {
     let colorClass = "text-foreground";
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-secondary";
+      colorClass = "text-secondary"; // Purple when active
     } else {
+      // Original colors for inactive state
       if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
       else if (type === VenueType.BAR) colorClass = "text-accent";
       else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
@@ -877,7 +882,7 @@ const MapContentAndLogic = () => {
             });
             couponGenerated = true;
           }
-           return { newCoinTotal: updatedVenueCoins, newCouponGenerated: couponGenerated };
+           return { newCoinTotal: updatedVenueCoins - (couponGenerated ? FERVO_COINS_FOR_COUPON : 0), newCouponGenerated: couponGenerated };
         });
 
         let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins para ${partnerName}! Total neste local: ${newCoinTotal}.`;
@@ -1082,9 +1087,9 @@ const MapContentAndLogic = () => {
         </div>
 
         {currentAppUser && currentAppUser.role === UserRole.USER && (
-            <Button
+             <Button
                 variant="default"
-                size="lg"
+                size="lg" 
                 className={cn(
                     "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
                     "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
@@ -1571,7 +1576,7 @@ const MapContentAndLogic = () => {
                             chatRoomId={chatRoomId}
                             currentUserId={currentUser.uid}
                             isChatSoundMuted={isChatSoundMuted}
-                            chatClearedTimestamp={null} // Pass null as we now permanently delete
+                            chatClearedTimestamp={chatClearedTimestamp} 
                         />
                     </CardContent>
                     <div className="p-3 sm:p-4 border-t border-border bg-card">

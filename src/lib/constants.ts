@@ -73,7 +73,7 @@ export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 3
 export const COUPON_CODE_PREFIX = "FERVO";
 
 // App URL
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002";
+export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9003";
 
 
 // Stripe Constants for Partner Subscription (using Firebase Extension "firestore-stripe-payments")
@@ -81,18 +81,18 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 // or a TEST Price ID if your extension is in TEST mode.
 // Ensure this Price ID corresponds to the Product ID for the Fervo Partner plan.
 // The Price ID below should be the one associated with the Fervo Partner monthly plan in your Stripe dashboard.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RSMZiL8kxrPyagwWB7l4fUK";
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RSMbbL8kxrPyagw39sXj3Ys"; // Fallback example, ensure this is correct for your LIVE/TEST mode
 // This Product ID should match the Product associated with the Price ID above in your Stripe dashboard.
-export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SN6pgrZHBiL4Wi";
+export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SN6pgrZHBiL4Wi"; // Fallback example
 
 // Stripe API Keys - Use environment variables for these in production!
 // For client-side usage (e.g., with loadStripe from @stripe/stripe-js)
-export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU";
+export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU"; // Fallback, use env var
 
 // WARNING: It's highly recommended to use your full sk_live_... or sk_test_... secret key
 // for the Firebase Stripe Extension. A restricted key (rk_...) might not have sufficient permissions.
 // Monitor Firebase Function logs for Stripe API errors if payments fail.
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9"; // Fallback, use env var
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "rk_test_51RMuSWL8kxrPyagwo2Ns8YZauzX14m3YcDldrbJoX8Ya1ndy8zcDhyTuVUFhXdsSSym7ExcXutUCrfioXQLkFsdC00VYu5BHEL"; // Fallback, use env var
 
 
 // PagBank (kept for reference if PagBank button is still used as alternative)

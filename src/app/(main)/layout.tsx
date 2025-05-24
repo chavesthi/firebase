@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff, HelpCircle, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -108,7 +108,7 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false, // Default to false, will be updated by customer listener
+              stripeSubscriptionActive: false, 
               photoURL: userData.photoURL || user.photoURL || null,
             };
 
@@ -122,11 +122,11 @@ const useAuthAndUserSubscription = () => {
                         isActive = true;
                     }
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
-                    setLoading(false); // Ensure loading is set to false after subscription status is determined
+                    setLoading(false); 
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
-                    setLoading(false); // Also set loading to false on error
+                    setLoading(false); 
                 });
             } else {
                 setAppUser(baseAppUser);
@@ -221,7 +221,7 @@ export default function MainAppLayout({
     }
 
     const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
-    const isSharedEventPage = pathname.startsWith('/shared-event');
+    const isSharedEventPage = pathname.startsWith('/shared-event'); // Allow public access to shared event pages
     const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/user/help');
 
     if (!appUser) {
@@ -240,6 +240,7 @@ export default function MainAppLayout({
           }
         }
       } else {
+        // If not on an auth page, and not a shared event page, and not a generally accessible user page
         if (!appUser.questionnaireCompleted && !isSharedEventPage && !isGeneralUserAccessiblePage) {
           const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
           router.push(questionnairePath);
@@ -250,25 +251,25 @@ export default function MainAppLayout({
 
   useEffect(() => {
     if (!loading && prevAppUserRef.current === null && appUser !== null && appUser.questionnaireCompleted) {
-      let trialExpiredRecentlyOrActiveSub = false;
+      let isPartnerTrialExpiredRecently = false;
+      let isPartnerWithActiveSub = false;
+
       if (appUser.role === UserRole.PARTNER) {
-        if (appUser.stripeSubscriptionActive) {
-            trialExpiredRecentlyOrActiveSub = true;
-        } else if (appUser.createdAt && appUser.trialExpiredNotified === true) {
+        isPartnerWithActiveSub = appUser.stripeSubscriptionActive || false;
+        if (appUser.createdAt && appUser.trialExpiredNotified === true && !isPartnerWithActiveSub) {
             const createdAtDate = appUser.createdAt.toDate();
             const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000);
             const now = new Date();
             if (now > trialEndDate) {
-                 trialExpiredRecentlyOrActiveSub = true;
+                 isPartnerTrialExpiredRecently = true;
             }
         }
       }
 
+      let greetingTitle = "";
+      let greetingDescription = "";
 
-      if (appUser.role === UserRole.PARTNER && trialExpiredRecentlyOrActiveSub && !appUser.stripeSubscriptionActive) {
-        // If partner's trial recently expired (and they were notified) AND they don't have an active sub,
-        // the toast from login-form.tsx should handle it. Don't show a generic greeting.
-      } else {
+      if (!isPartnerTrialExpiredRecently || isPartnerWithActiveSub) { // Only greet if not recently expired & unsubscribed
         const now = new Date();
         const hour = now.getHours();
         let greetingPrefix = "";
@@ -282,10 +283,7 @@ export default function MainAppLayout({
         } else {
           greetingPrefix = "Boa Noite";
         }
-
-        let greetingTitle = "";
-        let greetingDescription = "";
-
+        
         if (appUser.role === UserRole.USER) {
             greetingTitle = `${greetingPrefix}, ${appUser.name}!`;
             greetingDescription = "Onde vamos hoje?";
@@ -293,15 +291,15 @@ export default function MainAppLayout({
             greetingTitle = `${greetingPrefix}, ${appUser.venueName || appUser.name}!`;
             greetingDescription = "Qual Evento Vai Rolar Hoje?";
         }
+      }
         
-        if (greetingTitle){
-            toast({
-              title: greetingTitle,
-              description: greetingDescription,
-              variant: "default",
-              duration: 3000,
-            });
-        }
+      if (greetingTitle){
+          toast({
+            title: greetingTitle,
+            description: greetingDescription,
+            variant: "default",
+            duration: 3000,
+          });
       }
     }
     prevAppUserRef.current = appUser;
@@ -530,8 +528,8 @@ export default function MainAppLayout({
       musicStyles: appUser.preferredMusicStyles || [],
     };
 
-    if (userPrefs.venueTypes.length === 0 && userPrefs.musicStyles.length === 0) {
-       toast({ title: "Defina suas Preferências", description: "Adicione seus tipos de locais e estilos musicais favoritos no seu perfil para receber sugestões.", duration: 7000 });
+    if (userPrefs.venueTypes.length === 0 && userPrefs.musicStyles.length === 0 && (!appUser.address || !appUser.address.city || !appUser.address.state)) {
+       toast({ title: "Defina suas Preferências e Localização", description: "Adicione seus tipos de locais, estilos musicais e sua cidade/estado no perfil para receber sugestões.", duration: 7000 });
        return;
     }
 
@@ -552,6 +550,8 @@ export default function MainAppLayout({
             lastNotificationCheckTimestamp: serverTimestamp()
         }).catch(error => {
             console.error("Error updating notifications in Firestore:", error);
+            // Optionally revert local state if Firestore update fails, or show error to user
+            // setAppUser(prev => prev ? {...prev, notifications: currentNotifications } : null);
             toast({ title: "Erro ao atualizar notificações", description: "Não foi possível marcar notificações como lidas no servidor.", variant: "destructive" });
         });
     } else if (appUser.notifications && appUser.notifications.length === 0){
@@ -863,8 +863,8 @@ export default function MainAppLayout({
           userId={appUser.uid}
         />
       )}
+      
+      {/* Floating chat button removed from layout, now part of map page */}
     </div>
   );
 }
-
-        
