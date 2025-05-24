@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
 import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; // Added googleAuthProvider
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; // Added signInWithPopup
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore'; // Added serverTimestamp
+import { auth, firestore, googleAuthProvider } from '@/lib/firebase'; 
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, type UserCredential } from 'firebase/auth'; 
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, type Timestamp, collection, query, where, getDocs } from 'firebase/firestore'; 
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'E-mail inválido.' }),
@@ -57,7 +57,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [activeRole, setActiveRole] = useState<UserRole>(UserRole.USER);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); // 'login' or 'signup'
+  const [formMode, setFormMode] = useState<'login' | 'signup'>('login'); 
   const router = useRouter();
   const { toast } = useToast();
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
@@ -77,7 +77,6 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     const userDocSnap = await getDoc(userDocRef);
 
     let userNameForGreeting: string;
-    let venueNameForGreeting: string | undefined;
     let questionnaireCompletedForRedirect: boolean = false;
     let userRoleInDbForRedirect: UserRole = role;
 
@@ -88,21 +87,28 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     if (!userDocSnap.exists()) {
       // New user
       userNameForGreeting = isGoogleSignIn ? (googleName || user.displayName || (role === UserRole.USER ? "Usuário" : "Parceiro")) : signupMethods.getValues("name");
-      await setDoc(userDocRef, {
+      const initialUserData: any = {
         uid: user.uid,
-        name: userNameForGreeting,
+        name: userNameForGreeting, // This will be establishment name for partners from signup
         email: user.email,
         role: role,
         createdAt: serverTimestamp(),
         questionnaireCompleted: false,
         trialExpiredNotified: false, 
-        venueCoins: {}, 
-        favoriteVenueIds: [],
-        favoriteVenueNotificationSettings: {},
-        notifications: [],
-        lastNotificationCheckTimestamp: null,
-        photoURL: user.photoURL || null, // Add photoURL from Google or null
-      });
+      };
+      if (role === UserRole.USER) {
+        initialUserData.venueCoins = {};
+        initialUserData.favoriteVenueIds = [];
+        initialUserData.favoriteVenueNotificationSettings = {};
+        initialUserData.notifications = [];
+        initialUserData.lastNotificationCheckTimestamp = null;
+        initialUserData.photoURL = user.photoURL || null;
+      } else if (role === UserRole.PARTNER) {
+        // photoURL for partner is handled in partner-questionnaire
+        initialUserData.photoURL = null; 
+      }
+      await setDoc(userDocRef, initialUserData);
+
       toast({
         title: isGoogleSignIn ? "Login com Google Bem Sucedido!" : "Conta Criada com Sucesso!",
         description: "Quase lá! Conte-nos um pouco mais sobre você.",
@@ -113,9 +119,14 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
       // Existing user
       const userData = userDocSnap.data();
       userNameForGreeting = userData.name || (role === UserRole.USER ? 'Usuário' : 'Parceiro');
-      venueNameForGreeting = userData.venueName || (role === UserRole.PARTNER ? userNameForGreeting : undefined);
       userRoleInDbForRedirect = userData.role || UserRole.USER;
       questionnaireCompletedForRedirect = userData.questionnaireCompleted || false;
+
+      // Ensure photoURL is updated if user logs in with Google and has a new photo (only for UserRole.USER)
+      if (role === UserRole.USER && isGoogleSignIn && user.photoURL && userData.photoURL !== user.photoURL) {
+        await updateDoc(userDocRef, { photoURL: user.photoURL });
+      }
+
 
       if (role !== userRoleInDbForRedirect) {
         toast({
@@ -127,37 +138,45 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
         return;
       }
 
-      // Partner trial check
-      if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt && userData.trialExpiredNotified !== true) {
-        
+      if (userRoleInDbForRedirect === UserRole.PARTNER && userData.createdAt) {
         const subscriptionsRef = collection(firestore, `customers/${user.uid}/subscriptions`);
         const q = query(subscriptionsRef, where('status', 'in', ['trialing', 'active']));
         const subscriptionSnap = await getDocs(q);
 
-        if (subscriptionSnap.empty) { 
+        if (subscriptionSnap.empty) { // No active Stripe subscription
             const createdAtDate = (userData.createdAt as Timestamp).toDate();
-            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days
+            const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000); 
             const now = new Date();
 
-            if (now > trialEndDate) {
-            toast({
-                title: "Período de Teste Expirado",
-                description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
-                duration: 10000, 
-                action: (
-                <Button variant="outline" size="sm" onClick={() => router.push('/partner/settings')}>
-                    Assinar Agora
-                </Button>
-                ),
-            });
-            await updateDoc(userDocRef, { trialExpiredNotified: true });
+            if (now > trialEndDate) { // Trial has expired
+                if (userData.trialExpiredNotified !== true) {
+                    toast({
+                        title: "Período de Teste Expirado",
+                        description: "Seu período de teste gratuito de 15 dias expirou. Assine para continuar usando todos os recursos.",
+                        duration: 10000, 
+                        action: (
+                        <Button variant="outline" size="sm" onClick={() => router.push('/partner/settings')}>
+                            Assinar Agora
+                        </Button>
+                        ),
+                    });
+                    await updateDoc(userDocRef, { trialExpiredNotified: true });
+                }
+            } else { // Still within trial period
+                const daysRemaining = Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysRemaining > 0) {
+                     toast({
+                        title: "Período de Teste Ativo",
+                        description: `Você tem ${daysRemaining} dia(s) restante(s) no seu período de teste gratuito.`,
+                        duration: 5000,
+                    });
+                }
             }
         }
       }
 
-
       if (questionnaireCompletedForRedirect) {
-        // The greeting toast from layout.tsx will handle this for non-trial-expired partners.
+        // Greeting toast handled by layout.tsx
       } else {
          toast({
             title: `Bem-vindo(a) de volta, ${userNameForGreeting}!`,
@@ -345,10 +364,12 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
             <CardHeader/>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="signup-name" className={commonLabelStyle}>Nome Completo</Label>
+                <Label htmlFor="signup-name" className={commonLabelStyle}>
+                  {activeRole === UserRole.PARTNER ? 'Nome do Estabelecimento' : 'Nome Completo'}
+                </Label>
                 <Input
                   id="signup-name"
-                  placeholder="Seu nome"
+                  placeholder={activeRole === UserRole.PARTNER ? 'Nome do seu estabelecimento' : 'Seu nome completo'}
                   {...signupMethods.register('name')}
                   className={cn(signupMethods.formState.errors.name && commonErrorBorderStyle)}
                    autoComplete="name"
@@ -450,3 +471,4 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     </Tabs>
   );
 }
+
