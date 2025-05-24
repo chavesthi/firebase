@@ -80,7 +80,7 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9002
 // IMPORTANT: For LIVE mode, this MUST be a LIVE Price ID. For TEST mode, it MUST be a TEST Price ID.
 // Ensure this Price ID corresponds to the correct mode of your Stripe Extension and matches the Product ID below.
 // This ID should match the Price ID of your "Fervo Partner Monthly" plan in your Stripe dashboard.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RSMbbL8kxrPyagw39sXj3Ys"; // Updated Price ID
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RSMbbL8kxrPyagw39sXj3Ys";
 // Ensure this Product ID matches the Product for the Price ID above.
 export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "prod_SLMs2b92CI9P8w";
 
@@ -90,7 +90,7 @@ export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "p
 // WARNING: It's highly recommended to use your full sk_live_... or sk_test_... secret key
 // for the Firebase Stripe Extension. A restricted key (rk_...) might not have sufficient permissions.
 // Monitor Firebase Function logs for Stripe API errors if payments fail.
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "rk_test_51RMuSWL8kxrPyagwo2Ns8YZauzX14m3YcDldrbJoX8Ya1ndy8zcDhyTuVUFhXdsSSym7ExcXutUCrfioXQLkFsdC00VYu5BHEL";
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9";
 
 
 // PagBank (kept for reference if PagBank button is still used as alternative)
