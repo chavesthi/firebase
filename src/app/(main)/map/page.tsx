@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle as UICardTitle, CardDescription as UICardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, UICardTitle, CardDescription as UICardDescription } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -138,10 +138,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15',
+  [VenueType.STAND_UP]: '#FACC15', // Amarelo
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
-  [VenueType.LGBT]: '#F97316',
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Rosa
+  [VenueType.LGBT]: '#F97316', // Laranja
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -168,13 +168,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Purple
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Roxo para piscar
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'white'; // Fallback if base and highlight are the same
+    effectiveBlinkHighlightColor = 'white'; // Fallback se base e destaque forem iguais
   }
 
 
@@ -457,11 +457,11 @@ const MapContentAndLogic = () => {
             lng: position.coords.longitude,
           };
           setActualUserLocation(loc);
-          setUserLocation(loc);
+          setUserLocation(loc); // Update map center as well
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo default
           setUserLocation(defaultLoc);
           setActualUserLocation(null); // Ensure actualUserLocation is null if using default
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
@@ -672,16 +672,16 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; // Default color
+    let colorClass = "text-foreground"; 
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-secondary"; // Purple for active filter (as requested)
+      colorClass = "text-secondary"; // Roxo para filtro ativo
     } else {
-      // Use specific type colors when not active, but not purple for hover
-      if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
-      else if (type === VenueType.BAR) colorClass = "text-accent"; // Neon Green
+      // Cores específicas para hover quando não ativo, mas não roxo
+      if (type === VenueType.NIGHTCLUB) colorClass = "text-primary"; // Azul
+      else if (type === VenueType.BAR) colorClass = "text-accent"; // Verde Neon
       else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
-      else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary"; // Purple (this is fine as base if not active filter)
+      else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary"; // Roxo (ok como base se não ativo)
       else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
       else if (type === VenueType.LGBT) colorClass = "text-orange-500";
     }
@@ -768,9 +768,9 @@ const MapContentAndLogic = () => {
     }
 };
 
- const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp) => {
+ const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp, eventNameForShare?: string, shareRewardsEnabledForEvent?: boolean) => {
     if (isPreviewMode && currentAppUser?.role === UserRole.PARTNER) {
-        toast({ title: "Modo Preview", description: "Compartilhamento de eventos desabilitado para parceiros no modo de preview.", variant: "default" });
+        toast({ title: "Modo Preview", description: "Compartilhamento desabilitado para parceiros no modo de preview.", variant: "default" });
         return;
     }
     if (!currentUser || !currentAppUser) {
@@ -783,72 +783,70 @@ const MapContentAndLogic = () => {
         return;
     }
 
-    let eventDataForShare: VenueEvent | undefined;
-    if (selectedVenue && selectedVenue.id === partnerId) {
-        eventDataForShare = selectedVenue.events?.find(e => e.id === eventId);
-    } else {
-        try {
-            const eventDocRef = doc(firestore, `users/${partnerId}/events/${eventId}`);
-            const eventDocSnap = await getDoc(eventDocRef);
-            if (eventDocSnap.exists()) {
-                eventDataForShare = { id: eventDocSnap.id, ...eventDocSnap.data() } as VenueEvent;
-            } else {
-                toast({ title: "Erro ao Compartilhar", description: "Detalhes do evento não encontrados.", variant: "destructive" });
-                return;
-            }
-        } catch (fetchError) {
-            console.error("Error fetching event details for sharing:", fetchError);
-            toast({ title: "Erro ao Compartilhar", description: "Não foi possível carregar detalhes do evento.", variant: "destructive" });
-            return;
-        }
-    }
+    const effectiveEventName = eventNameForShare || selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento';
+    const effectiveShareRewardsEnabled = shareRewardsEnabledForEvent ?? selectedVenue?.events?.find(e => e.id === eventId)?.shareRewardsEnabled ?? true;
 
-    if (!eventDataForShare) {
-        toast({ title: "Evento não Encontrado", description: "Não foi possível encontrar os detalhes deste evento.", variant: "destructive" });
-        return;
-    }
 
     const sharerNameQueryParam = currentAppUser.name ? `?sharedByName=${encodeURIComponent(currentAppUser.name)}` : '';
     const shareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}${sharerNameQueryParam}`;
-    let sharedSuccessfully = false;
+    const title = `Confira este Fervo: ${partnerName} - ${effectiveEventName}`;
+    const text = `Olha esse evento que encontrei no Fervo App! Enviado por ${currentAppUser.name || 'um amigo'}.`;
 
-    if (navigator.share) {
+    let finalSharedSuccessfully = false;
+
+    // Tenta usar a interface nativa do Android primeiro
+    if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
       try {
-        await navigator.share({
-          title: `Confira este Fervo: ${partnerName} - ${eventDataForShare.eventName || 'Evento'}`,
-          text: `Olha esse evento que encontrei no Fervo App! Enviado por ${currentAppUser.name || 'um amigo'}.`,
-          url: shareUrl,
-        });
-        toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
-        sharedSuccessfully = true;
-      } catch (shareError: any) {
-        if (shareError.name === 'AbortError') {
-          console.log('Share operation cancelled by user.');
-          return;
-        } else {
-          console.warn('navigator.share failed, falling back to clipboard:', shareError);
-           try {
-            await navigator.clipboard.writeText(shareUrl);
-            toast({ title: "Link Copiado!", description: "O compartilhamento falhou ou não está disponível. O link foi copiado para a área de transferência!", variant: "default", duration: 6000 });
-            sharedSuccessfully = true;
-          } catch (clipError) {
-            console.error('Failed to copy link to clipboard:', clipError);
-            toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link automaticamente.", variant: "destructive"});
-          }
+        console.log("Tentando compartilhar via AndroidShareInterface com:", title, text, shareUrl);
+        // A interface nativa pode ser síncrona ou assíncrona
+        const nativeShareResult = (window as any).AndroidShareInterface.shareEvent(title, text, shareUrl);
+        if (nativeShareResult instanceof Promise) {
+          await nativeShareResult;
         }
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
-        sharedSuccessfully = true;
-      } catch (clipError) {
-        console.error('Failed to copy link to clipboard (fallback):', clipError);
-        toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
+        toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
+        finalSharedSuccessfully = true; // Assume sucesso se não houver erro
+      } catch (nativeShareError: any) {
+        console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
+        // Cai para navigator.share ou clipboard se a nativa falhar
       }
     }
 
-    if (sharedSuccessfully && currentUser && (eventDataForShare.shareRewardsEnabled ?? true) && currentAppUser?.role === UserRole.USER) {
+    if (!finalSharedSuccessfully) { // Se a nativa não foi usada ou falhou
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text, url: shareUrl });
+          toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
+          finalSharedSuccessfully = true;
+        } catch (shareError: any) {
+          if (shareError.name === 'AbortError') {
+            console.log('Share operation cancelled by user.');
+          } else {
+            console.warn('navigator.share falhou, tentando área de transferência:', shareError);
+            try {
+              await navigator.clipboard.writeText(shareUrl);
+              toast({ title: "Link Copiado!", description: "O compartilhamento falhou ou não está disponível. O link foi copiado!", variant: "default", duration: 6000 });
+              finalSharedSuccessfully = true;
+            } catch (clipError) {
+              console.error('Falha ao copiar para área de transferência:', clipError);
+              toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link automaticamente.", variant: "destructive"});
+            }
+          }
+        }
+      } else {
+        // Fallback final para área de transferência
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
+          finalSharedSuccessfully = true;
+        } catch (clipError) {
+          console.error('Falha ao copiar para área de transferência (fallback):', clipError);
+          toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
+        }
+      }
+    }
+
+
+    if (finalSharedSuccessfully && currentUser && (effectiveShareRewardsEnabled) && currentAppUser?.role === UserRole.USER) {
       const userDocRef = doc(firestore, "users", currentUser.uid);
       const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
@@ -877,7 +875,7 @@ const MapContentAndLogic = () => {
               userId: currentUser.uid,
               couponCode: couponCode,
               description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
-              eventName: eventDataForShare.eventName,
+              eventName: effectiveEventName,
               createdAt: serverTimestamp(),
               status: 'active',
               validAtPartnerId: partnerId,
@@ -905,7 +903,7 @@ const MapContentAndLogic = () => {
           duration: 5000
         });
       }
-    } else if (sharedSuccessfully && currentUser && !(eventDataForShare.shareRewardsEnabled ?? true) && currentAppUser?.role === UserRole.USER) {
+    } else if (finalSharedSuccessfully && currentUser && !effectiveShareRewardsEnabled && currentAppUser?.role === UserRole.USER) {
         console.log(`Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
     }
   };
@@ -969,7 +967,7 @@ const MapContentAndLogic = () => {
           toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
           setShowClearChatDialog(false);
           setIsDeletingChat(false);
-          setChatClearedTimestamp(Date.now());
+          // setChatClearedTimestamp(Date.now()); // This line is not needed for permanent deletion
           return;
       }
 
@@ -979,7 +977,8 @@ const MapContentAndLogic = () => {
 
       toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${chatRoomDisplayName} foram apagadas.`, variant: "default" });
       setShowClearChatDialog(false);
-      setChatClearedTimestamp(Date.now()); // Still set timestamp to ensure client clears immediately
+      // No need to set chatClearedTimestamp for permanent deletion.
+      // The onSnapshot in ChatMessageList will automatically update the view.
 
     } catch (error) {
         console.error("Error clearing chat messages:", error);
@@ -1022,6 +1021,8 @@ const MapContentAndLogic = () => {
   const chatRoomDisplayName = chatUserProfile?.address?.city && chatUserProfile?.address?.state
     ? `${chatUserProfile.address.city}, ${chatUserProfile.address.state}`
     : "Chat Geral";
+    console.log("MapPage - Rendering, current chatRoomId:", chatRoomId);
+
 
   return (
     <div className="relative flex w-full h-[calc(100vh-4rem)]">
@@ -1101,7 +1102,7 @@ const MapContentAndLogic = () => {
             </Button>
             )}
              {!filterSidebarOpen && (
-                 <Logo iconClassName="text-primary h-8 w-auto" className="bg-background/80 p-1.5 rounded-md shadow-lg" />
+                 <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={40} logoHeight={40} className="bg-background/80 p-1.5 rounded-md shadow-lg" />
             )}
         </div>
 
@@ -1112,13 +1113,13 @@ const MapContentAndLogic = () => {
                 className={cn(
                     "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
                     "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
-                    isChatWidgetOpen ? "animate-none" : "animate-bounce"
+                    !isChatWidgetOpen && "animate-bounce" // Bounce only when closed
                 )}
                 onClick={() => setIsChatWidgetOpen(prev => !prev)}
                 title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
             >
                 {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-                <span className="sm:inline">Fervo Chat</span>
+                <span className="hidden sm:inline">Fervo Chat</span>
                 <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
             </Button>
         )}
@@ -1354,7 +1355,7 @@ const MapContentAndLogic = () => {
                                           variant="ghost"
                                           size="icon"
                                           className="text-accent hover:text-accent/80 -mr-2 -mt-1"
-                                          onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime)}
+                                          onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime, event.eventName, event.shareRewardsEnabled)}
                                           title={(isPreviewMode && currentAppUser?.role === UserRole.PARTNER) ? "Compartilhamento desabilitado em modo preview para parceiros" : (eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!")}
                                           disabled={eventHasEnded || (isPreviewMode && currentAppUser?.role === UserRole.PARTNER)}
                                       >
@@ -1382,7 +1383,7 @@ const MapContentAndLogic = () => {
                               </p>
                                {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
                                 <div className="flex items-center gap-1 mt-1">
-                                    <StarRating rating={event.averageRating} totalStars={5} size={14} fillColor="#FFD700" readOnly />
+                                    <StarRating rating={event.averageRating} totalStars={5} size={14} fillColor="hsl(var(--primary))" readOnly />
                                     <span className="text-xs text-muted-foreground">({event.ratingCount} {event.ratingCount === 1 ? 'avaliação' : 'avaliações'})</span>
                                 </div>
                                ): (
@@ -1418,7 +1419,7 @@ const MapContentAndLogic = () => {
                                     readOnly={isSubmittingRating && currentlyRatingEventId === event.id}
                                     totalStars={5}
                                     size={20}
-                                    fillColor="#FFD700"
+                                    fillColor="hsl(var(--primary))"
                                   />
                                   <Textarea
                                     placeholder="Deixe um comentário (opcional)..."
@@ -1452,7 +1453,7 @@ const MapContentAndLogic = () => {
                               {currentUser && userHasCheckedIn && userHasRated && existingRatingForEvent && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
                                     <h4 className="text-sm font-semibold text-primary mb-1.5">Sua avaliação:</h4>
-                                    <StarRating rating={existingRatingForEvent.rating} totalStars={5} size={16} fillColor="#FFD700" readOnly />
+                                    <StarRating rating={existingRatingForEvent.rating} totalStars={5} size={16} fillColor="hsl(var(--primary))" readOnly />
                                     {existingRatingForEvent.comment && <p className="mt-1 text-xs text-muted-foreground italic">"{existingRatingForEvent.comment}"</p>}
                                 </div>
                               )}
@@ -1524,7 +1525,7 @@ const MapContentAndLogic = () => {
          <Card className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 w-[calc(100%-2rem)] sm:w-96 max-h-[70vh] sm:max-h-[60vh] z-50 flex flex-col shadow-2xl border-primary/50 bg-background/90 backdrop-blur-md">
             <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-primary" />
+                    {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5 text-primary cursor-pointer" onClick={() => setIsChatWidgetOpen(false)} /> : <MessageSquare className="h-5 w-5 text-primary" />}
                     <div>
                         <UICardTitle className="text-md sm:text-lg text-primary leading-tight">Fervo Chat</UICardTitle>
                         <UICardDescription className="text-xs sm:text-sm leading-tight">{chatRoomDisplayName}</UICardDescription>
@@ -1567,9 +1568,6 @@ const MapContentAndLogic = () => {
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
-                  <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary">
-                      <XCircleIcon className="h-5 w-5"/>
-                  </Button>
                 </div>
             </CardHeader>
             {isLoadingUserProfileForChat ? (
