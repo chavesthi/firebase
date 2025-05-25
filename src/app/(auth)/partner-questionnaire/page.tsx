@@ -10,9 +10,9 @@ import { useRouter } from 'next/navigation';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage"; // Added Firebase Storage
-import Image from 'next/image'; // Added Next Image
-import AvatarEditor from 'react-avatar-editor'; // Added AvatarEditor
+import { ref as storageRefStandard, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage"; // Renamed storageRef
+import Image from 'next/image';
+import AvatarEditor from 'react-avatar-editor';
 
 import { APIProvider, Map as GoogleMap, Marker, useMap } from '@vis.gl/react-google-maps';
 import { Button } from '@/components/ui/button';
@@ -23,13 +23,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/shared/logo';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore, storage } from '@/lib/firebase'; // Added storage
+import { auth, firestore, storage } from '@/lib/firebase';
 import { VenueType, MusicStyle, VENUE_TYPE_OPTIONS, MUSIC_STYLE_OPTIONS, GOOGLE_MAPS_API_KEY } from '@/lib/constants';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { geocodeAddress, type Location } from '@/services/geocoding';
-import { MapPin, Save, ArrowLeft, UploadCloud, UserCircle, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'; // Added icons
-import { Progress } from '@/components/ui/progress'; // Added Progress
-import { Slider } from '@/components/ui/slider'; // Added Slider
+import { MapPin, Save, ArrowLeft, UploadCloud, UserCircle, RotateCcw, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react'; // Added AlertCircle
+import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 
 const cepRegex = /^\d{5}-?\d{3}$/;
@@ -144,7 +144,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             whatsappPhone: userData.whatsappPhone || '',
           });
           
-          setCurrentPhotoURL(userData.photoURL || user.photoURL || null);
+          setCurrentPhotoURL(userData.photoURL || null); // Use Firestore photoURL primarily
           setIsProfileLocked(userData.questionnaireCompleted || false);
           if (userData.questionnaireCompleted) {
             toast({
@@ -159,7 +159,8 @@ const PartnerQuestionnairePage: NextPage = () => {
             setVenueLocation(userData.location);
           }
         } else {
-          setCurrentPhotoURL(user.photoURL || null);
+          // User authenticated but no Firestore document yet (e.g., new Google Sign-In before questionnaire step for partner)
+          setCurrentPhotoURL(null); // No Firestore photoURL yet
           setIsProfileLocked(false);
           setInitialQuestionnaireCompletedState(false);
         }
@@ -218,6 +219,7 @@ const PartnerQuestionnairePage: NextPage = () => {
     if (editorFile && editorRef.current) {
       setIsUploading(true);
       setUploadProgress(0);
+      console.log("onSubmit: Editor file selected, starting crop and upload process.");
       const canvas = editorRef.current.getImageScaledToCanvas();
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, editorFile.type, 0.90));
 
@@ -228,18 +230,23 @@ const PartnerQuestionnairePage: NextPage = () => {
       }
       
       const croppedImageFile = blobToFile(blob, editorFile.name);
-      const imagePath = `fotoperfilparceiros/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`; // Updated path
-      const imageStorageRef = storageRef(storage, imagePath);
+      const imagePath = `fotoperfilparceiros/${currentUser.uid}/${Date.now()}_${croppedImageFile.name}`;
+      const imageStorageRef = storageRefStandard(storage, imagePath);
+      console.log("onSubmit: Attempting to upload to path:", imagePath);
       const uploadTask = uploadBytesResumable(imageStorageRef, croppedImageFile);
 
       try {
-        // Delete old photo if it exists and is different
-        if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com") && currentPhotoURL !== finalPhotoURL) {
-            const oldImageRefTry = storageRef(storage, currentPhotoURL);
-            try { await deleteObject(oldImageRefTry); } 
-            catch (deleteError: any) { 
+        if (currentPhotoURL && currentPhotoURL.includes("firebasestorage.googleapis.com")) {
+            console.log("onSubmit: Attempting to delete old profile picture:", currentPhotoURL);
+            const oldImageRefTry = storageRefStandard(storage, currentPhotoURL);
+            try {
+                await deleteObject(oldImageRefTry);
+                console.log("onSubmit: Old profile picture deleted successfully.");
+            } catch (deleteError: any) {
                 if (deleteError.code !== 'storage/object-not-found') {
-                    console.warn("Could not delete old partner profile picture:", deleteError);
+                    console.warn("onSubmit: Could not delete old partner profile picture:", deleteError);
+                } else {
+                    console.log("onSubmit: Old profile picture not found in storage, no deletion needed.");
                 }
             }
         }
@@ -249,19 +256,30 @@ const PartnerQuestionnairePage: NextPage = () => {
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
               setUploadProgress(progress);
+              console.log('onSubmit: Upload is ' + progress + '% done');
             },
-            (error) => { console.error("Upload failed:", error); reject(error); },
-            async () => { finalPhotoURL = await getDownloadURL(uploadTask.snapshot.ref); resolve(); }
+            (error) => { 
+                console.error("onSubmit: Upload failed in task:", error);
+                toast({ title: "Falha no Upload da Foto", description: error.message || "Não foi possível enviar a imagem.", variant: "destructive" });
+                reject(error);
+            },
+            async () => { 
+                finalPhotoURL = await getDownloadURL(uploadTask.snapshot.ref);
+                console.log("onSubmit: New photo URL:", finalPhotoURL);
+                resolve();
+            }
           );
         });
-      } catch (error) {
-        toast({ title: "Falha no Upload da Foto", description: "Não foi possível enviar a imagem.", variant: "destructive" });
+      } catch (error:any) {
+        console.error("onSubmit: Error during photo upload promise:", error);
+        // Toast already shown in the promise reject or error handler
         setIsUploading(false);
         return; 
-      } finally {
-        setIsUploading(false);
       }
+    } else {
+        console.log("onSubmit: No new editor file, keeping current photoURL:", currentPhotoURL);
     }
+    setIsUploading(false);
 
 
     if (!currentVenueLocation && (data.street && data.number && data.city && data.state && data.cep && data.country)) {
@@ -302,7 +320,7 @@ const PartnerQuestionnairePage: NextPage = () => {
             country: data.country,
         },
         location: currentVenueLocation,
-        photoURL: finalPhotoURL, // Save the photo URL
+        photoURL: finalPhotoURL,
       };
 
       if (!initialQuestionnaireCompletedState) {
@@ -312,8 +330,9 @@ const PartnerQuestionnairePage: NextPage = () => {
           venueRatingCount: 0,
           questionnaireCompleted: true,
           questionnaireCompletedAt: serverTimestamp(),
+          // createdAt would have been set during initial account creation (handleSuccessfulAuth)
         };
-         toast({
+        toast({
           title: "Bem-vindo ao Fervo App, Parceiro!",
           description: "Seu local agora está no mapa! Explore funcionalidades como criação de eventos, QR codes para check-in, análise de feedback com IA e muito mais. Você tem 15 dias de acesso gratuito para testar tudo!",
           duration: 10000,
@@ -330,7 +349,7 @@ const PartnerQuestionnairePage: NextPage = () => {
       await updateDoc(userDocRef, dataToUpdate, { merge: true });
       
       setCurrentPhotoURL(finalPhotoURL);
-      setEditorFile(null);
+      setEditorFile(null); // Clear editor file after successful save
 
       toast({
         title: "Informações do Local Salvas!",
@@ -488,6 +507,10 @@ const PartnerQuestionnairePage: NextPage = () => {
                         </Select>
                       )}
                     />
+                    <div className="mt-1.5 flex items-start text-xs text-amber-600 dark:text-amber-500">
+                      <AlertCircle className="w-3.5 h-3.5 mr-1.5 mt-0.5 flex-shrink-0" />
+                      <span>Atenção: O tipo de local só poderá ser alterado a cada 30 dias. Escolha com cuidado.</span>
+                    </div>
                     {errors.venueType && <p className="mt-1 text-sm text-destructive">{errors.venueType.message}</p>}
                   </div>
 
@@ -668,3 +691,4 @@ const PartnerQuestionnairePage: NextPage = () => {
 };
 
 export default PartnerQuestionnairePage;
+
