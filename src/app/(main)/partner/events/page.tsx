@@ -59,7 +59,7 @@ const eventFormSchema = z.object({
   shareRewardsEnabled: z.boolean().default(true),
   ticketPurchaseUrl: z.string().url({ message: "URL de compra de ingresso inválida." }).optional().or(z.literal('')),
 }).refine(data => {
-    if (data.pricingType !== PricingType.FREE && (data.pricingValue === undefined || data.pricingValue <= 0)) {
+    if (data.pricingType !== PricingType.FREE && (data.pricingValue === undefined || data.pricingValue === null || data.pricingValue <= 0)) {
         return false;
     }
     return true;
@@ -79,7 +79,7 @@ const eventFormSchema = z.object({
     return endDateTime > startDateTime;
 }, {
     message: 'A data/hora de fim deve ser posterior à data/hora de início.',
-    path: ['endDate'],
+    path: ['endDate'], // Or 'endTime', or a general form error
 });
 
 
@@ -93,7 +93,7 @@ interface EventDocument extends EventFormInputs {
   createdAt: Timestamp;
   updatedAt?: Timestamp;
   checkInToken?: string;
-  pricingValue?: number | null;
+  pricingValue?: number | null; // Ensure this can be null
   averageRating?: number;
   ratingCount?: number;
   shareRewardsEnabled: boolean;
@@ -124,8 +124,8 @@ const ManageEventsPage: NextPage = () => {
   const [isDeletingPastEvents, setIsDeletingPastEvents] = useState(false);
 
   const [partnerCreatedAt, setPartnerCreatedAt] = useState<Timestamp | null>(null);
-  const [isSubscribedOrTrialing, setIsSubscribedOrTrialing] = useState<boolean>(true); // Default to true to avoid brief flicker of disabled state
-  const [canCreateEvents, setCanCreateEvents] = useState<boolean>(true); // Default to true
+  const [isSubscribedOrTrialing, setIsSubscribedOrTrialing] = useState<boolean>(true);
+  const [canCreateEvents, setCanCreateEvents] = useState<boolean>(true);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch, reset } = useForm<EventFormInputs>({
     resolver: zodResolver(eventFormSchema),
@@ -158,29 +158,30 @@ const ManageEventsPage: NextPage = () => {
         setCurrentUser(user);
         setLoading(true);
 
-        // Fetch partner's name and creation date
         const userDocRef = doc(firestore, 'users', user.uid);
         unsubscribePartnerStatus = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const userData = docSnap.data();
                 setPartnerName(userData?.venueName || 'Seu Local');
                 setPartnerCreatedAt(userData?.createdAt as Timestamp || null);
+            } else {
+                // Handle case where partner document might not exist yet or role is incorrect
+                toast({ title: "Erro de Parceiro", description: "Dados do parceiro não encontrados.", variant: "destructive" });
+                router.push('/login'); // Or partner questionnaire
             }
         });
         
-        // Listen for subscription status
         const subscriptionsQuery = query(collection(firestore, `customers/${user.uid}/subscriptions`), where("status", "in", ["trialing", "active"]));
         unsubscribeSubscriptionStatus = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
             setIsSubscribedOrTrialing(!subscriptionsSnap.empty);
         }, (error) => {
             console.error("Error fetching Stripe subscription status:", error);
-            setIsSubscribedOrTrialing(false); // Assume not subscribed on error
+            setIsSubscribedOrTrialing(false);
         });
 
 
-        // Fetch events
         const eventsCollectionRef = collection(firestore, 'users', user.uid, 'events');
-        const q = query(eventsCollectionRef, orderBy('updatedAt', 'desc'));
+        const q = query(eventsCollectionRef, orderBy('updatedAt', 'desc')); // Using updatedAt to show most recently modified first
 
         if (unsubscribeEvents) unsubscribeEvents();
         unsubscribeEvents = onSnapshot(q, (snapshot) => {
@@ -214,8 +215,8 @@ const ManageEventsPage: NextPage = () => {
   }, [router, toast]);
 
   useEffect(() => {
-    if (partnerCreatedAt === null) { // Still loading or partner data not found
-        setCanCreateEvents(true); // Default to allow while loading essential data
+    if (partnerCreatedAt === null) {
+        setCanCreateEvents(true); 
         return;
     }
 
@@ -241,19 +242,33 @@ const ManageEventsPage: NextPage = () => {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
       return;
     }
-    if (!canCreateEvents) {
-        toast({ title: "Criação de Eventos Bloqueada", description: "Seu período de teste expirou. Por favor, assine o plano para continuar criando eventos.", variant: "destructive", duration: 7000 });
+    if (!canCreateEvents && !editingEventId) { // Block new event creation if trial expired and not subscribed
+        toast({ title: "Criação de Eventos Bloqueada", description: "Seu período de teste expirou ou sua assinatura não está ativa. Por favor, assine o plano para continuar criando eventos.", variant: "destructive", duration: 7000 });
         return;
     }
-
-
-    const eventsCollectionRef = collection(firestore, 'users', currentUser.uid, 'events');
     const existingEvent = editingEventId ? partnerEvents.find(e => e.id === editingEventId) : null;
 
-    if (!editingEventId && data.visibility) {
-        const visibleEvents = partnerEvents.filter(event => event.visibility);
-        if (visibleEvents.length >= 5) {
-            toast({
+    // Check limit only for new events or if an existing non-visible event is being made visible
+    if ((!editingEventId && data.visibility) || (editingEventId && !existingEvent?.visibility && data.visibility)) {
+        const visibleEventsQuery = query(
+            collection(firestore, 'users', currentUser.uid, 'events'),
+            where('visibility', '==', true)
+        );
+        const visibleEventsSnapshot = await getDocs(visibleEventsQuery);
+        let currentVisibleCount = visibleEventsSnapshot.size;
+
+        // If editing an event that was already visible, don't count it towards the limit check again
+        if (editingEventId && existingEvent?.visibility && data.visibility) {
+             // No change in count as an already visible event remains visible
+        } else if (editingEventId && !existingEvent?.visibility && data.visibility) {
+            // An event is being made visible, effectively adding one to the count
+        } else if (!editingEventId && data.visibility) {
+            // A new visible event is being added
+        }
+
+
+        if (currentVisibleCount >= 5 && data.visibility && (!editingEventId || (editingEventId && !existingEvent?.visibility))) {
+             toast({
                 title: "Limite de Eventos Visíveis Atingido",
                 description: "Você pode ter no máximo 5 eventos visíveis. Crie como não visível ou oculte um evento existente.",
                 variant: "destructive",
@@ -262,6 +277,7 @@ const ManageEventsPage: NextPage = () => {
             return;
         }
     }
+
 
     const eventDataForFirestore: any = {
       partnerId: currentUser.uid,
@@ -290,7 +306,7 @@ const ManageEventsPage: NextPage = () => {
       } else {
         eventDataForFirestore.createdAt = serverTimestamp();
         eventDataForFirestore.updatedAt = serverTimestamp();
-        await addDoc(eventsCollectionRef, eventDataForFirestore);
+        await addDoc(collection(firestore, 'users', currentUser.uid, 'events'), eventDataForFirestore);
         toast({ title: "Evento Criado!", description: "O evento foi criado com sucesso." });
       }
       reset();
@@ -302,17 +318,11 @@ const ManageEventsPage: NextPage = () => {
   };
 
   const handleEditEvent = (event: EventDocument) => {
-    if (!canCreateEvents && !event.visibility) { // Allow editing of non-visible past events even if trial expired
-        const eventEndTime = event.endDateTime.toDate();
-        if (eventEndTime < new Date()) {
-             // Allow editing past, non-visible events for record keeping
-        } else {
-            toast({ title: "Edição Bloqueada", description: "Seu período de teste expirou. Assine para editar eventos futuros ou visíveis.", variant: "destructive", duration: 7000 });
-            return;
-        }
-    } else if (!canCreateEvents && event.visibility) {
-         toast({ title: "Edição Bloqueada", description: "Seu período de teste expirou. Assine para editar eventos.", variant: "destructive", duration: 7000 });
-         return;
+    const eventCanBeEdited = canCreateEvents || (isEventPast(event.endDateTime) && !event.visibility);
+
+    if (!eventCanBeEdited) {
+        toast({ title: "Edição Bloqueada", description: "Seu período de teste expirou ou sua assinatura não está ativa. Assine para editar eventos futuros ou visíveis.", variant: "destructive", duration: 7000 });
+        return;
     }
 
 
@@ -343,6 +353,7 @@ const ManageEventsPage: NextPage = () => {
     try {
       const eventDocRef = doc(firestore, 'users', currentUser.uid, 'events', eventId);
       await deleteDoc(eventDocRef);
+      // Ratings are not deleted from eventRatings collection here, as per spec.
 
       toast({ title: "Evento Excluído", description: "O evento foi excluído. Suas avaliações foram preservadas para estatísticas do local." });
       if (editingEventId === eventId) {
@@ -385,15 +396,21 @@ const ManageEventsPage: NextPage = () => {
     if (!currentUser) return;
 
     if (!canCreateEvents && !event.visibility) { 
-      toast({ title: "Ação Bloqueada", description: "Seu período de teste expirou. Assine para tornar eventos visíveis.", variant: "destructive", duration: 7000 });
+      toast({ title: "Ação Bloqueada", description: "Seu período de teste expirou ou sua assinatura não está ativa. Assine para tornar eventos visíveis.", variant: "destructive", duration: 7000 });
       return;
     }
 
     const newVisibility = !event.visibility;
 
     if (newVisibility) {
-        const visibleEvents = partnerEvents.filter(e => e.visibility && e.id !== event.id);
-        if (visibleEvents.length >= 5) {
+        const visibleEventsQuery = query(
+            collection(firestore, 'users', currentUser.uid, 'events'),
+            where('visibility', '==', true)
+        );
+        const visibleEventsSnapshot = await getDocs(visibleEventsQuery);
+        const currentVisibleCount = visibleEventsSnapshot.docs.filter(doc => doc.id !== event.id).length;
+
+        if (currentVisibleCount >= 5) {
              toast({
                 title: "Limite de Eventos Visíveis Atingido",
                 description: "Você pode ter no máximo 5 eventos visíveis. Oculte outro evento para tornar este visível.",
@@ -487,7 +504,7 @@ const ManageEventsPage: NextPage = () => {
                 <div className="p-3 my-4 bg-destructive/10 border border-destructive/30 rounded-md text-center">
                     <AlertCircle className="w-5 h-5 inline-block mr-2 text-destructive" />
                     <p className="text-sm text-destructive">
-                        Seu período de teste expirou. Para criar novos eventos, por favor, <Button variant="link" className="p-0 h-auto text-destructive underline" onClick={() => router.push('/partner/settings')}>assine um plano</Button>.
+                        Seu período de teste expirou ou sua assinatura não está ativa. Para criar novos eventos, por favor, <Button variant="link" className="p-0 h-auto text-destructive underline" onClick={() => router.push('/partner/settings')}>assine um plano</Button>.
                     </p>
                 </div>
             )}
@@ -602,17 +619,22 @@ const ManageEventsPage: NextPage = () => {
                 {errors.description && <p className="mt-1 text-sm text-destructive">{errors.description.message}</p>}
               </div>
 
-              <div className="md:col-span-2 flex items-center space-x-2 pt-2">
-                <Controller name="shareRewardsEnabled" control={control} render={({ field }) => <Switch id="shareRewardsEnabled" checked={field.value} onCheckedChange={field.onChange} />} />
-                <Label htmlFor="shareRewardsEnabled" className="text-foreground">Ativar Recompensa por Compartilhamento (FervoCoins). Quando o Usuário Compartilha o seu Evento para 10 pessoas ele ganha 20 moedas, 2 moedas por compartilhamento que valem um cupom de Cerveja ou Refrigerante 350ml. Esse Cupom pode ser Autenticado no seu painel Resgatar Cupons. Isso é um incentivo ao Usuário</Label>
-              </div>
-              <div className="md:col-span-2 -mt-3">
+              <div className="md:col-span-2 space-y-1 pt-2">
+                <p className="text-lg font-bold text-destructive mb-1 flex items-center">
+                  <AlertCircle className="w-5 h-5 mr-1.5" />
+                  Atenção:
+                </p>
+                <div className="flex items-center space-x-2">
+                  <Controller name="shareRewardsEnabled" control={control} render={({ field }) => <Switch id="shareRewardsEnabled" checked={field.value} onCheckedChange={field.onChange} />} />
+                  <Label htmlFor="shareRewardsEnabled" className="text-foreground text-sm">Ativar Recompensa por Compartilhamento (FervoCoins). Quando o Usuário Compartilha o seu Evento para 10 pessoas ele ganha 20 moedas, 2 moedas por compartilhamento que valem um cupom de Cerveja ou Refrigerante 350ml. Esse Cupom pode ser Autenticado no seu painel Resgatar Cupons. Isso é um incentivo ao Usuário</Label>
+                </div>
                 <p className="text-xs text-muted-foreground pl-8">
                   Positivo: Usuários ganham FervoCoins ao compartilhar este evento, aumentando o alcance!
                   <br/>Se desativado, o compartilhamento não gera recompensa. (Padrão: Ativado)
                 </p>
                 {errors.shareRewardsEnabled && <p className="mt-1 text-sm text-destructive">{errors.shareRewardsEnabled.message}</p>}
               </div>
+
 
               <div className="md:col-span-2 flex items-center space-x-2">
                 <Controller name="visibility" control={control} render={({ field }) => <Switch id="visibility" checked={field.value} onCheckedChange={field.onChange} />} />
@@ -627,7 +649,7 @@ const ManageEventsPage: NextPage = () => {
                     Cancelar Edição
                 </Button>
             )}
-            <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm" disabled={isSubmitting || (!canCreateEvents && !editingEventId) || (!canCreateEvents && editingEventId && partnerEvents.find(e=>e.id===editingEventId)?.visibility) }>
+            <Button type="submit" className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground text-xs sm:text-sm" disabled={isSubmitting || (!canCreateEvents && !editingEventId) || (!canCreateEvents && editingEventId && !!partnerEvents.find(e=>e.id===editingEventId)?.visibility) }>
               <Save className="w-4 h-4 mr-2" /> {isSubmitting ? 'Salvando...' : (editingEventId ? 'Salvar Alterações' : 'Criar Evento')}
             </Button>
           </CardFooter>
