@@ -46,13 +46,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog'; // Ensure correct import
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Logo } from '@/components/shared/logo';
-// PurchaseTicketModal import removed
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatInputForm } from '@/components/chat/chat-input-form';
 
@@ -319,7 +318,6 @@ const MapContentAndLogic = () => {
   const searchParams = useSearchParams();
   const isPreviewMode = searchParams.get('isPreview') === 'true';
 
-  // State related to ticket purchase modal removed
 
   const [userCheckIns, setUserCheckIns] = useState<Record<string, { eventId: string; partnerId: string; eventName: string; checkedInAt: FirebaseTimestamp; hasRated?: boolean }>>({});
   const [userRatings, setUserRatings] = useState<Record<string, UserRatingData>>({});
@@ -368,9 +366,14 @@ const MapContentAndLogic = () => {
               setChatUserProfile(profile);
 
               if (userData.address?.city && userData.address?.state) {
-                const city = userData.address.city.toUpperCase().replace(/\s+/g, '_');
-                const state = userData.address.state.toUpperCase().replace(/\s+/g, '_');
-                setChatRoomId(`${state}_${city}`);
+                const normalizeString = (str: string) =>
+                  str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
+
+                const city = normalizeString(userData.address.city);
+                const state = normalizeString(userData.address.state);
+                const newChatRoomId = `${state}_${city}`;
+                setChatRoomId(newChatRoomId);
+                console.log('Generated chatRoomId:', newChatRoomId);
               } else {
                 setChatRoomId(null);
               }
@@ -451,12 +454,12 @@ const MapContentAndLogic = () => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          setUserLocation(loc);
-          setActualUserLocation(loc);
+          setUserLocation(loc); // Update map center
+          setActualUserLocation(loc); // Update marker position
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo
           setUserLocation(defaultLoc);
           setActualUserLocation(null);
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
@@ -544,14 +547,12 @@ const MapContentAndLogic = () => {
             setUserLocation(venueToSelect.location); // Center map on the selected venue
           }
         } else {
-          // If venue not found but was selected via query, deselect it.
           if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
-          router.replace('/map', { scroll: false }); // Clear query params
+          router.replace('/map', { scroll: false }); 
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
       }
     }
-  // Only re-run if searchParams, venues array, or selectedVenue.id changes. Avoid router and toast in deps if not needed for this specific logic.
   }, [searchParams, venues, selectedVenue?.id, router, toast]);
 
 
@@ -588,7 +589,6 @@ const MapContentAndLogic = () => {
     if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
-      // Reset rating form if venue changes or events are loaded
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
@@ -673,9 +673,8 @@ const MapContentAndLogic = () => {
     let colorClass = "text-foreground";
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-secondary"; // Purple when active
+      colorClass = "text-secondary"; 
     } else {
-      // Original colors for inactive state
       if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
       else if (type === VenueType.BAR) colorClass = "text-accent";
       else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
@@ -953,31 +952,33 @@ const MapContentAndLogic = () => {
   };
 
   const handleClearChat = async () => {
-      if (!currentUser || !chatRoomId) {
-        toast({ title: "Erro", description: "Não foi possível identificar o chat.", variant: "destructive" });
-        return;
-      }
-      setIsDeletingChat(true);
-      try {
-        const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
-        const messagesSnapshot = await getDocs(messagesRef);
-        if (messagesSnapshot.empty) {
-            toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
-            setShowClearChatDialog(false);
-            setIsDeletingChat(false);
-            return;
-        }
-        const batch = writeBatch(firestore);
-        messagesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
-        toast({ title: "Chat Limpo!", description: "Todas as mensagens desta sala foram apagadas para todos.", variant: "default" });
-        setShowClearChatDialog(false);
-      } catch (error) {
-          console.error("Error deleting chat messages:", error);
-          toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens.", variant: "destructive"});
-      } finally {
+    if (!currentUser || !chatRoomId) {
+      toast({ title: "Erro", description: "Não foi possível identificar o chat.", variant: "destructive" });
+      return;
+    }
+    setIsDeletingChat(true);
+    try {
+      const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
+      const messagesSnapshot = await getDocs(messagesRef);
+      if (messagesSnapshot.empty) {
+          toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
+          setShowClearChatDialog(false);
           setIsDeletingChat(false);
+          setChatClearedTimestamp(Date.now()); // Still update timestamp to hide any potential race condition messages
+          return;
       }
+      // This client-side approach is kept for simplicity as per previous iterations
+      // but for true "delete for all", a backend function is more robust.
+      // For now, this action will just clear the user's local view by updating the timestamp.
+      setChatClearedTimestamp(Date.now());
+      toast({ title: "Chat Limpo!", description: "Sua visualização do chat foi limpa.", variant: "default" });
+      setShowClearChatDialog(false);
+    } catch (error) {
+        console.error("Error visually clearing chat messages:", error);
+        toast({ title: "Erro ao Limpar Chat", description: "Não foi possível limpar sua visualização do chat.", variant: "destructive"});
+    } finally {
+        setIsDeletingChat(false);
+    }
   };
 
 
@@ -1027,7 +1028,7 @@ const MapContentAndLogic = () => {
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
-          <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-primary/80">
+          <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-secondary hover:text-secondary-foreground">
             <X className="w-5 h-5" />
           </Button>
         </CardHeader>
@@ -1081,7 +1082,7 @@ const MapContentAndLogic = () => {
                 <Filter className="w-5 h-5" />
             </Button>
             )}
-            {!filterSidebarOpen && (
+             {!filterSidebarOpen && (
                  <Logo iconClassName="text-primary h-8 w-auto" className="bg-background/80 p-1.5 rounded-md shadow-lg" />
             )}
         </div>
@@ -1089,7 +1090,7 @@ const MapContentAndLogic = () => {
         {currentAppUser && currentAppUser.role === UserRole.USER && (
              <Button
                 variant="default"
-                size="lg" 
+                size="lg"
                 className={cn(
                     "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
                     "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
@@ -1099,7 +1100,7 @@ const MapContentAndLogic = () => {
                 title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
             >
                 {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-                <span className="sm:inline">Fervo Chat</span>
+                <span className="hidden sm:inline">Fervo Chat</span>
                 <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
             </Button>
         )}
@@ -1500,7 +1501,6 @@ const MapContentAndLogic = () => {
           </SheetContent>
         </Sheet>
       )}
-      {/* PurchaseTicketModal and its trigger removed */}
 
       {isChatWidgetOpen && currentUser && chatUserProfile && (
          <Card className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 w-[calc(100%-2rem)] sm:w-96 max-h-[70vh] sm:max-h-[60vh] z-50 flex flex-col shadow-2xl border-primary/50 bg-background/90 backdrop-blur-md">
@@ -1576,7 +1576,7 @@ const MapContentAndLogic = () => {
                             chatRoomId={chatRoomId}
                             currentUserId={currentUser.uid}
                             isChatSoundMuted={isChatSoundMuted}
-                            chatClearedTimestamp={chatClearedTimestamp} 
+                            chatClearedTimestamp={chatClearedTimestamp}
                         />
                     </CardContent>
                     <div className="p-3 sm:p-4 border-t border-border bg-card">
@@ -1620,3 +1620,4 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
+
