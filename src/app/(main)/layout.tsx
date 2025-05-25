@@ -17,9 +17,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp, orderBy, runTransaction, collectionGroup } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, getDocs, Timestamp, orderBy, runTransaction, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { auth, firestore } from '@/lib/firebase';
+import { auth, firestore, messaging } from '@/lib/firebase'; // Added messaging
+import { getToken, onMessage } from 'firebase/messaging'; // Added getToken and onMessage
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/theme-provider';
@@ -68,6 +69,7 @@ interface AppUser {
   trialExpiredNotified?: boolean;
   stripeSubscriptionActive?: boolean;
   photoURL?: string | null;
+  fcmTokens?: string[]; // For FCM tokens
 }
 
 const activeEventNotificationListeners: Record<string, () => void> = {};
@@ -108,8 +110,9 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false, 
+              stripeSubscriptionActive: false,
               photoURL: userData.photoURL || user.photoURL || null,
+              fcmTokens: userData.fcmTokens || [],
             };
 
             if (userData.role === UserRole.PARTNER) {
@@ -122,15 +125,15 @@ const useAuthAndUserSubscription = () => {
                         isActive = true;
                     }
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: isActive } : {...baseAppUser, stripeSubscriptionActive: isActive});
-                    setLoading(false); 
+                    setLoading(false);
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => prevUser ? {...prevUser, stripeSubscriptionActive: false } : {...baseAppUser, stripeSubscriptionActive: false});
-                    setLoading(false); 
+                    setLoading(false);
                 });
             } else {
                 setAppUser(baseAppUser);
-                setLoading(false);
+                setLoading(false); // Set loading to false for non-partner users here
             }
 
 
@@ -152,6 +155,7 @@ const useAuthAndUserSubscription = () => {
               trialExpiredNotified: false,
               stripeSubscriptionActive: false,
               photoURL: user.photoURL || null,
+              fcmTokens: [],
             });
             setLoading(false);
           }
@@ -185,6 +189,60 @@ const useAuthAndUserSubscription = () => {
   return { firebaseUser, appUser, setAppUser, loading };
 };
 
+const useNotificationSetup = (user: AppUser | null) => {
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && user && messaging) {
+      const requestPermissionAndToken = async () => {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            console.log('Notification permission granted.');
+            const currentToken = await getToken(messaging, {
+              vapidKey: "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE", // YOUR_VAPID_KEY_HERE
+            });
+            if (currentToken) {
+              console.log('FCM Token:', currentToken);
+              // Save the token to Firestore
+              const userDocRef = doc(firestore, 'users', user.uid);
+              const userDocSnap = await getDoc(userDocRef);
+              const existingTokens = userDocSnap.data()?.fcmTokens || [];
+              if (!existingTokens.includes(currentToken)) {
+                await updateDoc(userDocRef, {
+                  fcmTokens: arrayUnion(currentToken),
+                });
+                console.log('FCM token saved to Firestore.');
+              }
+            } else {
+              console.log('No registration token available. Request permission to generate one.');
+            }
+          } else {
+            console.log('Unable to get permission to notify.');
+          }
+        } catch (err) {
+          console.error('An error occurred while retrieving token. ', err);
+        }
+      };
+
+      requestPermissionAndToken();
+
+      // Handle incoming messages when the app is in the foreground
+      const unsubscribeOnMessage = onMessage(messaging, (payload) => {
+        console.log('Message received in foreground. ', payload);
+        toast({
+          title: payload.notification?.title || "Nova Notificação",
+          description: payload.notification?.body || "Você tem uma nova mensagem!",
+        });
+        // You can customize how you display this notification (e.g., a custom component)
+      });
+      return () => {
+        unsubscribeOnMessage();
+      };
+    }
+  }, [user, toast]);
+};
+
 
 export default function MainAppLayout({
   children,
@@ -192,6 +250,7 @@ export default function MainAppLayout({
   children: React.ReactNode;
 }) {
   const { appUser, setAppUser, loading } = useAuthAndUserSubscription();
+  useNotificationSetup(appUser); // Initialize notification setup
   const { theme, setTheme } = useTheme();
 
   const router = useRouter();
@@ -200,7 +259,6 @@ export default function MainAppLayout({
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false);
-  
   const prevAppUserRef = useRef<AppUser | null>(null);
 
 
@@ -221,7 +279,7 @@ export default function MainAppLayout({
     }
 
     const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
-    const isSharedEventPage = pathname.startsWith('/shared-event'); // Allow public access to shared event pages
+    const isSharedEventPage = pathname.startsWith('/shared-event');
     const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/user/help');
 
     if (!appUser) {
@@ -240,7 +298,6 @@ export default function MainAppLayout({
           }
         }
       } else {
-        // If not on an auth page, and not a shared event page, and not a generally accessible user page
         if (!appUser.questionnaireCompleted && !isSharedEventPage && !isGeneralUserAccessiblePage) {
           const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
           router.push(questionnairePath);
@@ -269,7 +326,7 @@ export default function MainAppLayout({
       let greetingTitle = "";
       let greetingDescription = "";
 
-      if (!isPartnerTrialExpiredRecently || isPartnerWithActiveSub) { // Only greet if not recently expired & unsubscribed
+      if (!isPartnerTrialExpiredRecently || isPartnerWithActiveSub) {
         const now = new Date();
         const hour = now.getHours();
         let greetingPrefix = "";
@@ -359,30 +416,39 @@ export default function MainAppLayout({
 
       if (potentialNewNotifications.length > 0 && appUser.uid) {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        const currentUserDocSnap = await getDoc(userDocRef);
-        const freshExistingNotificationsFromDB: Notification[] = currentUserDocSnap.data()?.notifications || [];
+        
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                const currentUserDocSnap = await transaction.get(userDocRef);
+                if (!currentUserDocSnap.exists()) {
+                    console.warn("User document not found for updating new partner notifications.");
+                    return;
+                }
+                const freshExistingNotificationsFromDB: Notification[] = currentUserDocSnap.data()?.notifications || [];
+                const notificationsActuallyToAdd = potentialNewNotifications.filter(newNotif =>
+                    !freshExistingNotificationsFromDB.some((exNotif: Notification) => exNotif.id === newNotif.id)
+                );
 
-        const notificationsActuallyToAdd = potentialNewNotifications.filter(newNotif =>
-            !freshExistingNotificationsFromDB.some((exNotif: Notification) => exNotif.id === newNotif.id)
-        );
+                if (notificationsActuallyToAdd.length > 0) {
+                    const finalNotifications = [...freshExistingNotificationsFromDB, ...notificationsActuallyToAdd]
+                        .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+                        .slice(0, 20); // Keep max 20 notifications
 
-        if (notificationsActuallyToAdd.length > 0) {
-            const finalNotifications = [...freshExistingNotificationsFromDB, ...notificationsActuallyToAdd]
-                .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-                .slice(0, 20);
-
-            let maxCreatedAt: FirebaseTimestamp | undefined = appUser.lastNotificationCheckTimestamp;
-            notificationsActuallyToAdd.forEach(n => {
-                if (!maxCreatedAt || n.createdAt.toMillis() > maxCreatedAt.toMillis()) {
-                    maxCreatedAt = n.createdAt;
+                    let maxCreatedAt: FirebaseTimestamp | undefined = currentUserDocSnap.data()?.lastNotificationCheckTimestamp;
+                    notificationsActuallyToAdd.forEach(n => {
+                        if (!maxCreatedAt || n.createdAt.toMillis() > maxCreatedAt.toMillis()) {
+                            maxCreatedAt = n.createdAt;
+                        }
+                    });
+                    const updatePayload: any = { notifications: finalNotifications };
+                    if (maxCreatedAt && (!appUser.lastNotificationCheckTimestamp || maxCreatedAt.toMillis() > appUser.lastNotificationCheckTimestamp.toMillis())) {
+                        updatePayload.lastNotificationCheckTimestamp = maxCreatedAt;
+                    }
+                    transaction.update(userDocRef, updatePayload);
                 }
             });
-
-            const updatePayload:any = { notifications: finalNotifications };
-            if (maxCreatedAt && (!appUser.lastNotificationCheckTimestamp || maxCreatedAt.toMillis() > appUser.lastNotificationCheckTimestamp.toMillis())) {
-                updatePayload.lastNotificationCheckTimestamp = maxCreatedAt;
-            }
-            await updateDoc(userDocRef, updatePayload);
+        } catch (error) {
+            console.error("Error in transaction for new partner notifications:", error);
         }
       }
     }, (error) => {
@@ -420,7 +486,6 @@ export default function MainAppLayout({
 
         const unsubscribe = onSnapshot(qEvents, async (snapshot) => {
           const userDocRefToUpdate = doc(firestore, "users", appUser.uid!);
-
           const notificationsToAddThisCycle: Notification[] = [];
 
           snapshot.docChanges().forEach((change) => {
@@ -465,30 +530,39 @@ export default function MainAppLayout({
           });
 
           if (notificationsToAddThisCycle.length > 0) {
-            const currentUserDocSnap = await getDoc(userDocRefToUpdate);
-            const freshExistingUserNotifications: Notification[] = currentUserDocSnap.data()?.notifications || [];
+            try {
+                await runTransaction(firestore, async (transaction) => {
+                    const currentUserDocSnap = await transaction.get(userDocRefToUpdate);
+                     if (!currentUserDocSnap.exists()) {
+                        console.warn("User document not found for updating favorite event notifications.");
+                        return;
+                    }
+                    const freshExistingUserNotifications: Notification[] = currentUserDocSnap.data()?.notifications || [];
+                    const notificationsActuallyToAdd = notificationsToAddThisCycle.filter(newNotif =>
+                        !freshExistingUserNotifications.some((exNotif: Notification) => exNotif.id === newNotif.id)
+                    );
 
-            const notificationsActuallyToAdd = notificationsToAddThisCycle.filter(newNotif =>
-                !freshExistingUserNotifications.some((exNotif: Notification) => exNotif.id === newNotif.id)
-            );
+                    if (notificationsActuallyToAdd.length > 0) {
+                        const allNotifications = [...freshExistingUserNotifications, ...notificationsActuallyToAdd]
+                          .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+                          .slice(0, 20);
 
-            if (notificationsActuallyToAdd.length > 0) {
-                const allNotifications = [...freshExistingUserNotifications, ...notificationsActuallyToAdd]
-                  .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-                  .slice(0, 20);
+                        let maxCreatedAtOfNew: FirebaseTimestamp | null = null;
+                        notificationsActuallyToAdd.forEach(n => {
+                            if (!maxCreatedAtOfNew || n.createdAt.toMillis() > maxCreatedAtOfNew.toMillis()) {
+                                maxCreatedAtOfNew = n.createdAt;
+                            }
+                        });
 
-                let maxCreatedAtOfNew: FirebaseTimestamp | null = null;
-                notificationsActuallyToAdd.forEach(n => {
-                    if (!maxCreatedAtOfNew || n.createdAt.toMillis() > maxCreatedAtOfNew.toMillis()) {
-                        maxCreatedAtOfNew = n.createdAt;
+                        const updatePayload: any = { notifications: allNotifications };
+                        if (maxCreatedAtOfNew && (!appUser.lastNotificationCheckTimestamp || maxCreatedAtOfNew.toMillis() > appUser.lastNotificationCheckTimestamp.toMillis())) {
+                            updatePayload.lastNotificationCheckTimestamp = maxCreatedAtOfNew;
+                        }
+                       transaction.update(userDocRefToUpdate, updatePayload);
                     }
                 });
-
-                const updatePayload: any = { notifications: allNotifications };
-                if (maxCreatedAtOfNew && (!appUser.lastNotificationCheckTimestamp || maxCreatedAtOfNew.toMillis() > appUser.lastNotificationCheckTimestamp.toMillis())) {
-                    updatePayload.lastNotificationCheckTimestamp = maxCreatedAtOfNew;
-                }
-                await updateDoc(userDocRefToUpdate, updatePayload);
+            } catch (error) {
+                 console.error("Error in transaction for favorite event notifications:", error);
             }
           }
         }, (error) => {
@@ -537,21 +611,22 @@ export default function MainAppLayout({
 
     if (unreadNotificationsCount > 0 && appUser.notifications) {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        const currentNotifications = appUser.notifications;
-        const updatedNotifications = currentNotifications.map(n => ({ ...n, read: true }));
+        // Create a deep copy of notifications to update 'read' status locally first
+        const currentNotificationsCopy = JSON.parse(JSON.stringify(appUser.notifications));
+        const updatedNotifications = currentNotificationsCopy.map((n: Notification) => ({ ...n, read: true }));
 
 
-        if (setAppUser) {
+        if (setAppUser) { // setAppUser is available from useAuthAndUserSubscription
           setAppUser(prev => prev ? {...prev, notifications: updatedNotifications, lastNotificationCheckTimestamp: Timestamp.now()} : null);
         }
 
         await updateDoc(userDocRef, {
             notifications: updatedNotifications,
-            lastNotificationCheckTimestamp: serverTimestamp()
+            lastNotificationCheckTimestamp: serverTimestamp() // Use server timestamp for consistency
         }).catch(error => {
             console.error("Error updating notifications in Firestore:", error);
             // Optionally revert local state if Firestore update fails, or show error to user
-            // setAppUser(prev => prev ? {...prev, notifications: currentNotifications } : null);
+            // setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null); // Revert to original
             toast({ title: "Erro ao atualizar notificações", description: "Não foi possível marcar notificações como lidas no servidor.", variant: "destructive" });
         });
     } else if (appUser.notifications && appUser.notifications.length === 0){
@@ -565,16 +640,8 @@ export default function MainAppLayout({
       return;
     }
 
-    const originalNotifications = appUser.notifications ? [...appUser.notifications] : [];
-
-    if (setAppUser && appUser.notifications) {
-      const updatedLocalNotifications = appUser.notifications.filter(n => n.id !== notificationId);
-      setAppUser(prev => prev ? {...prev, notifications: updatedLocalNotifications} : null);
-    }
-
+    const userDocRef = doc(firestore, "users", appUser.uid);
     try {
-        const userDocRef = doc(firestore, "users", appUser.uid);
-
         await runTransaction(firestore, async (transaction) => {
             const userSnap = await transaction.get(userDocRef);
             if (!userSnap.exists()) {
@@ -584,14 +651,11 @@ export default function MainAppLayout({
             const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
             transaction.update(userDocRef, { notifications: updatedDbNotifications });
         });
-
+        // Local state will update via onSnapshot listener due to Firestore change
         toast({ title: "Notificação Removida", description: "A notificação foi removida permanentemente.", variant: "default" });
 
     } catch (error: any) {
         console.error("Error dismissing notification from Firestore:", error);
-        if (setAppUser) {
-            setAppUser(prev => prev ? {...prev, notifications: originalNotifications} : null);
-        }
         toast({ title: "Erro ao Remover", description: error.message || "Não foi possível remover a notificação do sistema.", variant: "destructive" });
     }
   };
@@ -863,8 +927,6 @@ export default function MainAppLayout({
           userId={appUser.uid}
         />
       )}
-      
-      {/* Floating chat button removed from layout, now part of map page */}
     </div>
   );
 }
