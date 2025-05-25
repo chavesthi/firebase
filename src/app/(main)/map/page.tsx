@@ -47,7 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog'; 
+import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -138,10 +138,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', 
+  [VenueType.STAND_UP]: '#FACC15',
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
-  [VenueType.LGBT]: '#F97316', 
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
+  [VenueType.LGBT]: '#F97316',
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -168,13 +168,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))';
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Purple
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'white';
+    effectiveBlinkHighlightColor = 'white'; // Fallback if base and highlight are the same
   }
 
 
@@ -373,17 +373,17 @@ const MapContentAndLogic = () => {
                 const state = normalizeString(userData.address.state);
                 const newChatRoomId = `${state}_${city}`;
                 setChatRoomId(newChatRoomId);
-                console.log('MapPage: Generated chatRoomId:', newChatRoomId);
+                console.log('MapPage (chatRoomId): Generated chatRoomId:', newChatRoomId);
               } else {
                 setChatRoomId(null);
-                console.log('MapPage: User has no city/state for chatRoomId.');
+                console.log('MapPage (chatRoomId): User has no city/state for chatRoomId.');
               }
             } else {
               const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null };
               setCurrentAppUser(basicProfile);
               setChatUserProfile(basicProfile);
               setChatRoomId(null);
-              console.log('MapPage: User document not found, chat disabled.');
+              console.log('MapPage (chatRoomId): User document not found, chat disabled.');
             }
             setIsLoadingUserProfileForChat(false);
         });
@@ -457,13 +457,13 @@ const MapContentAndLogic = () => {
             lng: position.coords.longitude,
           };
           setActualUserLocation(loc);
-          setUserLocation(loc); 
+          setUserLocation(loc);
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; 
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
           setUserLocation(defaultLoc);
-          setActualUserLocation(null);
+          setActualUserLocation(null); // Ensure actualUserLocation is null if using default
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
         }
       );
@@ -546,11 +546,11 @@ const MapContentAndLogic = () => {
         if (venueToSelect) {
           setSelectedVenue(venueToSelect);
           if (venueToSelect.location) {
-            setUserLocation(venueToSelect.location); 
+            setUserLocation(venueToSelect.location);
           }
         } else {
           if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
-          router.replace('/map', { scroll: false }); 
+          router.replace('/map', { scroll: false });
           toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
         }
       }
@@ -672,15 +672,16 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground";
+    let colorClass = "text-foreground"; // Default color
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-secondary"; 
+      colorClass = "text-secondary"; // Purple for active filter (as requested)
     } else {
+      // Use specific type colors when not active, but not purple for hover
       if (type === VenueType.NIGHTCLUB) colorClass = "text-primary";
-      else if (type === VenueType.BAR) colorClass = "text-accent";
+      else if (type === VenueType.BAR) colorClass = "text-accent"; // Neon Green
       else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
-      else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary";
+      else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary"; // Purple (this is fine as base if not active filter)
       else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
       else if (type === VenueType.LGBT) colorClass = "text-orange-500";
     }
@@ -963,24 +964,22 @@ const MapContentAndLogic = () => {
     try {
       const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
       const messagesSnapshot = await getDocs(messagesRef);
-      
+
       if (messagesSnapshot.empty) {
           toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
           setShowClearChatDialog(false);
           setIsDeletingChat(false);
-          // For visual client-side clearing, still update the timestamp
-          // For actual deletion, this part isn't strictly needed if Firestore rules change, but good for consistency
-          setChatClearedTimestamp(Date.now()); 
+          setChatClearedTimestamp(Date.now());
           return;
       }
-      
+
       const batch = writeBatch(firestore);
       messagesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
       await batch.commit();
 
       toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${chatRoomDisplayName} foram apagadas.`, variant: "default" });
       setShowClearChatDialog(false);
-      // Messages will be removed by onSnapshot listener now
+      setChatClearedTimestamp(Date.now()); // Still set timestamp to ensure client clears immediately
 
     } catch (error) {
         console.error("Error clearing chat messages:", error);
@@ -1050,7 +1049,12 @@ const MapContentAndLogic = () => {
                   key={option.value}
                   variant={activeVenueTypeFilters.includes(option.value) ? "secondary" : "outline"}
                   onClick={() => toggleVenueTypeFilter(option.value)}
-                  className={`w-full justify-start ${activeVenueTypeFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-secondary hover:text-secondary-foreground hover:border-secondary/50'}`}
+                  className={cn(
+                    "w-full justify-start",
+                    activeVenueTypeFilters.includes(option.value)
+                      ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40'
+                      : 'hover:bg-secondary hover:text-secondary-foreground hover:border-secondary/50'
+                  )}
                   aria-pressed={activeVenueTypeFilters.includes(option.value)}
                 >
                   <VenueIconDisplayForFilter type={option.value} />
@@ -1066,7 +1070,12 @@ const MapContentAndLogic = () => {
                   key={option.value}
                   variant={activeMusicStyleFilters.includes(option.value) ? "secondary" : "outline"}
                   onClick={() => toggleMusicStyleFilter(option.value)}
-                  className={`w-full justify-start ${activeMusicStyleFilters.includes(option.value) ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40' : 'hover:bg-secondary hover:text-secondary-foreground hover:border-secondary/50'}`}
+                  className={cn(
+                    "w-full justify-start",
+                     activeMusicStyleFilters.includes(option.value)
+                       ? 'bg-primary/30 text-primary border-primary hover:bg-primary/40'
+                       : 'hover:bg-secondary hover:text-secondary-foreground hover:border-secondary/50'
+                   )}
                   aria-pressed={activeMusicStyleFilters.includes(option.value)}
                 >
                   <Music2 className="w-5 h-5 text-primary/70" />
@@ -1109,7 +1118,7 @@ const MapContentAndLogic = () => {
                 title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
             >
                 {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-                <span className="hidden sm:inline">Fervo Chat</span>
+                <span className="sm:inline">Fervo Chat</span>
                 <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
             </Button>
         )}
@@ -1629,4 +1638,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-

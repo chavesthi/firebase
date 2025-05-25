@@ -63,17 +63,15 @@ export const PRICING_TYPE_OPTIONS = [
 ];
 
 export const FERVO_COINS_SHARE_REWARD = 2;
-export const FERVO_COINS_FOR_COUPON = 20; 
+export const FERVO_COINS_FOR_COUPON = 20;
 export const COUPON_REWARD_DESCRIPTION = "1 Lata Cerveja 350ml ou Refrigerante 350ml";
 export const COUPON_CODE_PREFIX = "FERVO";
 
 // App URL - Ensure this matches your Firebase Hosting URL for production,
 // or your local dev URL for development.
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9003"; // Default for local dev
-// For your Firebase Studio environment, it might be:
-// export const APP_URL = "https://6000-firebase-studio-1746595136928.cluster-m7tpz3bmgjgoqrktlvd4ykrc2m.cloudworkstations.dev";
-// For your actual Firebase Hosting URL:
-// export const APP_URL = "https://fervoapp1--fervoappusuarioeparceiro.us-central1.hosted.app";
+export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://fervoapp1--fervoappusuarioeparceiro.us-central1.hosted.app";
+// For local dev, you might use:
+// export const APP_URL = "http://localhost:9003";
 
 
 // Stripe Constants for Partner Subscription (using Firebase Extension "firestore-stripe-payments")
@@ -82,7 +80,7 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:9003
 // Ensure this Price ID corresponds to the Product ID for the Fervo Partner plan.
 // The Price ID below should be the one associated with the Fervo Partner monthly plan in your Stripe dashboard.
 // Make sure to set NEXT_PUBLIC_STRIPE_PRICE_ID in your .env.local or hosting environment.
-export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RSMZiL8kxrPyagwWB7l4fUK"; 
+export const STRIPE_PRICE_ID_FERVO_PARTNER_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1RSMZiL8kxrPyagwWB7l4fUK";
 
 // This Product ID should match the Product associated with the Price ID above in your Stripe dashboard.
 // Make sure to set NEXT_PUBLIC_STRIPE_PRODUCT_ID in your .env.local or hosting environment.
@@ -91,13 +89,13 @@ export const STRIPE_PRODUCT_ID = process.env.NEXT_PUBLIC_STRIPE_PRODUCT_ID || "p
 // Stripe API Keys - Use environment variables for these in production!
 // For client-side usage (e.g., with loadStripe from @stripe/stripe-js)
 // Make sure to set NEXT_PUBLIC_STRIPE_PUBLIC_KEY in your .env.local or hosting environment.
-export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU"; 
+export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "pk_test_51RMuSWL8kxrPyagwamO1hVrwaZq84lMkkzQ1AS4dW64zRYj1jVOUIX4z4BujhowqwOh7dfWRyYY8tD61nVsKfMBW00nuPQSLiU";
 
 // WARNING: It's highly recommended to use your full sk_live_... or sk_test_... secret key
 // for the Firebase Stripe Extension. A restricted key (rk_...) might not have sufficient permissions.
 // Monitor Firebase Function logs for Stripe API errors if payments fail.
 // Make sure to set STRIPE_SECRET_KEY as a server-side environment variable.
-export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9"; 
+export const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "sk_test_51RMuSWL8kxrPyagwNAjjZHKSmERMT6tO9v7OiH7AuuhScwahN47LZHKKX116pT0whLyFsjaKr0EYayxDhRYxmdgH00tjTLgvF9";
 
 // PagBank (kept for reference if PagBank button is still used as alternative)
 export const PAGBANK_PRE_APPROVAL_CODE = "A584618E1414728444067FA92A607421";

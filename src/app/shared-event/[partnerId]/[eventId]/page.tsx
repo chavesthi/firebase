@@ -2,7 +2,7 @@
 'use client';
 
 import type { NextPage } from 'next';
-import { useEffect, useState } from 'react'; 
+import { useEffect, useState } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -16,25 +16,26 @@ import { Logo } from '@/components/shared/logo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { APP_URL } from '@/lib/constants';
+import { APP_URL } from '@/lib/constants'; // Import APP_URL
 
 interface EventDetails {
   eventName: string;
   startDateTime: FirebaseTimestamp;
   endDateTime: FirebaseTimestamp;
+  visibility?: boolean; // Added visibility
 }
 
 interface PartnerDetails {
   venueName: string;
-  photoURL?: string | null; 
+  photoURL?: string | null;
 }
 
 const SharedEventPage: NextPage = () => {
   const router = useRouter();
   const params = useParams();
-  const searchParamsHook = useSearchParams(); 
+  const searchParamsHook = useSearchParams();
   const { toast } = useToast();
-  
+
   const partnerId = typeof params.partnerId === 'string' ? params.partnerId : null;
   const eventId = typeof params.eventId === 'string' ? params.eventId : null;
   const sharedByName = searchParamsHook.get('sharedByName');
@@ -63,7 +64,7 @@ const SharedEventPage: NextPage = () => {
         }
         const partnerData = partnerDocSnap.data();
         console.log("SharedEventPage: Partner data fetched:", partnerData);
-        setPartnerDetails({ 
+        setPartnerDetails({
             venueName: partnerData.venueName || 'Local Desconhecido',
             photoURL: partnerData.photoURL || null,
         });
@@ -75,14 +76,12 @@ const SharedEventPage: NextPage = () => {
           console.error("SharedEventPage: Event not found.");
           throw new Error('Evento não encontrado.');
         }
-        const eventData = eventDocSnap.data() as Omit<EventDetails, 'id'>;
+        const eventData = eventDocSnap.data() as EventDetails; // Cast to include visibility
         console.log("SharedEventPage: Event data fetched:", eventData);
 
-        // Check visibility from event data itself
         if (eventData.visibility !== true) {
-            console.warn("SharedEventPage: Event is not visible.");
-            // Optionally, you could throw an error or handle this case differently.
-            // For now, we'll let it display, but this is a good place to add more specific logic if needed.
+            console.warn("SharedEventPage: Event is not visible. Preventing display.");
+            throw new Error('Este evento não está mais disponível publicamente.');
         }
 
         setEventDetails({
@@ -103,7 +102,9 @@ const SharedEventPage: NextPage = () => {
     fetchDetails();
   }, [partnerId, eventId, toast]);
 
-  const fervoAppLoginUrl = "https://fervoapp1--fervoappusuarioeparceiro.us-central1.hosted.app/login";
+  const fervoAppLoginUrl = `${APP_URL}/login`;
+  const fervoAppMapUrl = APP_URL && partnerId && eventId ? `${APP_URL}/map?venueId=${partnerId}&eventId=${eventId}` : `${APP_URL}/map`;
+
 
   if (loading) {
     return (
@@ -140,8 +141,8 @@ const SharedEventPage: NextPage = () => {
             {error && (
               <div className="p-4 text-center text-destructive-foreground bg-destructive/80 rounded-md">
                 <p>{error}</p>
-                <Button onClick={() => router.push('/map')} className="mt-4 bg-primary hover:bg-primary/80 text-sm sm:text-base">
-                  Explorar outros eventos
+                <Button asChild className="mt-4 bg-primary hover:bg-primary/80 text-sm sm:text-base">
+                  <Link href={`${APP_URL}/map`}>Explorar outros eventos</Link>
                 </Button>
               </div>
             )}
@@ -164,11 +165,11 @@ const SharedEventPage: NextPage = () => {
                     {format(eventDetails.startDateTime.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </span>
                 </div>
-                <Button 
+                <Button
                   asChild
                   className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground text-sm sm:text-base"
                 >
-                  <Link href={`/map?venueId=${partnerId}&eventId=${eventId}`}>
+                  <Link href={fervoAppMapUrl}>
                     Ver no Fervo App
                   </Link>
                 </Button>
@@ -191,8 +192,8 @@ const SharedEventPage: NextPage = () => {
                     <LogInIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Acesse ou Crie sua Conta!
                 </Button>
               </Link>
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 variant="outline"
                 className="w-full sm:w-auto border-primary text-primary hover:bg-primary/10 hover:text-primary text-sm sm:text-base"
                 onClick={() => {
@@ -204,7 +205,7 @@ const SharedEventPage: NextPage = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <footer className="py-6 sm:py-8 text-center">
           <p className="text-xs sm:text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} Fervo App. Todos os direitos reservados.
@@ -221,4 +222,3 @@ const SharedEventPage: NextPage = () => {
 };
 
 export default SharedEventPage;
-
