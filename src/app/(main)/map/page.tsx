@@ -47,7 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog'; // Ensure correct import
+import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog'; 
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -138,10 +138,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', // yellow-400
+  [VenueType.STAND_UP]: '#FACC15', 
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // pink-500
-  [VenueType.LGBT]: '#F97316', // orange-600
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
+  [VenueType.LGBT]: '#F97316', 
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -373,15 +373,17 @@ const MapContentAndLogic = () => {
                 const state = normalizeString(userData.address.state);
                 const newChatRoomId = `${state}_${city}`;
                 setChatRoomId(newChatRoomId);
-                console.log('Generated chatRoomId:', newChatRoomId);
+                console.log('MapPage: Generated chatRoomId:', newChatRoomId);
               } else {
                 setChatRoomId(null);
+                console.log('MapPage: User has no city/state for chatRoomId.');
               }
             } else {
               const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null };
               setCurrentAppUser(basicProfile);
               setChatUserProfile(basicProfile);
               setChatRoomId(null);
+              console.log('MapPage: User document not found, chat disabled.');
             }
             setIsLoadingUserProfileForChat(false);
         });
@@ -454,12 +456,12 @@ const MapContentAndLogic = () => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          setUserLocation(loc); // Update map center
-          setActualUserLocation(loc); // Update marker position
+          setActualUserLocation(loc);
+          setUserLocation(loc); 
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; 
           setUserLocation(defaultLoc);
           setActualUserLocation(null);
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
@@ -544,7 +546,7 @@ const MapContentAndLogic = () => {
         if (venueToSelect) {
           setSelectedVenue(venueToSelect);
           if (venueToSelect.location) {
-            setUserLocation(venueToSelect.location); // Center map on the selected venue
+            setUserLocation(venueToSelect.location); 
           }
         } else {
           if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
@@ -805,14 +807,15 @@ const MapContentAndLogic = () => {
         return;
     }
 
-    const shareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}`;
+    const sharerNameQueryParam = currentAppUser.name ? `?sharedByName=${encodeURIComponent(currentAppUser.name)}` : '';
+    const shareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}${sharerNameQueryParam}`;
     let sharedSuccessfully = false;
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: `Confira este Fervo: ${partnerName} - ${eventDataForShare.eventName || 'Evento'}`,
-          text: `Olha esse evento que encontrei no Fervo App!`,
+          text: `Olha esse evento que encontrei no Fervo App! Enviado por ${currentAppUser.name || 'um amigo'}.`,
           url: shareUrl,
         });
         toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
@@ -960,22 +963,28 @@ const MapContentAndLogic = () => {
     try {
       const messagesRef = collection(firestore, `chatRooms/${chatRoomId}/messages`);
       const messagesSnapshot = await getDocs(messagesRef);
+      
       if (messagesSnapshot.empty) {
           toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
           setShowClearChatDialog(false);
           setIsDeletingChat(false);
-          setChatClearedTimestamp(Date.now()); // Still update timestamp to hide any potential race condition messages
+          // For visual client-side clearing, still update the timestamp
+          // For actual deletion, this part isn't strictly needed if Firestore rules change, but good for consistency
+          setChatClearedTimestamp(Date.now()); 
           return;
       }
-      // This client-side approach is kept for simplicity as per previous iterations
-      // but for true "delete for all", a backend function is more robust.
-      // For now, this action will just clear the user's local view by updating the timestamp.
-      setChatClearedTimestamp(Date.now());
-      toast({ title: "Chat Limpo!", description: "Sua visualização do chat foi limpa.", variant: "default" });
+      
+      const batch = writeBatch(firestore);
+      messagesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${chatRoomDisplayName} foram apagadas.`, variant: "default" });
       setShowClearChatDialog(false);
+      // Messages will be removed by onSnapshot listener now
+
     } catch (error) {
-        console.error("Error visually clearing chat messages:", error);
-        toast({ title: "Erro ao Limpar Chat", description: "Não foi possível limpar sua visualização do chat.", variant: "destructive"});
+        console.error("Error clearing chat messages:", error);
+        toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens do chat.", variant: "destructive"});
     } finally {
         setIsDeletingChat(false);
     }
@@ -1028,7 +1037,7 @@ const MapContentAndLogic = () => {
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
-          <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-secondary hover:text-secondary-foreground">
+          <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-secondary hover:bg-secondary/80">
             <X className="w-5 h-5" />
           </Button>
         </CardHeader>
@@ -1190,7 +1199,7 @@ const MapContentAndLogic = () => {
                     </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-2 mt-1">
-                            <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="#FFD700" readOnly />
+                            <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="hsl(var(--primary))" readOnly />
                             <span className="text-sm text-foreground font-semibold">
                                 {selectedVenue.averageVenueRating.toFixed(1)}
                             </span>

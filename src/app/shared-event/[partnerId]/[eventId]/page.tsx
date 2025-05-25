@@ -3,13 +3,13 @@
 
 import type { NextPage } from 'next';
 import { useEffect, useState } from 'react'; 
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { doc, getDoc, Timestamp as FirebaseTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, MapPin as MapPinIcon, CalendarClock, Sparkles, Download, LogIn as LogInIcon } from 'lucide-react';
+import { Loader2, MapPin as MapPinIcon, CalendarClock, Sparkles, Download, LogIn as LogInIcon, Info } from 'lucide-react';
 
 import { firestore } from '@/lib/firebase';
 import { Logo } from '@/components/shared/logo';
@@ -26,19 +26,18 @@ interface EventDetails {
 
 interface PartnerDetails {
   venueName: string;
+  photoURL?: string | null; 
 }
 
-// Props no longer passed directly, params obtained via hook
 const SharedEventPage: NextPage = () => {
   const router = useRouter();
   const params = useParams();
+  const searchParamsHook = useSearchParams(); 
   const { toast } = useToast();
   
-  const partnerIdParam = params.partnerId;
-  const eventIdParam = params.eventId;
-
-  const partnerId = typeof partnerIdParam === 'string' ? partnerIdParam : null;
-  const eventId = typeof eventIdParam === 'string' ? eventIdParam : null;
+  const partnerId = typeof params.partnerId === 'string' ? params.partnerId : null;
+  const eventId = typeof params.eventId === 'string' ? params.eventId : null;
+  const sharedByName = searchParamsHook.get('sharedByName');
 
   const [eventDetails, setEventDetails] = useState<EventDetails | null>(null);
   const [partnerDetails, setPartnerDetails] = useState<PartnerDetails | null>(null);
@@ -53,23 +52,39 @@ const SharedEventPage: NextPage = () => {
     }
 
     const fetchDetails = async () => {
+      console.log(`SharedEventPage: Fetching details for partnerId: ${partnerId}, eventId: ${eventId}`);
       try {
         const partnerDocRef = doc(firestore, 'users', partnerId);
         const partnerDocSnap = await getDoc(partnerDocRef);
 
         if (!partnerDocSnap.exists() || partnerDocSnap.data()?.role !== 'partner') {
+          console.error("SharedEventPage: Partner not found or not a partner.");
           throw new Error('Local não encontrado ou inválido.');
         }
         const partnerData = partnerDocSnap.data();
-        setPartnerDetails({ venueName: partnerData.venueName || 'Local Desconhecido' });
+        console.log("SharedEventPage: Partner data fetched:", partnerData);
+        setPartnerDetails({ 
+            venueName: partnerData.venueName || 'Local Desconhecido',
+            photoURL: partnerData.photoURL || null,
+        });
 
         const eventDocRef = doc(firestore, 'users', partnerId, 'events', eventId);
         const eventDocSnap = await getDoc(eventDocRef);
 
         if (!eventDocSnap.exists()) {
+          console.error("SharedEventPage: Event not found.");
           throw new Error('Evento não encontrado.');
         }
         const eventData = eventDocSnap.data() as Omit<EventDetails, 'id'>;
+        console.log("SharedEventPage: Event data fetched:", eventData);
+
+        // Check visibility from event data itself
+        if (eventData.visibility !== true) {
+            console.warn("SharedEventPage: Event is not visible.");
+            // Optionally, you could throw an error or handle this case differently.
+            // For now, we'll let it display, but this is a good place to add more specific logic if needed.
+        }
+
         setEventDetails({
           eventName: eventData.eventName,
           startDateTime: eventData.startDateTime,
@@ -77,7 +92,7 @@ const SharedEventPage: NextPage = () => {
         });
 
       } catch (err: any) {
-        console.error("Error fetching shared event details:", err);
+        console.error("SharedEventPage: Error fetching details:", err);
         setError(err.message || 'Não foi possível carregar os detalhes do evento.');
         toast({ title: "Erro", description: err.message || 'Não foi possível carregar os detalhes do evento.', variant: "destructive" });
       } finally {
@@ -87,6 +102,8 @@ const SharedEventPage: NextPage = () => {
 
     fetchDetails();
   }, [partnerId, eventId, toast]);
+
+  const fervoAppLoginUrl = "https://fervoapp1--fervoappusuarioeparceiro.us-central1.hosted.app/login";
 
   if (loading) {
     return (
@@ -106,10 +123,16 @@ const SharedEventPage: NextPage = () => {
       <div className="flex flex-col items-center justify-center w-full max-w-2xl mt-20 sm:mt-24 space-y-6 sm:space-y-8">
         <Card className="w-full shadow-2xl bg-card/90 backdrop-blur-sm border-primary/30">
           <CardHeader className="text-center px-4 sm:px-6 pt-6 sm:pt-8">
+             {sharedByName && (
+              <p className="text-sm text-muted-foreground mb-2">
+                <Sparkles className="inline w-4 h-4 mr-1 text-accent" />
+                {decodeURIComponent(sharedByName)} te convidou para este Fervo!
+              </p>
+            )}
             <CardTitle className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
               Você foi Convidado para um FERVO!
             </CardTitle>
-            <CardDescription className="text-muted-foreground text-sm sm:text-base">
+            <CardDescription className="text-muted-foreground text-sm sm:text-base mt-1">
               Descubra mais sobre este evento e explore o universo Fervo App.
             </CardDescription>
           </CardHeader>
@@ -124,17 +147,22 @@ const SharedEventPage: NextPage = () => {
             )}
 
             {!error && eventDetails && partnerDetails && (
-              <div className="p-4 space-y-3 border rounded-lg border-border bg-background/50">
+              <div className="p-4 space-y-3 border rounded-lg border-border bg-background/50 shadow-md">
+                {partnerDetails.photoURL && (
+                    <div className="relative w-full h-48 sm:h-56 rounded-md overflow-hidden mb-3">
+                        <Image src={partnerDetails.photoURL} alt={`Foto de ${partnerDetails.venueName}`} layout="fill" objectFit="cover" data-ai-hint="venue building" />
+                    </div>
+                )}
                 <h3 className="text-xl sm:text-2xl font-semibold text-center text-accent">{eventDetails.eventName}</h3>
+                <div className="flex items-center justify-center text-muted-foreground text-sm sm:text-base">
+                  <MapPinIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-primary" />
+                  <span>{partnerDetails.venueName}</span>
+                </div>
                 <div className="flex items-center justify-center text-muted-foreground text-sm sm:text-base">
                   <CalendarClock className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-primary" />
                   <span>
                     {format(eventDetails.startDateTime.toDate(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </span>
-                </div>
-                <div className="flex items-center justify-center text-muted-foreground text-sm sm:text-base">
-                  <MapPinIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-primary" />
-                  <span>{partnerDetails.venueName}</span>
                 </div>
                 <Button 
                   asChild
@@ -147,31 +175,32 @@ const SharedEventPage: NextPage = () => {
               </div>
             )}
 
-            <div className="p-4 sm:p-6 space-y-4 text-center rounded-lg bg-gradient-to-tr from-primary/10 to-secondary/10">
-              <h4 className="text-lg sm:text-xl font-semibold text-primary">Benefícios do Fervo App:</h4>
-              <ul className="space-y-1 text-left list-disc list-inside text-foreground/90 text-sm sm:text-base">
-                <li><Sparkles className="inline w-4 h-4 mr-2 text-accent" />Descubra eventos incríveis perto de você.</li>
-                <li><Sparkles className="inline w-4 h-4 mr-2 text-accent" />Filtre por tipo de local e estilo musical.</li>
-                <li><Sparkles className="inline w-4 h-4 mr-2 text-accent" />Receba notificações sobre seus eventos favoritos.</li>
-                <li><Sparkles className="inline w-4 h-4 mr-2 text-accent" />Compartilhe com amigos e ganhe FervoCoins!</li>
+            <div className="p-4 sm:p-6 space-y-4 text-center rounded-lg bg-gradient-to-tr from-primary/10 to-secondary/10 border border-border/20">
+              <h4 className="text-lg sm:text-xl font-semibold text-primary">Por que usar o Fervo App?</h4>
+              <ul className="space-y-1.5 text-left list-none text-foreground/90 text-sm sm:text-base">
+                <li className="flex items-start"><Info className="w-5 h-5 mr-2 mt-0.5 text-accent shrink-0" />Descubra eventos incríveis e locais perto de você em tempo real.</li>
+                <li className="flex items-start"><Info className="w-5 h-5 mr-2 mt-0.5 text-accent shrink-0" />Filtre por tipo de local, estilo musical e muito mais.</li>
+                <li className="flex items-start"><Info className="w-5 h-5 mr-2 mt-0.5 text-accent shrink-0" />Favorite locais, receba notificações e não perca nenhum Fervo.</li>
+                <li className="flex items-start"><Info className="w-5 h-5 mr-2 mt-0.5 text-accent shrink-0" />Interaja no chat regional, faça check-in, avalie eventos e ganhe FervoCoins e cupons!</li>
               </ul>
             </div>
 
             <div className="flex flex-col items-center gap-3 sm:gap-4 pt-4 sm:flex-row sm:justify-center">
+               <Link href={fervoAppLoginUrl} passHref className="w-full sm:w-auto">
+                 <Button size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground text-sm sm:text-base">
+                    <LogInIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Acesse ou Crie sua Conta!
+                </Button>
+              </Link>
               <Button 
                 size="lg" 
-                className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground text-sm sm:text-base"
+                variant="outline"
+                className="w-full sm:w-auto border-primary text-primary hover:bg-primary/10 hover:text-primary text-sm sm:text-base"
                 onClick={() => {
-                    toast({ title: "Em Breve!", description: "Links para download do app serão disponibilizados aqui.", duration: 3000});
+                    toast({ title: "Em Breve!", description: "Links para download do app nas lojas serão disponibilizados aqui.", duration: 3000});
                 }}
               >
                 <Download className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Baixar o Fervo App
               </Button>
-              <Link href="/login" passHref className="w-full sm:w-auto">
-                <Button size="lg" variant="outline" className="w-full border-primary text-primary hover:bg-primary/10 hover:text-primary text-sm sm:text-base">
-                  <LogInIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Já tenho conta!
-                </Button>
-              </Link>
             </div>
           </CardContent>
         </Card>
@@ -192,3 +221,4 @@ const SharedEventPage: NextPage = () => {
 };
 
 export default SharedEventPage;
+
