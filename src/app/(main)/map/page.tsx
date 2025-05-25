@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, UICardTitle, CardDescription as UICardDescription } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -26,7 +26,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore, auth } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet'; // Renamed CardDescription to SheetPrimitiveDescription
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import {
@@ -672,18 +672,17 @@ const MapContentAndLogic = () => {
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; 
+    let colorClass = "text-foreground";
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-secondary"; // Roxo para filtro ativo
+      colorClass = "text-secondary";
     } else {
-      // Cores específicas para hover quando não ativo, mas não roxo
-      if (type === VenueType.NIGHTCLUB) colorClass = "text-primary"; // Azul
-      else if (type === VenueType.BAR) colorClass = "text-accent"; // Verde Neon
-      else if (type === VenueType.STAND_UP) colorClass = "text-yellow-400";
-      else if (type === VenueType.SHOW_HOUSE) colorClass = "text-secondary"; // Roxo (ok como base se não ativo)
-      else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "text-pink-500";
-      else if (type === VenueType.LGBT) colorClass = "text-orange-500";
+      if (type === VenueType.NIGHTCLUB) colorClass = "hover:text-primary";
+      else if (type === VenueType.BAR) colorClass = "hover:text-accent";
+      else if (type === VenueType.STAND_UP) colorClass = "hover:text-yellow-400";
+      else if (type === VenueType.SHOW_HOUSE) colorClass = "hover:text-secondary";
+      else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "hover:text-pink-500";
+      else if (type === VenueType.LGBT) colorClass = "hover:text-orange-500";
     }
 
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
@@ -794,24 +793,21 @@ const MapContentAndLogic = () => {
 
     let finalSharedSuccessfully = false;
 
-    // Tenta usar a interface nativa do Android primeiro
     if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
       try {
         console.log("Tentando compartilhar via AndroidShareInterface com:", title, text, shareUrl);
-        // A interface nativa pode ser síncrona ou assíncrona
         const nativeShareResult = (window as any).AndroidShareInterface.shareEvent(title, text, shareUrl);
         if (nativeShareResult instanceof Promise) {
           await nativeShareResult;
         }
         toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
-        finalSharedSuccessfully = true; // Assume sucesso se não houver erro
+        finalSharedSuccessfully = true;
       } catch (nativeShareError: any) {
         console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
-        // Cai para navigator.share ou clipboard se a nativa falhar
       }
     }
 
-    if (!finalSharedSuccessfully) { // Se a nativa não foi usada ou falhou
+    if (!finalSharedSuccessfully) {
       if (navigator.share) {
         try {
           await navigator.share({ title, text, url: shareUrl });
@@ -833,7 +829,6 @@ const MapContentAndLogic = () => {
           }
         }
       } else {
-        // Fallback final para área de transferência
         try {
           await navigator.clipboard.writeText(shareUrl);
           toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
@@ -967,7 +962,6 @@ const MapContentAndLogic = () => {
           toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
           setShowClearChatDialog(false);
           setIsDeletingChat(false);
-          // setChatClearedTimestamp(Date.now()); // This line is not needed for permanent deletion
           return;
       }
 
@@ -977,8 +971,6 @@ const MapContentAndLogic = () => {
 
       toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${chatRoomDisplayName} foram apagadas.`, variant: "default" });
       setShowClearChatDialog(false);
-      // No need to set chatClearedTimestamp for permanent deletion.
-      // The onSnapshot in ChatMessageList will automatically update the view.
 
     } catch (error) {
         console.error("Error clearing chat messages:", error);
@@ -1036,7 +1028,7 @@ const MapContentAndLogic = () => {
         )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <UICardTitle className="text-lg text-primary">Filtrar Locais</UICardTitle>
+          <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-secondary hover:bg-secondary/80">
             <X className="w-5 h-5" />
           </Button>
@@ -1113,7 +1105,7 @@ const MapContentAndLogic = () => {
                 className={cn(
                     "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
                     "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
-                    !isChatWidgetOpen && "animate-bounce" // Bounce only when closed
+                    !isChatWidgetOpen && "animate-bounce"
                 )}
                 onClick={() => setIsChatWidgetOpen(prev => !prev)}
                 title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
@@ -1248,7 +1240,7 @@ const MapContentAndLogic = () => {
                     </Button>
                    </SheetClose>
                 </div>
-                <SheetDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetDescription>
+                <SheetPrimitiveDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetPrimitiveDescription>
             </SheetHeader>
 
             <ScrollArea className="h-[calc(100vh-6rem)]">
@@ -1340,7 +1332,7 @@ const MapContentAndLogic = () => {
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
                                   <div className="flex-1">
-                                    <UICardTitle className="text-md text-secondary mb-1">{event.eventName}</UICardTitle>
+                                    <CardTitle className="text-md text-secondary mb-1">{event.eventName}</CardTitle>
                                     {isHappening && (
                                       <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                                         <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
@@ -1527,8 +1519,8 @@ const MapContentAndLogic = () => {
                 <div className="flex items-center gap-2">
                     {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5 text-primary cursor-pointer" onClick={() => setIsChatWidgetOpen(false)} /> : <MessageSquare className="h-5 w-5 text-primary" />}
                     <div>
-                        <UICardTitle className="text-md sm:text-lg text-primary leading-tight">Fervo Chat</UICardTitle>
-                        <UICardDescription className="text-xs sm:text-sm leading-tight">{chatRoomDisplayName}</UICardDescription>
+                        <CardTitle className="text-md sm:text-lg text-primary leading-tight">Fervo Chat</CardTitle>
+                        <CardDescription className="text-xs sm:text-sm leading-tight">{chatRoomDisplayName}</CardDescription>
                     </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1577,10 +1569,10 @@ const MapContentAndLogic = () => {
             ) : (!chatUserProfile.questionnaireCompleted || !chatUserProfile.address?.city || !chatUserProfile.address?.state) ? (
                 <CardContent className="flex-1 flex flex-col items-center justify-center p-4 text-center">
                      <AlertCircle className="w-10 h-10 text-destructive mb-3" />
-                    <UICardTitle className="text-primary mb-1 text-lg">Complete seu Perfil</UICardTitle>
-                    <UICardDescription className="text-xs sm:text-sm">
+                    <CardTitle className="text-primary mb-1 text-lg">Complete seu Perfil</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm">
                         Para usar o Fervo Chat, precisamos que você defina sua Cidade e Estado em seu perfil.
-                    </UICardDescription>
+                    </CardDescription>
                     <Button onClick={() => { router.push('/user/profile'); setIsChatWidgetOpen(false);}} className="mt-4 w-full text-xs sm:text-sm">
                         Completar Perfil Agora
                     </Button>
