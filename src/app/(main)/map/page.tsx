@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Corrected import
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -26,7 +26,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore, auth } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet'; // Renamed CardDescription to SheetPrimitiveDescription
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import {
@@ -70,6 +70,7 @@ interface VenueEvent {
   shareRewardsEnabled?: boolean;
   description?: string;
   ticketPurchaseUrl?: string | null;
+  checkInToken?: string;
 }
 
 interface Venue {
@@ -101,6 +102,15 @@ interface UserVenueCoins {
     [partnerId: string]: number;
 }
 
+interface EventShareCount {
+  [eventId: string]: number;
+}
+
+interface UserEventShareCounts {
+  shareCounts?: EventShareCount;
+}
+
+
 interface MapPageAppUser {
     uid: string;
     name: string;
@@ -112,6 +122,7 @@ interface MapPageAppUser {
         state?: string;
     };
     questionnaireCompleted?: boolean;
+    eventShareCounts?: EventShareCount;
 }
 
 
@@ -138,10 +149,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', // Amarelo
+  [VenueType.STAND_UP]: '#FACC15',
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Rosa
-  [VenueType.LGBT]: '#F97316', // Laranja
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
+  [VenueType.LGBT]: '#F97316',
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -168,13 +179,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Roxo para piscar
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))';
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'white'; // Fallback se base e destaque forem iguais
+    effectiveBlinkHighlightColor = 'white';
   }
 
 
@@ -327,7 +338,6 @@ const MapContentAndLogic = () => {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
-  const [isChatWidgetOpen, setIsChatWidgetOpen] = useState(false);
   const [chatRoomId, setChatRoomId] = useState<string | null>(null);
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
@@ -335,6 +345,8 @@ const MapContentAndLogic = () => {
   const [chatClearedTimestamp, setChatClearedTimestamp] = useState<number | null>(null);
   const [showClearChatDialog, setShowClearChatDialog] = useState(false);
   const [isDeletingChat, setIsDeletingChat] = useState(false);
+  const [selectedEventForChat, setSelectedEventForChat] = useState<VenueEvent | null>(null);
+  const [isChatWidgetOpen, setIsChatWidgetOpen] = useState(false);
 
 
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
@@ -352,46 +364,27 @@ const MapContentAndLogic = () => {
         const userDocRef = doc(firestore, "users", user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
-              const userData = userDocSnap.data();
-              const profile: MapPageAppUser = {
-                uid: user.uid,
-                name: userData.name || (userData.role === UserRole.PARTNER ? "Parceiro Fervo" : "Usuário Fervo"),
-                favoriteVenueIds: userData.favoriteVenueIds || [],
-                role: userData.role as UserRole || UserRole.USER,
-                photoURL: userData.photoURL || null,
-                address: userData.address,
-                questionnaireCompleted: userData.questionnaireCompleted,
-              };
-              setCurrentAppUser(profile);
-              setChatUserProfile(profile);
-
-              if (userData.address?.city && userData.address?.state) {
-                const normalizeString = (str: string) =>
-                  str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
-
-                const city = normalizeString(userData.address.city);
-                const state = normalizeString(userData.address.state);
-                const newChatRoomId = `${state}_${city}`;
-                setChatRoomId(newChatRoomId);
-                console.log('MapPage (chatRoomId): Generated chatRoomId:', newChatRoomId);
-              } else {
-                setChatRoomId(null);
-                console.log('MapPage (chatRoomId): User has no city/state for chatRoomId.');
-              }
+              const userData = userDocSnap.data() as MapPageAppUser;
+              setCurrentAppUser(userData);
+              setChatUserProfile(userData);
+              console.log("MapContentAndLogic: AppUser data loaded:", userData);
             } else {
               const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null };
               setCurrentAppUser(basicProfile);
               setChatUserProfile(basicProfile);
-              setChatRoomId(null);
-              console.log('MapPage (chatRoomId): User document not found, chat disabled.');
+              console.log('MapContentAndLogic: User document not found, using basic profile.');
             }
+            setIsLoadingUserProfileForChat(false);
+        }, (error) => {
+            console.error("MapContentAndLogic: Error fetching user document with onSnapshot:", error);
+            setCurrentAppUser(null);
+            setChatUserProfile(null);
             setIsLoadingUserProfileForChat(false);
         });
         return () => unsubscribeUser();
       } else {
         setCurrentAppUser(null);
         setChatUserProfile(null);
-        setChatRoomId(null);
         setIsLoadingUserProfileForChat(false);
       }
     });
@@ -457,13 +450,13 @@ const MapContentAndLogic = () => {
             lng: position.coords.longitude,
           };
           setActualUserLocation(loc);
-          setUserLocation(loc); // Update map center as well
+          setUserLocation(loc);
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo default
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
           setUserLocation(defaultLoc);
-          setActualUserLocation(null); // Ensure actualUserLocation is null if using default
+          setActualUserLocation(null);
           toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão.", variant: "default" });
         }
       );
@@ -675,14 +668,9 @@ const MapContentAndLogic = () => {
     let colorClass = "text-foreground";
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-secondary";
+      colorClass = "text-secondary"; // Purple for active filter
     } else {
-      if (type === VenueType.NIGHTCLUB) colorClass = "hover:text-primary";
-      else if (type === VenueType.BAR) colorClass = "hover:text-accent";
-      else if (type === VenueType.STAND_UP) colorClass = "hover:text-yellow-400";
-      else if (type === VenueType.SHOW_HOUSE) colorClass = "hover:text-secondary";
-      else if (type === VenueType.ADULT_ENTERTAINMENT) colorClass = "hover:text-pink-500";
-      else if (type === VenueType.LGBT) colorClass = "hover:text-orange-500";
+      colorClass = "hover:text-secondary"; // Purple for hover on inactive
     }
 
     return IconComponent ? <IconComponent className={`w-5 h-5 ${colorClass}`} /> : <div className={`w-5 h-5 rounded-full ${colorClass}`} />;
@@ -782,9 +770,17 @@ const MapContentAndLogic = () => {
         return;
     }
 
+    const userShareDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
+    const userShareSnap = await getDoc(userShareDataRef);
+    const currentShareCount = userShareSnap.exists() ? userShareSnap.data()?.shareCount || 0 : 0;
+
+    if (currentShareCount >= 10) {
+      toast({ title: "Limite de Compartilhamento Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10).", variant: "default" });
+      return;
+    }
+
     const effectiveEventName = eventNameForShare || selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento';
     const effectiveShareRewardsEnabled = shareRewardsEnabledForEvent ?? selectedVenue?.events?.find(e => e.id === eventId)?.shareRewardsEnabled ?? true;
-
 
     const sharerNameQueryParam = currentAppUser.name ? `?sharedByName=${encodeURIComponent(currentAppUser.name)}` : '';
     const shareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}${sharerNameQueryParam}`;
@@ -796,12 +792,9 @@ const MapContentAndLogic = () => {
     if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
       try {
         console.log("Tentando compartilhar via AndroidShareInterface com:", title, text, shareUrl);
-        const nativeShareResult = (window as any).AndroidShareInterface.shareEvent(title, text, shareUrl);
-        if (nativeShareResult instanceof Promise) {
-          await nativeShareResult;
-        }
-        toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
+        (window as any).AndroidShareInterface.shareEvent(title, text, shareUrl);
         finalSharedSuccessfully = true;
+        toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
       } catch (nativeShareError: any) {
         console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
       }
@@ -811,33 +804,25 @@ const MapContentAndLogic = () => {
       if (navigator.share) {
         try {
           await navigator.share({ title, text, url: shareUrl });
-          toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
           finalSharedSuccessfully = true;
+          toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
         } catch (shareError: any) {
-          if (shareError.name === 'AbortError') {
-            console.log('Share operation cancelled by user.');
-          } else {
+          if (shareError.name !== 'AbortError') {
             console.warn('navigator.share falhou, tentando área de transferência:', shareError);
-            try {
-              await navigator.clipboard.writeText(shareUrl);
-              toast({ title: "Link Copiado!", description: "O compartilhamento falhou ou não está disponível. O link foi copiado!", variant: "default", duration: 6000 });
-              finalSharedSuccessfully = true;
-            } catch (clipError) {
-              console.error('Falha ao copiar para área de transferência:', clipError);
-              toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link automaticamente.", variant: "destructive"});
-            }
           }
         }
-      } else {
+      }
+    }
+
+    if (!finalSharedSuccessfully) {
         try {
           await navigator.clipboard.writeText(shareUrl);
-          toast({ title: "Link Copiado!", description: "O link do evento foi copiado. Compartilhe-o!", variant: "default", duration: 4000 });
           finalSharedSuccessfully = true;
+          toast({ title: "Link Copiado!", description: "O compartilhamento nativo falhou ou não está disponível. O link do evento foi copiado para a área de transferência!", variant: "default", duration: 6000 });
         } catch (clipError) {
-          console.error('Falha ao copiar para área de transferência (fallback):', clipError);
-          toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
+          console.error('Falha ao copiar para área de transferência (fallback final):', clipError);
+          toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento automaticamente.", variant: "destructive"});
         }
-      }
     }
 
 
@@ -847,6 +832,9 @@ const MapContentAndLogic = () => {
 
       try {
         const { newCoinTotal, newCouponGenerated } = await runTransaction(firestore, async (transaction) => {
+          // Increment event-specific share count
+          transaction.set(userShareDataRef, { shareCount: increment(1) }, { merge: true });
+
           const userSnap = await transaction.get(userDocRef);
           if (!userSnap.exists()) {
             throw new Error("Usuário não encontrado para premiar moedas.");
@@ -969,7 +957,7 @@ const MapContentAndLogic = () => {
       messagesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
       await batch.commit();
 
-      toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${chatRoomDisplayName} foram apagadas.`, variant: "default" });
+      toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${selectedEventForChat?.eventName || 'este chat'} foram apagadas.`, variant: "default" });
       setShowClearChatDialog(false);
 
     } catch (error) {
@@ -978,6 +966,20 @@ const MapContentAndLogic = () => {
     } finally {
         setIsDeletingChat(false);
     }
+  };
+
+  const openEventChat = (event: VenueEvent) => {
+    if (!currentUser || !currentAppUser) {
+        toast({ title: "Login Necessário", description: "Faça login para acessar o chat do evento.", variant: "destructive"});
+        return;
+    }
+    if (!userCheckIns[event.id]) {
+        toast({ title: "Check-in Necessário", description: "Faça check-in neste evento para participar do chat!", variant: "default", duration: 4000});
+        return;
+    }
+    setSelectedEventForChat(event);
+    setChatRoomId(event.id); // Event ID is the chat room ID
+    setIsChatWidgetOpen(true);
   };
 
 
@@ -1009,11 +1011,6 @@ const MapContentAndLogic = () => {
         </div>
     );
   }
-
-  const chatRoomDisplayName = chatUserProfile?.address?.city && chatUserProfile?.address?.state
-    ? `${chatUserProfile.address.city}, ${chatUserProfile.address.state}`
-    : "Chat Geral";
-    console.log("MapPage - Rendering, current chatRoomId:", chatRoomId);
 
 
   return (
@@ -1098,24 +1095,6 @@ const MapContentAndLogic = () => {
             )}
         </div>
 
-        {currentAppUser && currentAppUser.role === UserRole.USER && (
-             <Button
-                variant="default"
-                size="lg"
-                className={cn(
-                    "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
-                    "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90",
-                    !isChatWidgetOpen && "animate-bounce"
-                )}
-                onClick={() => setIsChatWidgetOpen(prev => !prev)}
-                title={isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}
-            >
-                {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-                <span className="hidden sm:inline">Fervo Chat</span>
-                <span className="sr-only">{isChatWidgetOpen ? "Fechar Chat" : "Abrir Fervo Chat"}</span>
-            </Button>
-        )}
-
 
         {GOOGLE_MAPS_API_KEY && mapsApi && (
             <GoogleMap
@@ -1168,6 +1147,9 @@ const MapContentAndLogic = () => {
             if (!isOpen) {
                 const venueIdInParams = searchParams.get('venueId');
                 setSelectedVenue(null);
+                setSelectedEventForChat(null);
+                setIsChatWidgetOpen(false);
+                setChatRoomId(null);
 
                 if (isPreviewMode && venueIdInParams) {
                     router.replace('/map', { scroll: false });
@@ -1194,7 +1176,7 @@ const MapContentAndLogic = () => {
             onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4">
+            <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4 z-10">
                 <div className="flex-1">
                     <SheetTitle className="text-2xl font-bold text-secondary">
                     {selectedVenue.name}
@@ -1401,6 +1383,18 @@ const MapContentAndLogic = () => {
                                   </Button>
                               )}
 
+                              {currentUser && currentAppUser?.role === UserRole.USER && userCheckIns[event.id] && (
+                                <Button
+                                  onClick={() => openEventChat(event)}
+                                  variant="outline"
+                                  className="w-full mt-3 border-primary text-primary hover:bg-primary/10"
+                                  size="sm"
+                                >
+                                  <MessageSquare className="w-4 h-4 mr-2" />
+                                  Entrar no Chat do Evento
+                                </Button>
+                              )}
+
 
                               {currentUser && userHasCheckedIn && !userHasRated && (
                                 <div className="mt-3 pt-3 border-t border-border/30">
@@ -1473,7 +1467,11 @@ const MapContentAndLogic = () => {
                             className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
-                              window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+                              if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchNavigation === 'function') {
+                                (window as any).AndroidShareInterface.launchNavigation('googlemaps', lat, lng, selectedVenue.name);
+                              } else {
+                                window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+                              }
                             }}
                           >
                             <MapPin className="w-4 h-4 mr-2 text-primary" /> Google Maps
@@ -1482,7 +1480,11 @@ const MapContentAndLogic = () => {
                             className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
-                              window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+                               if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchNavigation === 'function') {
+                                (window as any).AndroidShareInterface.launchNavigation('waze', lat, lng, selectedVenue.name);
+                              } else {
+                                window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
+                              }
                             }}
                           >
                             <Navigation2 className="w-4 h-4 mr-2 text-primary" /> Waze
@@ -1492,7 +1494,11 @@ const MapContentAndLogic = () => {
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
                               const venueName = encodeURIComponent(selectedVenue.name);
-                              window.open(`https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[formatted_address]=${venueName}`, '_blank');
+                               if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchNavigation === 'function') {
+                                (window as any).AndroidShareInterface.launchNavigation('uber', lat, lng, selectedVenue.name);
+                              } else {
+                                window.open(`https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[formatted_address]=${venueName}`, '_blank');
+                              }
                               toast({
                                 title: "Uber (Redirecionando)",
                                 description: "Você será redirecionado para o app Uber. Confirme os detalhes da viagem lá.",
@@ -1507,101 +1513,71 @@ const MapContentAndLogic = () => {
                       </DropdownMenu>
                     </div>
                   )}
+
+                  {/* Event-Specific Chat Widget integrated here */}
+                  {isChatWidgetOpen && currentUser && chatUserProfile && chatRoomId && selectedEventForChat && (
+                    <Card className="mt-6 flex flex-col max-h-[60vh] border-primary/50 bg-background/90 backdrop-blur-sm">
+                      <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between sticky top-0 bg-background/95 z-10">
+                          <div className="flex items-center gap-2">
+                              <MessageSquare className="h-5 w-5 text-primary" />
+                              <div>
+                                  <CardTitle className="text-md sm:text-lg text-primary leading-tight truncate max-w-[150px] sm:max-w-[200px]">Chat: {selectedEventForChat.eventName}</CardTitle>
+                              </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
+                              <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat">
+                                      <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
+                                  </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirmar Limpeza do Chat</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                          Tem certeza que deseja apagar TODAS as mensagens do chat "{selectedEventForChat.eventName}"? Esta ação é permanente e afetará todos os usuários.
+                                      </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                      <AlertDialogCancel disabled={isDeletingChat}>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={handleClearChat} disabled={isDeletingChat} className="bg-destructive hover:bg-destructive/90">
+                                          {isDeletingChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                          Apagar Todas as Mensagens
+                                      </AlertDialogAction>
+                                  </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                            <Button variant="ghost" size="icon" onClick={() => setIsChatSoundMuted(prev => !prev)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary" title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}>
+                                {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Fechar chat">
+                                <XCircleIcon className="h-4 w-4 sm:h-5 sm:h-5"/>
+                            </Button>
+                          </div>
+                      </CardHeader>
+                      <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
+                          <ChatMessageList
+                              chatRoomId={chatRoomId}
+                              currentUserId={currentUser.uid}
+                              isChatSoundMuted={isChatSoundMuted}
+                              chatClearedTimestamp={null} // Event-specific chat doesn't use client-side clear timestamp
+                          />
+                      </CardContent>
+                      <div className="p-3 sm:p-4 border-t border-border bg-card">
+                          <ChatInputForm
+                              chatRoomId={chatRoomId}
+                              userId={currentUser.uid}
+                              userName={chatUserProfile.name || 'Usuário Anônimo'}
+                              userPhotoURL={chatUserProfile.photoURL || null}
+                          />
+                      </div>
+                    </Card>
+                  )}
+
               </div>
             </ScrollArea>
           </SheetContent>
         </Sheet>
-      )}
-
-      {isChatWidgetOpen && currentUser && chatUserProfile && (
-         <Card className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 w-[calc(100%-2rem)] sm:w-96 max-h-[70vh] sm:max-h-[60vh] z-50 flex flex-col shadow-2xl border-primary/50 bg-background/90 backdrop-blur-md">
-            <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                    {isChatWidgetOpen ? <XCircleIcon className="h-5 w-5 text-primary cursor-pointer" onClick={() => setIsChatWidgetOpen(false)} /> : <MessageSquare className="h-5 w-5 text-primary" />}
-                    <div>
-                        <CardTitle className="text-md sm:text-lg text-primary leading-tight">Fervo Chat</CardTitle>
-                        <CardDescription className="text-xs sm:text-sm leading-tight">{chatRoomDisplayName}</CardDescription>
-                    </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setIsChatSoundMuted(prev => !prev)}
-                      className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary"
-                      title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}
-                  >
-                      {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
-                  </Button>
-                   <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
-                        <AlertDialogTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive"
-                                title="Limpar mensagens da sala"
-                            >
-                                <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmar Limpeza do Chat</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Tem certeza que deseja apagar TODAS as mensagens desta sala de chat ({chatRoomDisplayName})? Esta ação é permanente e afetará todos os usuários.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel disabled={isDeletingChat}>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleClearChat} disabled={isDeletingChat} className="bg-destructive hover:bg-destructive/90">
-                                    {isDeletingChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    Apagar Todas as Mensagens
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                </div>
-            </CardHeader>
-            {isLoadingUserProfileForChat ? (
-                <CardContent className="flex-1 flex items-center justify-center p-4">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                </CardContent>
-            ) : (!chatUserProfile.questionnaireCompleted || !chatUserProfile.address?.city || !chatUserProfile.address?.state) ? (
-                <CardContent className="flex-1 flex flex-col items-center justify-center p-4 text-center">
-                     <AlertCircle className="w-10 h-10 text-destructive mb-3" />
-                    <CardTitle className="text-primary mb-1 text-lg">Complete seu Perfil</CardTitle>
-                    <CardDescription className="text-xs sm:text-sm">
-                        Para usar o Fervo Chat, precisamos que você defina sua Cidade e Estado em seu perfil.
-                    </CardDescription>
-                    <Button onClick={() => { router.push('/user/profile'); setIsChatWidgetOpen(false);}} className="mt-4 w-full text-xs sm:text-sm">
-                        Completar Perfil Agora
-                    </Button>
-                </CardContent>
-            ) : chatRoomId && chatUserProfile && currentUser ? (
-                <>
-                    <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
-                        <ChatMessageList
-                            chatRoomId={chatRoomId}
-                            currentUserId={currentUser.uid}
-                            isChatSoundMuted={isChatSoundMuted}
-                            chatClearedTimestamp={chatClearedTimestamp}
-                        />
-                    </CardContent>
-                    <div className="p-3 sm:p-4 border-t border-border bg-card">
-                        <ChatInputForm
-                            chatRoomId={chatRoomId}
-                            userId={currentUser.uid}
-                            userName={chatUserProfile.name || 'Usuário Anônimo'}
-                            userPhotoURL={chatUserProfile.photoURL || null}
-                        />
-                    </div>
-                </>
-            ) : (
-                 <CardContent className="flex-1 flex items-center justify-center p-4">
-                    <p className="text-muted-foreground">Não foi possível carregar o chat.</p>
-                 </CardContent>
-            )}
-         </Card>
       )}
     </div>
   );

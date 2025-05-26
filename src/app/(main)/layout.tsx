@@ -17,13 +17,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, Timestamp, orderBy, runTransaction, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, updateDoc, serverTimestamp, type Timestamp as FirebaseTimestamp, onSnapshot, Timestamp, orderBy, runTransaction, arrayUnion, arrayRemove, writeBatch, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { auth, firestore, messaging } from '@/lib/firebase';
 import { getToken, onMessage } from 'firebase/messaging';
 import QrScannerModal from '@/components/checkin/qr-scanner-modal';
 import { cn } from '@/lib/utils';
-import { useTheme } from '@/contexts/theme-provider';
+import { ThemeProvider, useTheme } from '@/contexts/theme-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface UserVenueCoins {
@@ -61,15 +61,14 @@ interface AppUser {
   favoriteVenueIds?: string[];
   favoriteVenueNotificationSettings?: FavoriteVenueNotificationSettings;
   venueName?: string; // For partners
-  address?: { // For users (chat) and partners (location)
+  address?: {
     city?: string;
     state?: string;
-    // Partner specific address fields are in PartnerQuestionnaire
   };
   createdAt?: FirebaseTimestamp; // For partners trial period
   trialExpiredNotified?: boolean; // For partners
   stripeSubscriptionActive?: boolean; // For partners
-  photoURL?: string | null; // For users and partners
+  photoURL?: string | null;
   fcmTokens?: string[];
 }
 
@@ -111,7 +110,7 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false, // Will be updated by customer listener if partner
+              stripeSubscriptionActive: false,
               photoURL: userData.photoURL || user.photoURL || null,
               fcmTokens: userData.fcmTokens || [],
             };
@@ -125,7 +124,7 @@ const useAuthAndUserSubscription = () => {
                         isActive = true;
                     }
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: isActive}));
-                    setLoading(false); 
+                    setLoading(false);
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: false}));
@@ -133,7 +132,7 @@ const useAuthAndUserSubscription = () => {
                 });
             } else {
                 setAppUser(baseAppUser);
-                setLoading(false); 
+                setLoading(false);
             }
           } else {
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
@@ -182,7 +181,7 @@ const useAuthAndUserSubscription = () => {
            delete activeEventNotificationListeners[key];
       }
     };
-  }, [pathname, toast]); 
+  }, [pathname, toast]);
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -197,9 +196,9 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
             console.log('Notification permission granted.');
-            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE";
-            if (!vapidKeyToUse) {
-                console.warn("VAPID key is not defined. Push notifications might not work correctly.");
+            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE"; // Fallback, prefer env variable
+            if (!vapidKeyToUse || vapidKeyToUse === "SUA_CHAVE_PUBLICA_VAPID_AQUI") {
+                console.warn("VAPID key is not defined or is a placeholder. Push notifications might not work correctly.");
                 toast({ title: "Configuração Incompleta", description: "A chave VAPID para notificações não está configurada.", variant: "destructive"});
             }
             const currentToken = await getToken(messaging, { vapidKey: vapidKeyToUse });
@@ -287,21 +286,17 @@ export default function MainAppLayout({
         router.push('/login');
       }
     } else {
-      // User is logged in
-      if (isAuthPage) { // If on an auth page but logged in
+      if (isAuthPage) {
         if (appUser.questionnaireCompleted) {
           const targetPath = appUser.role === UserRole.USER ? '/map' : '/partner/dashboard';
           router.push(targetPath);
         } else {
-            // If on login but questionnaire not complete, redirect to questionnaire
             if (pathname === '/login') {
                  const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
                  router.push(questionnairePath);
             }
-            // If on a questionnaire page already, no redirect needed from here
         }
       } else {
-        // User is on a non-auth page
         if (!appUser.questionnaireCompleted && !isSharedEventPage && !isGeneralUserAccessiblePage) {
           const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
           router.push(questionnairePath);
@@ -343,7 +338,7 @@ export default function MainAppLayout({
       } else {
         greetingPrefix = "Boa Noite";
       }
-      
+
       if (appUser.role === UserRole.USER) {
           greetingTitle = `${greetingPrefix}, ${appUser.name}!`;
           greetingDescription = "Onde vamos hoje?";
@@ -351,7 +346,7 @@ export default function MainAppLayout({
           greetingTitle = `${greetingPrefix}, ${appUser.venueName || appUser.name}!`;
           greetingDescription = "Qual Evento Vai Rolar Hoje?";
       }
-        
+
       if (greetingTitle && (!isPartnerTrialExpiredRecently || isPartnerWithActiveSub)){
           toast({
             title: greetingTitle,
@@ -418,7 +413,7 @@ export default function MainAppLayout({
 
       if (potentialNewNotifications.length > 0 && appUser.uid) {
         const userDocRef = doc(firestore, "users", appUser.uid);
-        
+
         try {
             await runTransaction(firestore, async (transaction) => {
                 const currentUserDocSnap = await transaction.get(userDocRef);
@@ -434,7 +429,7 @@ export default function MainAppLayout({
                 if (notificationsActuallyToAdd.length > 0) {
                     const finalNotifications = [...freshExistingNotificationsFromDB, ...notificationsActuallyToAdd]
                         .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-                        .slice(0, 20); // Keep max 20 notifications
+                        .slice(0, 20);
 
                     let maxCreatedAt: FirebaseTimestamp | undefined = currentUserDocSnap.data()?.lastNotificationCheckTimestamp;
                     notificationsActuallyToAdd.forEach(n => {
@@ -458,7 +453,7 @@ export default function MainAppLayout({
     });
 
     return () => unsubscribe();
-  }, [appUser, loading]); // Added loading dependency as per review, and appUser as a whole
+  }, [appUser, loading]);
 
 
   useEffect(() => {
@@ -496,13 +491,13 @@ export default function MainAppLayout({
             const eventData = change.doc.data();
             const eventId = change.doc.id;
             const eventCreatedAt = eventData.createdAt as FirebaseTimestamp;
-            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp; 
+            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp;
             const eventEndDateTime = eventData.endDateTime as FirebaseTimestamp;
 
             if (eventEndDateTime && eventEndDateTime.toDate() < new Date()) {
-              return; 
+              return;
             }
-            
+
             const relevantTimestamp = eventUpdatedAt || eventCreatedAt;
 
             if (relevantTimestamp && relevantTimestamp.toMillis() > currentAppUserLastCheck) {
@@ -517,10 +512,10 @@ export default function MainAppLayout({
                         message = `Evento atualizado em ${venueName}: ${eventData.eventName}. Confira as novidades!`;
                         notificationIdSuffix = `update_${relevantTimestamp.toMillis()}`;
                     } else {
-                        return; 
+                        return;
                     }
                 } else {
-                    return; 
+                    return;
                 }
 
                 if (message) {
@@ -531,7 +526,7 @@ export default function MainAppLayout({
                         venueName: venueName,
                         eventName: eventData.eventName,
                         message: message,
-                        createdAt: relevantTimestamp, 
+                        createdAt: relevantTimestamp,
                         read: false,
                     });
                 }
@@ -593,7 +588,7 @@ export default function MainAppLayout({
         }
       }
     });
-  }, [appUser, loading]); // Added loading dependency as per review, and appUser as a whole
+  }, [appUser, loading]);
 
 
   const handleNotificationsClick = async () => {
@@ -607,13 +602,11 @@ export default function MainAppLayout({
       return;
     }
 
-    const userPrefs = {
-      venueTypes: appUser.preferredVenueTypes || [],
-      musicStyles: appUser.preferredMusicStyles || [],
-    };
-
-    if (userPrefs.venueTypes.length === 0 && userPrefs.musicStyles.length === 0 && (!appUser.address || !appUser.address.city || !appUser.address.state)) {
-       toast({ title: "Defina suas Preferências e Localização", description: "Adicione seus tipos de locais, estilos musicais e sua cidade/estado no perfil para receber sugestões.", duration: 7000 });
+    if ((!appUser.preferredVenueTypes || appUser.preferredVenueTypes.length === 0) &&
+        (!appUser.preferredMusicStyles || appUser.preferredMusicStyles.length === 0) &&
+        (!appUser.address || !appUser.address.city || !appUser.address.state) &&
+        (!appUser.favoriteVenueIds || appUser.favoriteVenueIds.length === 0)) {
+       toast({ title: "Defina Preferências ou Favoritos", description: "Adicione seus tipos de locais, estilos musicais, sua cidade/estado no perfil, ou favorite locais para receber notificações e sugestões.", duration: 8000 });
        return;
     }
 
@@ -623,15 +616,15 @@ export default function MainAppLayout({
         const userDocRef = doc(firestore, "users", appUser.uid);
         const currentNotificationsCopy = JSON.parse(JSON.stringify(appUser.notifications));
         const updatedNotifications = currentNotificationsCopy.map((n: Notification) => ({ ...n, read: true }));
-        
+
         setAppUser(prev => prev ? {...prev, notifications: updatedNotifications } : null);
-        
+
         updateDoc(userDocRef, {
             notifications: updatedNotifications,
-            lastNotificationCheckTimestamp: serverTimestamp() 
+            lastNotificationCheckTimestamp: serverTimestamp()
         }).catch(error => {
             console.error("Error updating notifications as read in Firestore:", error);
-            setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null); 
+            setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null);
             toast({ title: "Erro ao Marcar Notificações", description: "Não foi possível marcar notificações como lidas no servidor.", variant: "destructive" });
         });
     } else if (appUser.notifications && appUser.notifications.length === 0){
@@ -644,7 +637,7 @@ export default function MainAppLayout({
       toast({ title: "Erro", description: "Usuário não autenticado para remover notificação.", variant: "destructive"});
       return;
     }
-    
+
     const userDocRef = doc(firestore, "users", appUser.uid);
     try {
         await runTransaction(firestore, async (transaction) => {
@@ -655,6 +648,15 @@ export default function MainAppLayout({
             const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
             const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
             transaction.update(userDocRef, { notifications: updatedDbNotifications });
+
+            // Additionally, delete the partner document if it was a "new partner" notification
+            // This part should be specific and careful. Let's assume partnerId is part of notification data.
+            const notificationToRemove = currentDbNotifications.find(n => n.id === notificationId);
+            if (notificationToRemove?.partnerId && notificationToRemove.id.startsWith("partner_")) {
+                // This logic might be too aggressive or incorrect depending on how notifications are structured
+                // For now, only removing from the user's list.
+                // If the goal is to delete the partner record itself, that's a different operation.
+            }
         });
 
         setAppUser(prev => {
@@ -672,6 +674,22 @@ export default function MainAppLayout({
 
   const handleLogout = async () => {
     try {
+      // Remove FCM token for this device
+      if (appUser?.uid && messaging) {
+        const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE";
+        try {
+          const currentToken = await getToken(messaging, { vapidKey: vapidKeyToUse });
+          if (currentToken) {
+            const userDocRef = doc(firestore, 'users', appUser.uid);
+            await updateDoc(userDocRef, {
+              fcmTokens: arrayRemove(currentToken)
+            });
+            console.log('FCM token removed on logout.');
+          }
+        } catch (tokenError) {
+          console.error('Error removing FCM token on logout:', tokenError);
+        }
+      }
       await auth.signOut();
       router.push('/login');
       toast({ title: "Logout", description: "Você foi desconectado." });
@@ -689,29 +707,6 @@ export default function MainAppLayout({
     }
      router.push('/user/coins');
   };
-
-  const handleFloatingChatButtonClick = () => {
-    if (!appUser || !appUser.uid) {
-      toast({ title: "Login Necessário", description: "Faça login para usar o Fervo Chat.", variant: "destructive" });
-      return;
-    }
-    if (!appUser.questionnaireCompleted) {
-      toast({ title: "Complete seu Perfil", description: "Preencha suas preferências e localização para usar o Fervo Chat!", variant: "default", duration: 6000 });
-      return;
-    }
-     if (!appUser.address?.city || !appUser.address?.state) {
-      toast({ title: "Localização Necessária", description: "Defina sua cidade e estado no perfil para usar o Fervo Chat da sua região.", variant: "default", duration: 7000 });
-      return;
-    }
-    // If all checks pass, the chat is handled by the MapPage component's widget logic
-    // This button is now informational.
-    toast({
-      title: "Fervo Chat nos Eventos!",
-      description: "O chat agora acontece dentro de cada evento. Faça check-in em um evento para participar da conversa exclusiva e interagir com outros participantes!",
-      duration: 7000,
-    });
-  };
-
 
   if (loading) {
     return (
@@ -734,10 +729,8 @@ export default function MainAppLayout({
       if (appUser.questionnaireCompleted) {
         renderChildrenContent = true;
       } else {
-        // Do not render children if questionnaire is not complete and not on an auth/shared page
       }
     } else {
-      // Do not render children if no appUser and not on an auth/shared page
     }
   }
 
@@ -752,8 +745,8 @@ export default function MainAppLayout({
       {appUser && (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
-             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={40} logoHeight={40} className="mr-auto md:mr-4" /> 
-            
+             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={40} logoHeight={40} className="mr-auto md:mr-4" />
+
             <nav className="flex items-center gap-1 ml-auto sm:gap-2 md:gap-4">
               {appUser?.role === UserRole.USER && (
                 <>
@@ -954,22 +947,7 @@ export default function MainAppLayout({
           </div>
         )}
       </main>
-       {appUser && appUser.role === UserRole.USER && appUser.uid && appUser.questionnaireCompleted && (
-        <Button
-            variant="default"
-            size="lg"
-            className={cn(
-                "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
-                "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90"
-            )}
-            onClick={handleFloatingChatButtonClick}
-            title="Informações sobre o Fervo Chat"
-        >
-            <MessageSquare className="h-5 w-5" />
-            <span className="hidden sm:inline">Fervo Chat</span>
-            <span className="sr-only">Informações sobre o Fervo Chat</span>
-        </Button>
-      )}
+
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal
           isOpen={isQrScannerOpen}
