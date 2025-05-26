@@ -26,7 +26,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore, auth } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import {
@@ -149,10 +149,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', // Amarelo Milho
-  [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))', // Roxo
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Rosa choque
-  [VenueType.LGBT]: '#F97316', // Laranja
+  [VenueType.STAND_UP]: '#FACC15',
+  [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
+  [VenueType.LGBT]: '#F97316',
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -179,13 +179,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Roxo como padrão para piscar
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))';
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'hsl(var(--destructive))'; // Vermelho neon como fallback
+    effectiveBlinkHighlightColor = 'hsl(var(--destructive))';
   }
 
 
@@ -342,7 +342,7 @@ const MapContentAndLogic = () => {
   const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
   const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
   const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
-  
+
   const [showClearChatDialog, setShowClearChatDialog] = useState(false);
   const [isDeletingChat, setIsDeletingChat] = useState(false);
   const [selectedEventForChat, setSelectedEventForChat] = useState<VenueEvent | null>(null);
@@ -395,14 +395,14 @@ const MapContentAndLogic = () => {
             console.error("MapContentAndLogic: Error fetching user document with onSnapshot:", error);
             setCurrentAppUser(null);
             setChatUserProfile(null);
-            setChatRoomId(null); // Reset chatRoomId on error
+            setChatRoomId(null);
             setIsLoadingUserProfileForChat(false);
         });
         return () => unsubscribeUser();
       } else {
         setCurrentAppUser(null);
         setChatUserProfile(null);
-        setChatRoomId(null); // Reset chatRoomId on logout
+        setChatRoomId(null);
         setIsLoadingUserProfileForChat(false);
       }
     });
@@ -472,7 +472,7 @@ const MapContentAndLogic = () => {
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
           setUserLocation(defaultLoc);
           setActualUserLocation(null);
           if (!isPreviewMode) {
@@ -615,7 +615,6 @@ const MapContentAndLogic = () => {
     return () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedVenue]);
 
 
@@ -663,7 +662,7 @@ const MapContentAndLogic = () => {
   const isAnyFilterActive = activeVenueTypeFilters.length > 0 || activeMusicStyleFilters.length > 0;
 
   const filteredVenues = useMemo(() => {
-    if (!isAnyFilterActive) return venues; // Show all venues if no filter is active
+    if (!isAnyFilterActive) return venues;
 
     return venues.filter(venue => {
       const venueTypeMatch = activeVenueTypeFilters.length === 0 || activeVenueTypeFilters.includes(venue.type);
@@ -679,7 +678,7 @@ const MapContentAndLogic = () => {
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false; // Should not be reached if isAnyFilterActive is true
+      return false;
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
@@ -687,10 +686,10 @@ const MapContentAndLogic = () => {
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
     let colorClass = "text-foreground";
-    let hoverColorClass = "hover:text-secondary"; // Default roxo para hover
+    let hoverColorClass = "hover:text-secondary";
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-primary"; // Neon blue for active filter
+      colorClass = "text-primary";
       hoverColorClass = "hover:text-primary/80";
     }
 
@@ -799,22 +798,22 @@ const MapContentAndLogic = () => {
 
     const sharerNameQueryParam = currentAppUser.name ? `?sharedByName=${encodeURIComponent(currentAppUser.name)}` : '';
     const webShareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}${sharerNameQueryParam}`;
-    //const customShareUrl = `shareevent://${partnerId}/${eventId}${sharerNameQueryParam}`;
+    const customShareUrl = `shareevent://${partnerId}/${eventId}${sharerNameQueryParam}`;
     const title = `Confira este Fervo: ${partnerName} - ${effectiveEventName}`;
-    const text = `Olha esse evento que encontrei no Fervo App! Enviado por ${currentAppUser.name || 'um amigo'}.`;
+    const text = `Olha esse evento que encontrei no Fervo App! ${currentAppUser.name ? 'Enviado por ' + currentAppUser.name : ''}.`;
 
     let finalSharedSuccessfully = false;
 
     if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
       try {
-        console.log("Tentando compartilhar via AndroidShareInterface com:", title, text, webShareUrl);
+        console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com:", title, text, webShareUrl);
         (window as any).AndroidShareInterface.shareEvent(title, text, webShareUrl);
         finalSharedSuccessfully = true;
         toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
       } catch (nativeShareError: any) {
         console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
       }
-    } /*else if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchShareIntent === 'function') {
+    } else if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchShareIntent === 'function') {
       try {
         console.log("Tentando compartilhar via AndroidShareInterface.launchShareIntent com:", customShareUrl);
         (window as any).AndroidShareInterface.launchShareIntent(customShareUrl);
@@ -823,14 +822,16 @@ const MapContentAndLogic = () => {
       } catch (legacyNativeError: any) {
         console.warn('AndroidShareInterface.launchShareIntent falhou:', legacyNativeError);
       }
-    }*/
+    }
 
 
     if (!finalSharedSuccessfully && navigator.share) {
       try {
         await navigator.share({ title, text, url: webShareUrl });
         finalSharedSuccessfully = true;
-        toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
+         if (finalSharedSuccessfully) { // Ensure this toast only shows if navigator.share succeeded
+            toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
+        }
       } catch (shareError: any) {
         if (shareError.name !== 'AbortError') {
           console.warn('navigator.share falhou, tentando área de transferência:', shareError);
@@ -856,56 +857,52 @@ const MapContentAndLogic = () => {
 
       try {
         const { newCoinTotal, newCouponGenerated } = await runTransaction(firestore, async (transaction) => {
-          // --- Start of All READS ---
+          // --- All READS first ---
           const userShareSnap = await transaction.get(userShareDataRef);
           const userSnap = await transaction.get(userDocRef);
-          // --- End of All READS ---
 
+          // --- All DATA EXTRACTION from reads immediately after ---
           if (!userSnap.exists()) {
             throw new Error("Usuário não encontrado para premiar moedas.");
           }
-
-          // --- Start of Data Extraction from READS ---
-          const currentShareCount = userShareSnap.exists() ? userShareSnap.data()?.shareCount || 0 : 0;
-          const userData = userSnap.data();
+          const userData = userSnap.data(); // Extract data
+          const currentShareCount = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0; // Extract data
+          
           const venueCoinsMap: UserVenueCoins = userData.venueCoins || {};
           const currentVenueCoinsForPartner = venueCoinsMap[partnerId] || 0;
-          // --- End of Data Extraction ---
-          
+
+          // --- All LOGIC based on extracted data ---
           if (currentShareCount >= 10) {
-             // Throw an error that will be caught by the outer catch block.
-             // This error message will be displayed to the user via toast.
              throw new Error("Limite de compartilhamento (10) atingido para este evento.");
           }
 
-
-          // --- Start of LOGIC based on extracted data ---
-          const coinsAfterReward = currentVenueCoinsForPartner + FERVO_COINS_SHARE_REWARD;
+          const coinsGained = FERVO_COINS_SHARE_REWARD;
+          let coinsSpentOnCoupon = 0;
           let couponGeneratedThisTransaction = false;
-          let finalCoinTotalForThisPartner = coinsAfterReward;
+          
+          const potentialTotalCoinsForPartner = currentVenueCoinsForPartner + coinsGained;
 
-          const updatesForUserDoc: Record<string, any> = {};
-          // Always increment share count and award coins if limit not reached
-          updatesForUserDoc[`venueCoins.${partnerId}`] = increment(FERVO_COINS_SHARE_REWARD);
-
-
-          if (coinsAfterReward >= FERVO_COINS_FOR_COUPON) {
-            finalCoinTotalForThisPartner = coinsAfterReward - FERVO_COINS_FOR_COUPON;
-            // Adjust the increment to reflect net change if coupon is generated
-            updatesForUserDoc[`venueCoins.${partnerId}`] = increment(FERVO_COINS_SHARE_REWARD - FERVO_COINS_FOR_COUPON);
+          if (potentialTotalCoinsForPartner >= FERVO_COINS_FOR_COUPON) {
+            coinsSpentOnCoupon = FERVO_COINS_FOR_COUPON;
             couponGeneratedThisTransaction = true;
           }
-          // --- End of LOGIC ---
+          
+          const netCoinChangeForPartner = coinsGained - coinsSpentOnCoupon;
+          const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + netCoinChangeForPartner;
 
-          // --- Start of All WRITES (queued based on logic above) ---
+          // --- All WRITES last ---
           transaction.set(userShareDataRef, { shareCount: increment(1) }, { merge: true });
+          
+          const updatesForUserDoc: Record<string, any> = {
+            [`venueCoins.${partnerId}`]: increment(netCoinChangeForPartner)
+          };
           transaction.update(userDocRef, updatesForUserDoc);
 
           if (couponGeneratedThisTransaction) {
             const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-            const newCouponRef = doc(couponCollectionRef);
+            const newCouponRef = doc(couponCollectionRef); 
             transaction.set(newCouponRef, {
-              userId: currentUser.uid, // Important for querying user's coupons
+              userId: currentUser.uid,
               couponCode: couponCode,
               description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
               eventName: effectiveEventName,
@@ -915,7 +912,6 @@ const MapContentAndLogic = () => {
               partnerVenueName: partnerName,
             });
           }
-          // --- End of All WRITES ---
 
           return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction };
         });
@@ -974,7 +970,7 @@ const MapContentAndLogic = () => {
         } else {
           if (currentFavorites.length >= 20) {
               toast({ title: "Limite de Favoritos Atingido", description: "Você pode ter no máximo 20 locais favoritos.", variant: "destructive", duration: 4000 });
-              return; // Important to stop the transaction here
+              return;
           }
           updatedFavorites = [...currentFavorites, venueId];
           toast({ title: "Adicionado aos Favoritos!", description: `${venueName} agora é um dos seus fervos favoritos!`, variant: "default" });
@@ -988,16 +984,16 @@ const MapContentAndLogic = () => {
   };
 
   const handleClearChat = async () => {
-    if (!currentUser || !selectedEventForChat) { 
+    if (!currentUser || !selectedEventForChat) {
       toast({ title: "Erro", description: "Não foi possível identificar o chat ou o evento.", variant: "destructive" });
       return;
     }
 
-    const currentChatRoomId = selectedEventForChat.id; // Use the event ID as the chat room ID
+    const currentChatRoomIdForClear = selectedEventForChat.id;
 
     setIsDeletingChat(true);
     try {
-      const messagesRef = collection(firestore, `chatRooms/${currentChatRoomId}/messages`);
+      const messagesRef = collection(firestore, `chatRooms/${currentChatRoomIdForClear}/messages`);
       const messagesSnapshot = await getDocs(messagesRef);
 
       if (messagesSnapshot.empty) {
@@ -1032,8 +1028,7 @@ const MapContentAndLogic = () => {
         return;
     }
     setSelectedEventForChat(event);
-    // For event-specific chat, the chatRoomId is simply the event.id
-    setChatRoomId(event.id); 
+    setChatRoomId(event.id);
     setIsChatWidgetOpen(true);
   };
 
@@ -1145,6 +1140,7 @@ const MapContentAndLogic = () => {
                 <Filter className="w-5 h-5" />
             </Button>
             )}
+             <Logo />
         </div>
 
 
@@ -1201,7 +1197,6 @@ const MapContentAndLogic = () => {
                 setSelectedVenue(null);
                 setSelectedEventForChat(null);
                 setIsChatWidgetOpen(false);
-                // Do not reset chatRoomId here, it's the global room ID based on user profile
 
                 if (isPreviewMode && venueIdInParams) {
                     router.replace('/map', { scroll: false });
@@ -1234,7 +1229,7 @@ const MapContentAndLogic = () => {
                     {selectedVenue.name}
                     </CardTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="hsl(var(--primary))" readOnly />
                             <span className="text-sm text-foreground font-semibold">
                                 {selectedVenue.averageVenueRating.toFixed(1)}
@@ -1474,11 +1469,11 @@ const MapContentAndLogic = () => {
                                     size="sm"
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
-                                        if(currentlyRatingEventId !== event.id && !isSubmittingRating) { // Ensure not to reset if already rating this event
+                                        if(currentlyRatingEventId !== event.id && !isSubmittingRating) {
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id); // Set it again to ensure it's current if clicking another event's rate button
+                                        setCurrentlyRatingEventId(event.id);
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1609,15 +1604,15 @@ const MapContentAndLogic = () => {
                       </CardHeader>
                       <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
                           <ChatMessageList
-                              chatRoomId={selectedEventForChat.id} // Use event ID as chat room ID
+                              chatRoomId={selectedEventForChat.id}
                               currentUserId={currentUser.uid}
                               isChatSoundMuted={isChatSoundMuted}
-                              chatClearedTimestamp={chatClearedTimestamp} 
+                              chatClearedTimestamp={chatClearedTimestamp}
                           />
                       </CardContent>
                       <div className="p-3 sm:p-4 border-t border-border bg-card">
                           <ChatInputForm
-                              chatRoomId={selectedEventForChat.id} // Use event ID as chat room ID
+                              chatRoomId={selectedEventForChat.id}
                               userId={currentUser.uid}
                               userName={chatUserProfile.name || 'Usuário Anônimo'}
                               userPhotoURL={chatUserProfile.photoURL || null}
@@ -1656,4 +1651,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-

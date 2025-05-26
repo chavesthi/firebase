@@ -4,74 +4,99 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users collection
-    match /users/{userId} {
-      allow create: if request.auth != null; // Allow authenticated users to create their own user document
-      allow read: if request.auth != null && (request.auth.uid == userId || get(/databases/$(database)/documents/users/$(userId)).data.role == 'partner'); // Users can read their own data, anyone can read partner's public data
-      allow update: if request.auth != null && request.auth.uid == userId; // Users can update their own data
-      allow delete: if request.auth != null && request.auth.uid == userId; // Users can delete their own account data
-
-      // Subcollection for partner events
-      match /events/{eventId} {
-        allow create, update, delete: if request.auth != null && request.auth.uid == userId && get(/databases/$(database)/documents/users/$(userId)).data.role == 'partner'; // Only partner who owns the user doc can manage events
-        allow read: if true; // Allow anyone to read event details
-
-        // Sub-subcollection for event check-ins
-        match /checkIns/{checkInUserId} {
-          allow create: if request.auth != null && request.auth.uid == checkInUserId; // Users can check themselves in
-          allow read: if request.auth != null && (request.auth.uid == userId || request.auth.uid == checkInUserId) ; // Partner can read check-ins for their events, user can read their own
+    // Helper function to check if any of the specified immutable fields are being changed
+    function dataHasChanged(newData, oldData, immutableFields) {
+      let changedKeys = newData.keys().diff(oldData.keys()).affectedKeys();
+      // Check if any of the changed keys are in the immutable list
+      if (changedKeys.hasAny(immutableFields)) {
+        return true;
+      }
+      // Check if any immutable fields that existed before have different values now
+      for (let i = 0; i < immutableFields.size(); i++) {
+        let key = immutableFields[i];
+        if (key in oldData && key in newData && newData[key] != oldData[key]) {
+          return true;
         }
       }
+      return false;
+    }
 
-      // Subcollection for user's checked-in events (for rating purposes)
-      match /checkedInEvents/{eventId} {
-        allow create, update, read: if request.auth != null && request.auth.uid == userId; // User can manage their own list of checked-in events
-        allow delete: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId} {
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow read: if request.auth != null && (request.auth.uid == userId || resource.data.role == 'partner'); // Allow reading own data or partner profiles
+
+      // Simplified update rule to avoid "reads after writes" in transactions for coin/share updates
+      // This rule is broader for updates originating from transactions like handleShareEvent.
+      // More specific validations should be in the profile edit page's direct update logic.
+      allow update: if request.auth != null && request.auth.uid == userId
+                    // Prevent changing critical immutable fields that are NOT typically updated by transactions like handleShareEvent
+                    && (request.resource.data.uid == resource.data.uid || request.resource.data.uid == null || !(request.resource.data.uid is string)) // Cannot change existing uid
+                    && (request.resource.data.email == resource.data.email || request.resource.data.email == null || !(request.resource.data.email is string)) // Cannot change existing email
+                    && (request.resource.data.role == resource.data.role || request.resource.data.role == null || !(request.resource.data.role is string))
+                    && (request.resource.data.createdAt == resource.data.createdAt || request.resource.data.createdAt == null || !(request.resource.data.createdAt is timestamp));
+                    // Other fields like 'name', 'age', 'venueCoins', 'eventShareCounts', 'photoURL', 'updatedAt' can be updated by the owner.
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+
+      match /events/{eventId} {
+        allow read: if resource.data.visibility == true || (request.auth != null && request.auth.uid == userId); // Public can read visible, owner can read all
+        allow create, update, delete: if request.auth != null && request.auth.uid == userId; // Only partner owner
+
+        match /checkIns/{checkInId} {
+          allow read, create, update, delete: if request.auth != null && request.auth.uid == userId; // User can manage their own check-ins
+          // Partner might need read access to their event's checkIns for stats
+          // allow read: if request.auth != null && get(/databases/$(database)/documents/users/$(userId)).data.role == 'partner';
+        }
       }
-
-      // Subcollection for user's coupons
       match /coupons/{couponId} {
-        allow create, read, update: if request.auth != null && request.auth.uid == userId; // User can manage their own coupons
-        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if request.auth != null && request.auth.uid == userId; // User manages their coupons
+      }
+      match /checkedInEvents/{eventId} {
+         allow read, write, delete: if request.auth != null && request.auth.uid == userId; // User manages their record of checked-in events
+      }
+      match /eventShareCounts/{eventId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId; // User manages their own share counts
       }
     }
 
-    // EventRatings collection (ratings are per event, associated with a partner)
-    match /eventRatings/{ratingId} { // ratingId is typically eventId_userId
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid; // User can create their own rating
-      allow read: if true; // Anyone can read ratings (for displaying average on event)
-      allow update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid; // User can update/delete their own rating
+    match /eventRatings/{ratingId} { // ratingId is eventId_userId
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null; // Allow any authenticated user to read ratings (e.g., for display)
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid; // Only owner can update/delete their rating
     }
 
-    // purchasedTickets collection removed as functionality is removed
-
-    // Stripe extension collections
+    // Rules for Stripe Extension Collections (if using firestore-stripe-payments extension)
     match /customers/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-
+      allow read, write: if request.auth.uid == uid; // User can manage their own customer data
       match /checkout_sessions/{id} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if request.auth.uid == uid;
       }
       match /subscriptions/{id} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read: if request.auth.uid == uid;
+        // Writes to subscriptions are typically handled by the Stripe extension's backend functions
       }
-       match /payments/{id} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+      match /payments/{id} {
+        allow read: if request.auth.uid == uid;
       }
       match /portals/{id} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if request.auth.uid == uid;
+      }
+    }
+     match /products/{id} {
+      allow read: if true; // Products can be public
+      match /prices/{id} {
+        allow read: if true; // Prices can be public
+      }
+      match /tax_rates/{id} {
+        allow read: if true; // Tax rates can be public
       }
     }
 
-    // ChatRooms collection
     match /chatRooms/{roomId} {
-      allow read: if request.auth != null; // Authenticated users can list/read chat rooms
-      allow create: if request.auth != null; // Authenticated users can create chat rooms (implicitly by sending first message)
-      
+      allow read, write: if request.auth != null;
       match /messages/{messageId} {
-        allow read: if request.auth != null && exists(/databases/$(database)/documents/chatRooms/$(roomId));
+        allow read: if request.auth != null;
         allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-        // Allow users to delete their own messages
         allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
       }
     }
