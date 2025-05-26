@@ -118,25 +118,24 @@ const useAuthAndUserSubscription = () => {
 
             if (userData.role === UserRole.PARTNER) {
                 const subscriptionsQuery = query(collection(firestore, `customers/${user.uid}/subscriptions`), where("status", "in", ["trialing", "active"]));
-                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc(); // Unsubscribe from previous listener if exists
+                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc();
                 unsubscribeCustomerDoc = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
                     let isActive = false;
                     if (!subscriptionsSnap.empty) {
                         isActive = true;
                     }
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: isActive}));
-                    setLoading(false); // Set loading to false once subscription status is determined
+                    setLoading(false); 
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: false}));
-                    setLoading(false); // Also set loading to false on error
+                    setLoading(false);
                 });
             } else {
                 setAppUser(baseAppUser);
-                setLoading(false); // Set loading to false for non-partner users here
+                setLoading(false); 
             }
           } else {
-            // New user or user document doesn't exist yet
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
               uid: user.uid,
@@ -183,7 +182,7 @@ const useAuthAndUserSubscription = () => {
            delete activeEventNotificationListeners[key];
       }
     };
-  }, [pathname, toast]); // Removed appUser from dependencies to avoid re-runs on its own update
+  }, [pathname, toast]); 
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -259,7 +258,6 @@ export default function MainAppLayout({
   const { toast } = useToast();
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
-  const [isFetchingCoinDetails, setIsFetchingCoinDetails] = useState(false); // This state seems unused, consider removing if not needed
   const prevAppUserRef = useRef<AppUser | null>(null);
 
 
@@ -460,7 +458,7 @@ export default function MainAppLayout({
     });
 
     return () => unsubscribe();
-  }, [appUser?.uid, appUser?.questionnaireCompleted, appUser?.role, appUser?.preferredVenueTypes, appUser?.preferredMusicStyles, appUser?.address, appUser?.lastNotificationCheckTimestamp, loading]);
+  }, [appUser, loading]); // Added loading dependency as per review, and appUser as a whole
 
 
   useEffect(() => {
@@ -486,7 +484,6 @@ export default function MainAppLayout({
         const venueName = venueDocSnap.exists() ? venueDocSnap.data().venueName : "Local Desconhecido";
 
         const eventsRef = collection(firestore, `users/${venueId}/events`);
-        // Order by updatedAt to catch modifications. If you only care about new events, orderBy createdAt.
         const qEvents = query(eventsRef, where('visibility', '==', true), orderBy('updatedAt', 'desc'));
 
         const unsubscribe = onSnapshot(qEvents, async (snapshot) => {
@@ -499,14 +496,13 @@ export default function MainAppLayout({
             const eventData = change.doc.data();
             const eventId = change.doc.id;
             const eventCreatedAt = eventData.createdAt as FirebaseTimestamp;
-            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp; // Use updatedAt for logic
+            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp; 
             const eventEndDateTime = eventData.endDateTime as FirebaseTimestamp;
 
             if (eventEndDateTime && eventEndDateTime.toDate() < new Date()) {
-              return; // Skip past events
+              return; 
             }
             
-            // Use updatedAt for determining if a notification should be generated
             const relevantTimestamp = eventUpdatedAt || eventCreatedAt;
 
             if (relevantTimestamp && relevantTimestamp.toMillis() > currentAppUserLastCheck) {
@@ -517,16 +513,14 @@ export default function MainAppLayout({
                     message = `Novo evento em ${venueName}: ${eventData.eventName}!`;
                     notificationIdSuffix = `new_${relevantTimestamp.toMillis()}`;
                 } else if (change.type === "modified") {
-                    // Only notify for modifications if the event was created *before* the last check,
-                    // otherwise the "added" notification would cover it.
                     if (eventCreatedAt && eventCreatedAt.toMillis() <= currentAppUserLastCheck) {
                         message = `Evento atualizado em ${venueName}: ${eventData.eventName}. Confira as novidades!`;
                         notificationIdSuffix = `update_${relevantTimestamp.toMillis()}`;
                     } else {
-                        return; // Already covered by "added" or not relevant
+                        return; 
                     }
                 } else {
-                    return; // Only care about added or modified
+                    return; 
                 }
 
                 if (message) {
@@ -537,7 +531,7 @@ export default function MainAppLayout({
                         venueName: venueName,
                         eventName: eventData.eventName,
                         message: message,
-                        createdAt: relevantTimestamp, // Use the relevant timestamp for sorting
+                        createdAt: relevantTimestamp, 
                         read: false,
                     });
                 }
@@ -570,7 +564,6 @@ export default function MainAppLayout({
                         });
 
                         const updatePayload: any = { notifications: allNotifications };
-                         // Update lastNotificationCheckTimestamp only if new relevant notifications were added
                         const currentLastCheckTimestamp = currentUserDocSnap.data()?.lastNotificationCheckTimestamp;
                         if (maxCreatedAtOfNew && (!currentLastCheckTimestamp || maxCreatedAtOfNew.toMillis() > currentLastCheckTimestamp.toMillis())) {
                             updatePayload.lastNotificationCheckTimestamp = maxCreatedAtOfNew;
@@ -600,8 +593,7 @@ export default function MainAppLayout({
         }
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appUser?.uid, appUser?.favoriteVenueIds, appUser?.favoriteVenueNotificationSettings, loading, appUser?.lastNotificationCheckTimestamp]);
+  }, [appUser, loading]); // Added loading dependency as per review, and appUser as a whole
 
 
   const handleNotificationsClick = async () => {
@@ -631,22 +623,15 @@ export default function MainAppLayout({
         const userDocRef = doc(firestore, "users", appUser.uid);
         const currentNotificationsCopy = JSON.parse(JSON.stringify(appUser.notifications));
         const updatedNotifications = currentNotificationsCopy.map((n: Notification) => ({ ...n, read: true }));
-
-        // Optimistically update local state for immediate UI feedback
+        
         setAppUser(prev => prev ? {...prev, notifications: updatedNotifications } : null);
         
-        // Persist to Firestore
-        // Also update lastNotificationCheckTimestamp to serverTimestamp when notifications are marked read.
-        // This is slightly different from other timestamp updates which use the latest notification's createdAt.
-        // This ensures that re-opening the dropdown doesn't immediately re-trigger old 'new partner' notifications if their
-        // completion timestamp was slightly after the last actual event notification.
         updateDoc(userDocRef, {
             notifications: updatedNotifications,
             lastNotificationCheckTimestamp: serverTimestamp() 
         }).catch(error => {
             console.error("Error updating notifications as read in Firestore:", error);
-            // Optionally revert local state if Firestore update fails, or show error to user
-            setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null); // Revert
+            setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null); 
             toast({ title: "Erro ao Marcar Notificações", description: "Não foi possível marcar notificações como lidas no servidor.", variant: "destructive" });
         });
     } else if (appUser.notifications && appUser.notifications.length === 0){
@@ -660,30 +645,26 @@ export default function MainAppLayout({
       return;
     }
     
-    // Optimistically update local state
-    const updatedLocalNotifications = appUser.notifications?.filter(n => n.id !== notificationId) || [];
-    setAppUser(prev => prev ? { ...prev, notifications: updatedLocalNotifications } : null);
-
     const userDocRef = doc(firestore, "users", appUser.uid);
     try {
-        const batch = writeBatch(firestore);
-        const userSnap = await getDoc(userDocRef); // Get current server state to avoid race conditions
-
-        if (userSnap.exists()) {
+        await runTransaction(firestore, async (transaction) => {
+            const userSnap = await transaction.get(userDocRef);
+            if (!userSnap.exists()) {
+                 throw new Error("User document not found for dismissing notification.");
+            }
             const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
             const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
-            batch.update(userDocRef, { notifications: updatedDbNotifications });
-            await batch.commit();
-            // No need to re-setAppUser here if onSnapshot is correctly re-fetching from DB
-            toast({ title: "Notificação Removida", description: "A notificação foi removida permanentemente.", variant: "default", duration: 3000 });
-        } else {
-             throw new Error("User document not found for dismissing notification.");
-        }
+            transaction.update(userDocRef, { notifications: updatedDbNotifications });
+        });
+
+        setAppUser(prev => {
+            if (!prev || !prev.notifications) return prev;
+            return { ...prev, notifications: prev.notifications.filter(n => n.id !== notificationId) };
+        });
+        toast({ title: "Notificação Removida", description: "A notificação foi removida permanentemente.", variant: "default", duration: 3000 });
 
     } catch (error: any) {
         console.error("Error dismissing notification from Firestore:", error);
-        // Revert optimistic update if server update fails
-        setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null);
         toast({ title: "Erro ao Remover", description: error.message || "Não foi possível remover a notificação do sistema.", variant: "destructive" });
     }
   };
@@ -707,6 +688,28 @@ export default function MainAppLayout({
       return;
     }
      router.push('/user/coins');
+  };
+
+  const handleFloatingChatButtonClick = () => {
+    if (!appUser || !appUser.uid) {
+      toast({ title: "Login Necessário", description: "Faça login para usar o Fervo Chat.", variant: "destructive" });
+      return;
+    }
+    if (!appUser.questionnaireCompleted) {
+      toast({ title: "Complete seu Perfil", description: "Preencha suas preferências e localização para usar o Fervo Chat!", variant: "default", duration: 6000 });
+      return;
+    }
+     if (!appUser.address?.city || !appUser.address?.state) {
+      toast({ title: "Localização Necessária", description: "Defina sua cidade e estado no perfil para usar o Fervo Chat da sua região.", variant: "default", duration: 7000 });
+      return;
+    }
+    // If all checks pass, the chat is handled by the MapPage component's widget logic
+    // This button is now informational.
+    toast({
+      title: "Fervo Chat nos Eventos!",
+      description: "O chat agora acontece dentro de cada evento. Faça check-in em um evento para participar da conversa exclusiva e interagir com outros participantes!",
+      duration: 7000,
+    });
   };
 
 
@@ -749,7 +752,7 @@ export default function MainAppLayout({
       {appUser && (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
-             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={40} logoHeight={40} className="mr-auto md:mr-4" /> {/* Logo always visible and to the left */}
+             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={40} logoHeight={40} className="mr-auto md:mr-4" /> 
             
             <nav className="flex items-center gap-1 ml-auto sm:gap-2 md:gap-4">
               {appUser?.role === UserRole.USER && (
@@ -848,7 +851,7 @@ export default function MainAppLayout({
                         onClick={handleCoinsClick}
                         title="Minhas FervoCoins"
                       >
-                         {isFetchingCoinDetails ? <Loader2 className="w-5 h-5 animate-spin" /> : <Coins className="w-5 h-5" />}
+                         <Coins className="w-5 h-5" />
                         <span className="sr-only">Moedas</span>
                       </Button>
                       {totalFervoCoins > 0 && (
@@ -951,6 +954,22 @@ export default function MainAppLayout({
           </div>
         )}
       </main>
+       {appUser && appUser.role === UserRole.USER && appUser.uid && appUser.questionnaireCompleted && (
+        <Button
+            variant="default"
+            size="lg"
+            className={cn(
+                "fixed bottom-6 right-6 sm:bottom-8 sm:right-8 rounded-full shadow-xl z-40 flex items-center gap-2",
+                "bg-gradient-to-br from-primary to-secondary text-primary-foreground hover:from-primary/90 hover:to-secondary/90"
+            )}
+            onClick={handleFloatingChatButtonClick}
+            title="Informações sobre o Fervo Chat"
+        >
+            <MessageSquare className="h-5 w-5" />
+            <span className="hidden sm:inline">Fervo Chat</span>
+            <span className="sr-only">Informações sobre o Fervo Chat</span>
+        </Button>
+      )}
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal
           isOpen={isQrScannerOpen}
