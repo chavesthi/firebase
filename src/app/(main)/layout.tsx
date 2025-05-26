@@ -124,7 +124,7 @@ const useAuthAndUserSubscription = () => {
                         isActive = true;
                     }
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: isActive}));
-                    setLoading(false);
+                    setLoading(false); // setLoading(false) moved here to ensure it's called
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: false}));
@@ -196,7 +196,7 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
             console.log('Notification permission granted.');
-            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE"; // Fallback, prefer env variable
+            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE"; // Fallback
             if (!vapidKeyToUse || vapidKeyToUse === "SUA_CHAVE_PUBLICA_VAPID_AQUI") {
                 console.warn("VAPID key is not defined or is a placeholder. Push notifications might not work correctly.");
                 toast({ title: "Configuração Incompleta", description: "A chave VAPID para notificações não está configurada.", variant: "destructive"});
@@ -213,7 +213,9 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
                   fcmTokens: arrayUnion(currentToken),
                 });
                 console.log('FCM token saved to Firestore.');
-                setAppUser(prev => prev ? { ...prev, fcmTokens: [...existingTokens, currentToken] } : null);
+                if(setAppUser) { // Ensure setAppUser is defined
+                  setAppUser(prev => prev ? { ...prev, fcmTokens: [...existingTokens, currentToken] } : null);
+                }
               }
             } else {
               console.log('No registration token available. Request permission to generate one.');
@@ -617,14 +619,19 @@ export default function MainAppLayout({
         const currentNotificationsCopy = JSON.parse(JSON.stringify(appUser.notifications));
         const updatedNotifications = currentNotificationsCopy.map((n: Notification) => ({ ...n, read: true }));
 
+        // Optimistically update client state
         setAppUser(prev => prev ? {...prev, notifications: updatedNotifications } : null);
 
+        // Update Firestore in the background
         updateDoc(userDocRef, {
             notifications: updatedNotifications,
+            // Update lastNotificationCheckTimestamp to ensure new partner notifications aren't re-triggered
+            // if they were created before this read action but after the last check.
             lastNotificationCheckTimestamp: serverTimestamp()
         }).catch(error => {
             console.error("Error updating notifications as read in Firestore:", error);
-            setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null);
+            // Revert client state on error if needed, or simply log
+            setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null); // Revert
             toast({ title: "Erro ao Marcar Notificações", description: "Não foi possível marcar notificações como lidas no servidor.", variant: "destructive" });
         });
     } else if (appUser.notifications && appUser.notifications.length === 0){
@@ -648,17 +655,9 @@ export default function MainAppLayout({
             const currentDbNotifications: Notification[] = userSnap.data()?.notifications || [];
             const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
             transaction.update(userDocRef, { notifications: updatedDbNotifications });
-
-            // Additionally, delete the partner document if it was a "new partner" notification
-            // This part should be specific and careful. Let's assume partnerId is part of notification data.
-            const notificationToRemove = currentDbNotifications.find(n => n.id === notificationId);
-            if (notificationToRemove?.partnerId && notificationToRemove.id.startsWith("partner_")) {
-                // This logic might be too aggressive or incorrect depending on how notifications are structured
-                // For now, only removing from the user's list.
-                // If the goal is to delete the partner record itself, that's a different operation.
-            }
         });
 
+        // Optimistically update client state
         setAppUser(prev => {
             if (!prev || !prev.notifications) return prev;
             return { ...prev, notifications: prev.notifications.filter(n => n.id !== notificationId) };
@@ -707,6 +706,15 @@ export default function MainAppLayout({
     }
      router.push('/user/coins');
   };
+
+  const handleChatIconClick = () => {
+    toast({
+        title: "Fervo Chat nos Eventos!",
+        description: "O chat agora é específico para cada evento. Para participar, primeiro faça check-in no evento desejado através do mapa.",
+        duration: 7000
+    });
+  };
+
 
   if (loading) {
     return (
@@ -948,6 +956,25 @@ export default function MainAppLayout({
         )}
       </main>
 
+      {/* Floating Chat Info Button */}
+      {appUser && appUser.questionnaireCompleted && appUser.role === UserRole.USER && (
+        <div className="fixed bottom-6 right-6 z-40">
+            <Button
+                onClick={handleChatIconClick}
+                className={cn(
+                    "rounded-full h-14 w-14 p-0 shadow-lg text-white flex items-center justify-center",
+                    "bg-gradient-to-br from-primary to-accent hover:from-primary/80 hover:to-accent/80",
+                    "animate-bounce hover:animate-none" // Simple bounce animation
+                )}
+                aria-label="Informações sobre o Fervo Chat"
+                title="Informações sobre o Fervo Chat"
+            >
+                <MessageSquare className="h-7 w-7" />
+            </Button>
+        </div>
+      )}
+
+
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
         <QrScannerModal
           isOpen={isQrScannerOpen}
@@ -958,3 +985,4 @@ export default function MainAppLayout({
     </div>
   );
 }
+
