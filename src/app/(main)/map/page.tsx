@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardDescription as UICardDescription } from '@/components/ui/card'; // Renamed CardTitle to UICardTitle
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -26,7 +26,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore, auth } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet'; // Added SheetTitle
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import {
@@ -45,7 +45,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogTitle as RadixAlertDialogTitle, // Renamed to avoid conflict if any
 } from "@/components/ui/alert-dialog";
 import { AlertDialogTrigger } from '@radix-ui/react-alert-dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -149,10 +149,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15',
+  [VenueType.STAND_UP]: '#FACC15', // Yellow-ish
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
-  [VenueType.LGBT]: '#F97316',
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Pink-ish
+  [VenueType.LGBT]: '#F97316', // Orange-ish
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -179,13 +179,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))';
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Purple as default blink target
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'hsl(var(--destructive))';
+    effectiveBlinkHighlightColor = 'hsl(var(--destructive))'; // Fallback to red if purple is the base
   }
 
 
@@ -380,7 +380,7 @@ const MapContentAndLogic = () => {
                 console.log("MapContentAndLogic: Generated chatRoomId:", generatedChatRoomId);
               } else {
                 setChatRoomId(null);
-                console.log("MapContentAndLogic: City/State not set for old chatRoomId generation.");
+                console.log("MapContentAndLogic: City/State not set for chatRoomId generation.");
               }
 
             } else {
@@ -468,11 +468,11 @@ const MapContentAndLogic = () => {
             lng: position.coords.longitude,
           };
           setActualUserLocation(loc);
-          setUserLocation(loc);
+          setUserLocation(loc); // Update map center when actual location is found
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo
           setUserLocation(defaultLoc);
           setActualUserLocation(null);
           if (!isPreviewMode) {
@@ -564,8 +564,8 @@ const MapContentAndLogic = () => {
             setUserLocation(venueToSelect.location);
           }
         } else {
-          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
-          router.replace('/map', { scroll: false });
+          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); // Clear selection if it matches but venue not found (e.g. after deletion)
+          router.replace('/map', { scroll: false }); // Remove query params if venue not found
           if (!isPreviewMode) {
             toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
           }
@@ -576,12 +576,15 @@ const MapContentAndLogic = () => {
 
 
   const fetchVenueEvents = async (venueId: string) => {
+    // Avoid refetching if events are already loaded for the selected venue,
+    // unless explicitly told to (e.g. by a refresh mechanism not yet implemented)
     if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return;
     setIsLoadingEvents(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
 
+      // Use onSnapshot to listen for real-time updates to events
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const eventsData = snapshot.docs.map(docSnap => ({
           id: docSnap.id,
@@ -595,7 +598,7 @@ const MapContentAndLogic = () => {
         toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
         setIsLoadingEvents(false);
       });
-      return unsubscribe;
+      return unsubscribe; // Return the unsubscribe function for cleanup
     } catch (error) {
       console.error("Error fetching venue events:", error);
       toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
@@ -603,19 +606,23 @@ const MapContentAndLogic = () => {
     }
   };
 
+  // Effect to fetch events when a venue is selected or if events are not yet loaded
   useEffect(() => {
     let unsubscribeEvents: (() => void) | undefined;
-    if (selectedVenue && !selectedVenue.events) {
+    if (selectedVenue && !selectedVenue.events) { // Only fetch if events are not already there
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
+      // If events are already loaded, just ensure rating form is reset for this venue
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
     }
+    // Cleanup function to unsubscribe from event listener when component unmounts or selectedVenue changes
     return () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
-  }, [selectedVenue]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVenue]); // Re-run if selectedVenue changes
 
 
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
@@ -678,18 +685,18 @@ const MapContentAndLogic = () => {
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false;
+      return false; // Should not happen if isAnyFilterActive is true
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground";
-    let hoverColorClass = "hover:text-secondary";
+    let colorClass = "text-foreground"; // Default color
+    let hoverColorClass = "hover:text-secondary"; // Use secondary (purple) for hover of non-active
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-primary";
+      colorClass = "text-primary"; // Active filter uses primary color
       hoverColorClass = "hover:text-primary/80";
     }
 
@@ -729,7 +736,7 @@ const MapContentAndLogic = () => {
             if (existingRatingSnap.exists()) {
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
-                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) {
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { // Special case for single existing rating being updated
                     newAverageRating = currentRating;
                 }
 
@@ -761,8 +768,9 @@ const MapContentAndLogic = () => {
         toast({ title: "Avaliação Enviada!", description: "Obrigado pelo seu feedback!", variant: "default" });
         setCurrentRating(0);
         setCurrentComment('');
-        setCurrentlyRatingEventId(null);
+        setCurrentlyRatingEventId(null); // Clear which event is being rated
 
+        // After successfully rating an event, trigger update of the partner's overall venue rating
         if (selectedVenue) {
             await updatePartnerOverallRating(selectedVenue.id);
         }
@@ -809,7 +817,9 @@ const MapContentAndLogic = () => {
         console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com:", title, text, webShareUrl);
         (window as any).AndroidShareInterface.shareEvent(title, text, webShareUrl);
         finalSharedSuccessfully = true;
-        toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
+        if (finalSharedSuccessfully) {
+           toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
+        }
       } catch (nativeShareError: any) {
         console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
       }
@@ -818,7 +828,9 @@ const MapContentAndLogic = () => {
         console.log("Tentando compartilhar via AndroidShareInterface.launchShareIntent com:", customShareUrl);
         (window as any).AndroidShareInterface.launchShareIntent(customShareUrl);
         finalSharedSuccessfully = true;
-        toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android (legacy).", variant: "default" });
+        if (finalSharedSuccessfully) {
+          toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android (legacy).", variant: "default" });
+        }
       } catch (legacyNativeError: any) {
         console.warn('AndroidShareInterface.launchShareIntent falhou:', legacyNativeError);
       }
@@ -829,7 +841,7 @@ const MapContentAndLogic = () => {
       try {
         await navigator.share({ title, text, url: webShareUrl });
         finalSharedSuccessfully = true;
-         if (finalSharedSuccessfully) { // Ensure this toast only shows if navigator.share succeeded
+         if (finalSharedSuccessfully) {
             toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
         }
       } catch (shareError: any) {
@@ -857,21 +869,18 @@ const MapContentAndLogic = () => {
 
       try {
         const { newCoinTotal, newCouponGenerated } = await runTransaction(firestore, async (transaction) => {
-          // --- All READS first ---
           const userShareSnap = await transaction.get(userShareDataRef);
           const userSnap = await transaction.get(userDocRef);
 
-          // --- All DATA EXTRACTION from reads immediately after ---
           if (!userSnap.exists()) {
             throw new Error("Usuário não encontrado para premiar moedas.");
           }
-          const userData = userSnap.data(); // Extract data
-          const currentShareCount = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0; // Extract data
+          const userData = userSnap.data();
+          const currentShareCount = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
           
           const venueCoinsMap: UserVenueCoins = userData.venueCoins || {};
           const currentVenueCoinsForPartner = venueCoinsMap[partnerId] || 0;
 
-          // --- All LOGIC based on extracted data ---
           if (currentShareCount >= 10) {
              throw new Error("Limite de compartilhamento (10) atingido para este evento.");
           }
@@ -890,7 +899,6 @@ const MapContentAndLogic = () => {
           const netCoinChangeForPartner = coinsGained - coinsSpentOnCoupon;
           const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + netCoinChangeForPartner;
 
-          // --- All WRITES last ---
           transaction.set(userShareDataRef, { shareCount: increment(1) }, { merge: true });
           
           const updatesForUserDoc: Record<string, any> = {
@@ -970,7 +978,7 @@ const MapContentAndLogic = () => {
         } else {
           if (currentFavorites.length >= 20) {
               toast({ title: "Limite de Favoritos Atingido", description: "Você pode ter no máximo 20 locais favoritos.", variant: "destructive", duration: 4000 });
-              return;
+              return; // Prevent transaction from proceeding
           }
           updatedFavorites = [...currentFavorites, venueId];
           toast({ title: "Adicionado aos Favoritos!", description: `${venueName} agora é um dos seus fervos favoritos!`, variant: "default" });
@@ -1004,7 +1012,7 @@ const MapContentAndLogic = () => {
       }
 
       const batch = writeBatch(firestore);
-      messagesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+      messagesSnapshot.docs.forEach(docSnap => batch.delete(docSnap.ref)); // Corrected variable name
       await batch.commit();
 
       toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${selectedEventForChat.eventName} foram apagadas.`, variant: "default" });
@@ -1028,8 +1036,9 @@ const MapContentAndLogic = () => {
         return;
     }
     setSelectedEventForChat(event);
-    setChatRoomId(event.id);
+    setChatRoomId(event.id); // This will be the eventId for event-specific chats
     setIsChatWidgetOpen(true);
+    console.log("Opening chat for event:", event.eventName, "Room ID:", event.id);
   };
 
 
@@ -1075,7 +1084,7 @@ const MapContentAndLogic = () => {
         )}
       >
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg text-primary">Filtrar Locais</CardTitle>
+          <h2 className="text-lg text-primary">Filtrar Locais</h2> {/* Changed CardTitle to h2 */}
           <Button variant="ghost" size="icon" onClick={() => setFilterSidebarOpen(false)} className="text-primary hover:text-secondary hover:bg-secondary/10">
             <X className="w-5 h-5" />
           </Button>
@@ -1140,8 +1149,50 @@ const MapContentAndLogic = () => {
                 <Filter className="w-5 h-5" />
             </Button>
             )}
-             <Logo />
+             <Logo logoWidth={50} logoHeight={50} />
         </div>
+
+        {/* Chat Floating Action Button */}
+        {currentAppUser && currentAppUser.questionnaireCompleted && (
+             <Button
+                onClick={() => {
+                    if (isLoadingUserProfileForChat) {
+                        toast({ title: "Aguarde", description: "Carregando informações do perfil para o chat...", variant: "default" });
+                        return;
+                    }
+                    if (currentAppUser && currentAppUser.address && currentAppUser.address.city && currentAppUser.address.state) {
+                        const city = currentAppUser.address.city;
+                        const state = currentAppUser.address.state;
+                        const normalizedCity = city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
+                        const normalizedState = state.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
+                        const generatedChatRoomId = `${normalizedState}_${normalizedCity}`;
+                        setChatRoomId(generatedChatRoomId); // Set chat room ID based on general user location
+                        setSelectedEventForChat(null); // Ensure event-specific chat is not triggered
+                        setIsChatWidgetOpen(prev => !prev);
+                        console.log("Toggling general chat widget. Room ID:", generatedChatRoomId);
+                    } else {
+                        toast({
+                            title: "Localização Necessária",
+                            description: "Por favor, complete sua cidade e estado no seu perfil para usar o Fervo Chat regional.",
+                            variant: "destructive",
+                            duration: 5000,
+                            action: <Button variant="outline" size="sm" onClick={() => router.push('/user/profile')}>Completar Perfil</Button>
+                        });
+                    }
+                }}
+                className={cn(
+                    "fixed bottom-6 right-6 z-30 rounded-full h-14 w-auto px-4 shadow-lg text-white flex items-center justify-center",
+                    "bg-gradient-to-br from-primary to-accent hover:from-primary/80 hover:to-accent/80",
+                    isChatWidgetOpen ? "animate-none" : "animate-bounce hover:animate-none"
+                )}
+                aria-label={isChatWidgetOpen ? "Fechar Fervo Chat" : "Abrir Fervo Chat"}
+                title={isChatWidgetOpen ? "Fechar Fervo Chat" : "Abrir Fervo Chat"}
+                size="lg"
+            >
+                {isChatWidgetOpen ? <XCircleIcon className="h-6 w-6 mr-2" /> : <MessageSquare className="h-6 w-6 mr-2" />}
+                Fervo Chat
+            </Button>
+        )}
 
 
         {GOOGLE_MAPS_API_KEY && mapsApi && (
@@ -1195,8 +1246,8 @@ const MapContentAndLogic = () => {
             if (!isOpen) {
                 const venueIdInParams = searchParams.get('venueId');
                 setSelectedVenue(null);
-                setSelectedEventForChat(null);
-                setIsChatWidgetOpen(false);
+                setSelectedEventForChat(null); // Clear event for chat when sheet closes
+                setIsChatWidgetOpen(false); // Close event-specific chat too
 
                 if (isPreviewMode && venueIdInParams) {
                     router.replace('/map', { scroll: false });
@@ -1225,9 +1276,9 @@ const MapContentAndLogic = () => {
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4 z-10">
                 <div className="flex-1">
-                    <CardTitle className="text-2xl font-bold text-secondary">
+                    <SheetTitle className="text-2xl font-bold text-secondary"> {/* Changed CardTitle to SheetTitle */}
                     {selectedVenue.name}
-                    </CardTitle>
+                    </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="hsl(var(--primary))" readOnly />
@@ -1258,13 +1309,13 @@ const MapContentAndLogic = () => {
                         {currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? (
                             <HeartOff className="w-4 h-4 sm:w-5 sm:w-5 fill-current" />
                         ) : (
-                            <Heart className="w-4 h-4 sm:w-5 sm:w-5 fill-current" />
+                            <Heart className="w-4 h-4 sm:w-5 sm:w-5" />
                         )}
                       </Button>
                    )}
                    <SheetClose asChild>
                     <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground flex-shrink-0 -mt-1 -mr-2 sm:-mr-0 h-8 w-8 sm:h-9 sm:w-9">
-                        <X className="w-4 h-4 sm:w-5 sm:w-5" />
+                        <X className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span className="sr-only">Fechar</span>
                     </Button>
                    </SheetClose>
@@ -1330,7 +1381,7 @@ const MapContentAndLogic = () => {
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && (
+                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && ( // Show only if not embedded
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1361,7 +1412,7 @@ const MapContentAndLogic = () => {
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
                                   <div className="flex-1">
-                                    <CardTitle className="text-md text-secondary mb-1">{event.eventName}</CardTitle>
+                                    <h4 className="text-md text-secondary mb-1 font-semibold">{event.eventName}</h4> {/* Changed to h4 */}
                                     {isHappening && (
                                       <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                                         <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
@@ -1371,26 +1422,26 @@ const MapContentAndLogic = () => {
                                         <Badge variant="outline" className="mt-1 text-xs border-destructive text-destructive">Encerrado</Badge>
                                     )}
                                   </div>
-                                  <div className="flex items-center space-x-1">
+                                  <div className="flex items-center space-x-0.5"> {/* Reduced space for smaller screens */}
                                       <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="text-accent hover:text-accent/80 -mr-2 -mt-1"
+                                          className="text-accent hover:text-accent/80 -mr-1 -mt-1 h-7 w-7" // Smaller icon button
                                           onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime, event.eventName, event.shareRewardsEnabled)}
                                           title={eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!"}
                                           disabled={eventHasEnded || (isPreviewMode && currentAppUser?.role === UserRole.PARTNER)}
                                       >
-                                          <Share2 className="w-5 h-5" />
+                                          <Share2 className="w-4 h-4" /> {/* Smaller icon */}
                                       </Button>
                                       <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="text-primary hover:text-primary/80 -mr-2 -mt-1"
+                                          className="text-primary hover:text-primary/80 -mr-1 -mt-1 h-7 w-7" // Smaller icon button
                                           onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
                                           title={eventHasEnded || event.startDateTime.toDate() < new Date() ? "Evento já começou ou encerrou" : "Ativar notificação para este evento"}
                                           disabled={eventHasEnded || event.startDateTime.toDate() < new Date()}
                                       >
-                                          <Bell className="w-5 h-5" />
+                                          <Bell className="w-4 h-4" /> {/* Smaller icon */}
                                       </Button>
                                   </div>
                               </div>
@@ -1432,7 +1483,10 @@ const MapContentAndLogic = () => {
 
                               {currentUser && currentAppUser?.role === UserRole.USER && userCheckIns[event.id] && (
                                 <Button
-                                  onClick={() => openEventChat(event)}
+                                  onClick={() => {
+                                    console.log("Button clicked for event chat:", event);
+                                    openEventChat(event);
+                                  }}
                                   variant="outline"
                                   className="w-full mt-3 border-primary text-primary hover:bg-primary/10"
                                   size="sm"
@@ -1458,7 +1512,7 @@ const MapContentAndLogic = () => {
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
                                     onChange={(e) => {
-                                      setCurrentlyRatingEventId(event.id);
+                                      setCurrentlyRatingEventId(event.id); // Ensure we're tracking which event this comment/rating is for
                                       setCurrentComment(e.target.value);
                                     }}
                                     className="mt-2 text-xs"
@@ -1469,11 +1523,12 @@ const MapContentAndLogic = () => {
                                     size="sm"
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
+                                        // If user starts rating a different event, reset previous rating state
                                         if(currentlyRatingEventId !== event.id && !isSubmittingRating) {
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id);
+                                        setCurrentlyRatingEventId(event.id); // Confirm this event is being rated
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1568,7 +1623,7 @@ const MapContentAndLogic = () => {
                           <div className="flex items-center gap-2">
                               <MessageSquare className="h-5 w-5 text-primary" />
                               <div>
-                                  <CardTitle className="text-md sm:text-lg text-primary leading-tight truncate max-w-[150px] sm:max-w-[200px]">Chat: {selectedEventForChat.eventName}</CardTitle>
+                                  <h2 className="text-md sm:text-lg text-primary leading-tight truncate max-w-[150px] sm:max-w-[200px] font-semibold">Chat: {selectedEventForChat.eventName}</h2> {/* Changed to h2 for semantics */}
                               </div>
                           </div>
                           <div className="flex items-center gap-1">
@@ -1579,12 +1634,10 @@ const MapContentAndLogic = () => {
                                   </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                      <AlertDialogTitle>Confirmar Limpeza do Chat</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                          Tem certeza que deseja apagar TODAS as mensagens do chat "{selectedEventForChat.eventName}"? Esta ação é permanente e afetará todos os usuários.
-                                      </AlertDialogDescription>
-                                  </AlertDialogHeader>
+                                  <RadixAlertDialogTitle>Confirmar Limpeza do Chat</RadixAlertDialogTitle>
+                                  <AlertDialogDescription>
+                                      Tem certeza que deseja apagar TODAS as mensagens do chat "{selectedEventForChat.eventName}"? Esta ação é permanente e afetará todos os usuários.
+                                  </AlertDialogDescription>
                                   <AlertDialogFooter>
                                       <AlertDialogCancel disabled={isDeletingChat}>Cancelar</AlertDialogCancel>
                                       <AlertDialogAction onClick={handleClearChat} disabled={isDeletingChat} className="bg-destructive hover:bg-destructive/90">
@@ -1604,7 +1657,7 @@ const MapContentAndLogic = () => {
                       </CardHeader>
                       <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
                           <ChatMessageList
-                              chatRoomId={selectedEventForChat.id}
+                              chatRoomId={selectedEventForChat.id} // Use event ID for event-specific chat
                               currentUserId={currentUser.uid}
                               isChatSoundMuted={isChatSoundMuted}
                               chatClearedTimestamp={chatClearedTimestamp}
@@ -1612,7 +1665,7 @@ const MapContentAndLogic = () => {
                       </CardContent>
                       <div className="p-3 sm:p-4 border-t border-border bg-card">
                           <ChatInputForm
-                              chatRoomId={selectedEventForChat.id}
+                              chatRoomId={selectedEventForChat.id} // Use event ID
                               userId={currentUser.uid}
                               userName={chatUserProfile.name || 'Usuário Anônimo'}
                               userPhotoURL={chatUserProfile.photoURL || null}
@@ -1620,6 +1673,46 @@ const MapContentAndLogic = () => {
                       </div>
                     </Card>
                   )}
+
+                  {/* Regional Chat Widget - Rendered based on main FAB click */}
+                   {isChatWidgetOpen && currentUser && chatUserProfile && !selectedEventForChat && chatRoomId && (
+                     <Card className="mt-6 flex flex-col max-h-[60vh] border-primary/50 bg-background/90 backdrop-blur-sm">
+                       <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between sticky top-0 bg-background/95 z-10">
+                           <div className="flex items-center gap-2">
+                               <MessageSquare className="h-5 w-5 text-primary" />
+                               <div>
+                                   <h2 className="text-md sm:text-lg text-primary leading-tight truncate max-w-[150px] sm:max-w-[200px] font-semibold">Chat: {chatUserProfile.address?.city || 'Sua Região'}</h2> {/* Changed to h2 */}
+                               </div>
+                           </div>
+                           <div className="flex items-center gap-1">
+                             {/* No clear button for regional chat for now, or needs different logic */}
+                             <Button variant="ghost" size="icon" onClick={() => setIsChatSoundMuted(prev => !prev)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary" title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}>
+                                 {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
+                             </Button>
+                             <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Fechar chat">
+                                 <XCircleIcon className="h-4 w-4 sm:h-5 sm:h-5"/>
+                             </Button>
+                           </div>
+                       </CardHeader>
+                       <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
+                           <ChatMessageList
+                               chatRoomId={chatRoomId} // Regional chat room ID
+                               currentUserId={currentUser.uid}
+                               isChatSoundMuted={isChatSoundMuted}
+                               chatClearedTimestamp={null} // Regional chat doesn't use client-side clear timestamp for now
+                           />
+                       </CardContent>
+                       <div className="p-3 sm:p-4 border-t border-border bg-card">
+                           <ChatInputForm
+                               chatRoomId={chatRoomId} // Regional chat room ID
+                               userId={currentUser.uid}
+                               userName={chatUserProfile.name || 'Usuário Anônimo'}
+                               userPhotoURL={chatUserProfile.photoURL || null}
+                           />
+                       </div>
+                     </Card>
+                   )}
+
 
               </div>
             </ScrollArea>
