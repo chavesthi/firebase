@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Corrected import for CardTitle and CardDescription
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -149,10 +149,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15',
+  [VenueType.STAND_UP]: '#FACC15', // Amarelo Ouro
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
-  [VenueType.LGBT]: '#F97316',
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Rosa choque
+  [VenueType.LGBT]: '#F97316', // Laranja
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -179,13 +179,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))';
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Default roxo
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'hsl(var(--destructive))';
+    effectiveBlinkHighlightColor = 'hsl(var(--destructive))'; // Se o roxo for igual à cor base, usa vermelho como blink
   }
 
 
@@ -338,15 +338,14 @@ const MapContentAndLogic = () => {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
+  // Event-Specific Chat States (moved from removed chat page, managed by map page now when event chat is opened)
   const [selectedEventForChat, setSelectedEventForChat] = useState<VenueEvent | null>(null);
   const [isEventChatWidgetOpen, setIsEventChatWidgetOpen] = useState(false);
   const [isEventChatSoundMuted, setIsEventChatSoundMuted] = useState(false);
   const [showClearEventChatDialog, setShowClearEventChatDialog] = useState(false);
-  const [isDeletingEventChat, setIsDeletingEventChat] = useState(false);
+  const [isDeletingEventChat, setIsDeletingEventChat] = useState(false); // For potential delete logic
   const [eventChatClearedTimestamp, setEventChatClearedTimestamp] = useState<number | null>(null);
-  const [chatUserProfile, setChatUserProfile] = useState<{name: string, photoURL: string | null, city: string, state: string } | null>(null);
-  const [isChatProfileLoading, setIsChatProfileLoading] = useState(true);
-  const [chatRoomId, setChatRoomId] = useState<string | null>(null);
+
 
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
   const barAudioRef = useRef<HTMLAudioElement>(null);
@@ -362,46 +361,21 @@ const MapContentAndLogic = () => {
         const userDocRef = doc(firestore, "users", user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
-              const userData = userDocSnap.data() as MapPageAppUser;
+              const userData = userDocSnap.data() as MapPageAppUser; // Cast to include eventShareCounts
               setCurrentAppUser(userData);
-              setIsChatProfileLoading(true);
-              if (userData.name && userData.address?.city && userData.address?.state) {
-                setChatUserProfile({
-                  name: userData.name,
-                  photoURL: userData.photoURL || null,
-                  city: userData.address.city,
-                  state: userData.address.state,
-                });
-                const cityNorm = userData.address.city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
-                const stateNorm = userData.address.state.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
-                const generatedChatRoomId = `${stateNorm}_${cityNorm}`;
-                setChatRoomId(generatedChatRoomId);
-                console.log("MapPage: ChatRoomId gerado:", generatedChatRoomId);
-              } else {
-                setChatUserProfile(null);
-                setChatRoomId(null);
-              }
-              setIsChatProfileLoading(false);
             } else {
-              const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null };
+              // This case might happen if a user is authenticated but their Firestore doc is somehow missing
+              // Or for a very new user before their doc is fully populated by login-form's handleSuccessfulAuth
+              const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null, eventShareCounts: {} };
               setCurrentAppUser(basicProfile);
-              setChatUserProfile(null);
-              setChatRoomId(null);
-              setIsChatProfileLoading(false);
             }
         }, (error) => {
             console.error("MapContentAndLogic: Error fetching user document with onSnapshot:", error);
             setCurrentAppUser(null);
-            setChatUserProfile(null);
-            setChatRoomId(null);
-            setIsChatProfileLoading(false);
         });
         return () => unsubscribeUser();
       } else {
         setCurrentAppUser(null);
-        setChatUserProfile(null);
-        setChatRoomId(null);
-        setIsChatProfileLoading(false);
       }
     });
     return () => unsubscribeAuth();
@@ -466,15 +440,16 @@ const MapContentAndLogic = () => {
             lng: position.coords.longitude,
           };
           setActualUserLocation(loc);
+          // Only set userLocation (for map centering) if no specific venue is targeted by query params
           if (!searchParams.get('venueId')) {
             setUserLocation(loc);
           }
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
-          setUserLocation(defaultLoc);
-          setActualUserLocation(null);
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo default
+          setUserLocation(defaultLoc); // Center map on default if geolocation fails
+          setActualUserLocation(null); // No actual user location obtained
           if (!isPreviewMode) {
             toast({ title: "Localização Desativada", description: "Não foi possível obter sua localização. Usando localização padrão de SP.", variant: "default" });
           }
@@ -489,7 +464,7 @@ const MapContentAndLogic = () => {
           toast({ title: "Geolocalização Indisponível", description: "Seu navegador não suporta geolocalização. Usando localização padrão de SP.", variant: "default" });
        }
     }
-  }, [toast, isPreviewMode, searchParams]);
+  }, [toast, isPreviewMode, searchParams]); // searchParams dependency added
 
   useEffect(() => {
     setIsLoadingVenues(true);
@@ -556,16 +531,17 @@ const MapContentAndLogic = () => {
    useEffect(() => {
     const venueIdFromQuery = searchParams.get('venueId');
     if (venueIdFromQuery && venues.length > 0) {
-      if (selectedVenue?.id !== venueIdFromQuery) {
+      if (selectedVenue?.id !== venueIdFromQuery) { // Prevent re-selection if already selected
         const venueToSelect = venues.find(v => v.id === venueIdFromQuery);
         if (venueToSelect) {
           setSelectedVenue(venueToSelect);
-          if (venueToSelect.location) {
+          if (venueToSelect.location) { // Center map on the selected venue
             setUserLocation(venueToSelect.location);
           }
         } else {
-          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
-          router.replace('/map', { scroll: false });
+          // If venue not found, clear selection and query params to avoid stale state
+          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); // Clear only if it was the one being searched
+          router.replace('/map', { scroll: false }); // Remove query params
           if (!isPreviewMode) {
             toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
           }
@@ -576,47 +552,40 @@ const MapContentAndLogic = () => {
 
 
   const fetchVenueEvents = async (venueId: string) => {
+    // Only fetch if it's a new venue or events are not yet loaded for the current selectedVenue
     if (!selectedVenue || selectedVenue.id !== venueId || (selectedVenue.events && selectedVenue.events.length > 0)) return;
     setIsLoadingEvents(true);
     try {
       const eventsCollectionRef = collection(firestore, 'users', venueId, 'events');
       const q = query(eventsCollectionRef, where('visibility', '==', true), orderBy('startDateTime', 'asc'));
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const eventsData = snapshot.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        } as VenueEvent));
+      // Using getDocs for initial load when venue is selected, onSnapshot can be added if real-time event updates are critical for an open sheet
+      const snapshot = await getDocs(q);
+      const eventsData = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as VenueEvent));
 
-        setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
-        setIsLoadingEvents(false);
-      }, (error) => {
-        console.error("Error fetching venue events with onSnapshot:", error);
-        toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
-        setIsLoadingEvents(false);
-      });
-      return unsubscribe;
+      setSelectedVenue(prev => prev ? { ...prev, events: eventsData } : null);
     } catch (error) {
       console.error("Error fetching venue events:", error);
       toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
+    } finally {
       setIsLoadingEvents(false);
     }
   };
 
   useEffect(() => {
-    let unsubscribeEvents: (() => void) | undefined;
-    if (selectedVenue && !selectedVenue.events) {
-       fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
+    if (selectedVenue && !selectedVenue.events) { // Fetch events only if not already fetched
+       fetchVenueEvents(selectedVenue.id);
     } else if (selectedVenue && selectedVenue.events) {
+      // Reset rating state when a new venue's events are loaded or venue changes
       setCurrentlyRatingEventId(null);
       setCurrentRating(0);
       setCurrentComment('');
     }
-    return () => {
-        if (unsubscribeEvents) unsubscribeEvents();
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVenue]);
+  }, [selectedVenue]); // Only re-run if selectedVenue object itself changes
 
 
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
@@ -653,6 +622,7 @@ const MapContentAndLogic = () => {
     if (activeVenueTypeFilters.includes(VenueType.ADULT_ENTERTAINMENT)) playAudio(adultEntertainmentAudioRef);
     else pauseAudio(adultEntertainmentAudioRef);
 
+    // Cleanup: pause all when component unmounts or filters change significantly
     return () => {
       pauseAudio(nightclubAudioRef);
       pauseAudio(barAudioRef);
@@ -679,18 +649,18 @@ const MapContentAndLogic = () => {
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false;
+      return false; // Should not happen if isAnyFilterActive is true
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground";
-    let hoverColorClass = "hover:text-secondary";
+    let colorClass = "text-foreground"; // Default
+    let hoverColorClass = "hover:text-secondary"; // Default hover
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-primary";
+      colorClass = "text-primary"; // Active filter color
       hoverColorClass = "hover:text-primary/80";
     }
 
@@ -729,8 +699,9 @@ const MapContentAndLogic = () => {
 
             if (existingRatingSnap.exists()) {
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
+                // Corrected logic for updating average rating
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
-                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) {
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { // Avoid division by zero if only one rating and it's being changed
                     newAverageRating = currentRating;
                 }
 
@@ -752,9 +723,10 @@ const MapContentAndLogic = () => {
                 rating: currentRating,
                 comment: currentComment || null,
                 createdAt: serverTimestamp(),
-                eventName: eventNameForRating,
-            }, { merge: true });
+                eventName: eventNameForRating, // Storing event name for context in ratings collection
+            }, { merge: true }); // Use merge true to create if not exists, update if it does
 
+            // Mark in user's check-in data that they have rated this event
             const userCheckedInEventRef = doc(firestore, `users/${currentUser.uid}/checkedInEvents/${eventId}`);
             transaction.update(userCheckedInEventRef, { hasRated: true });
         });
@@ -764,8 +736,9 @@ const MapContentAndLogic = () => {
         setCurrentComment('');
         setCurrentlyRatingEventId(null);
 
+        // After a successful event rating, trigger an update to the partner's overall venue rating
         if (selectedVenue) {
-            await updatePartnerOverallRating(selectedVenue.id);
+            await updatePartnerOverallRating(selectedVenue.id); // Make sure this function correctly calculates and updates
         }
 
     } catch (error: any) {
@@ -796,188 +769,133 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
   const effectiveEventName = eventNameForShare || selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento';
   const effectiveShareRewardsEnabled = shareRewardsEnabledForEvent ?? selectedVenue?.events?.find(e => e.id === eventId)?.shareRewardsEnabled ?? true;
 
+
+  // Check share limit before attempting to share
+  const userShareEventDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
+  try {
+      const userShareSnap = await getDoc(userShareEventDataRef);
+      const currentShareCountForEvent = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
+
+      if (currentShareCountForEvent >= 10) {
+          toast({ title: "Limite Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10).", variant: "default", duration: 6000 });
+          return; // Stop further execution
+      }
+  } catch (error) {
+      console.error("Error fetching share count before sharing:", error);
+      toast({ title: "Erro ao Verificar Compartilhamentos", description: "Não foi possível verificar seus compartilhamentos anteriores.", variant: "destructive" });
+      return; // Stop if we can't verify the limit
+  }
+
+
   const encodedUserName = currentAppUser.name ? encodeURIComponent(currentAppUser.name) : '';
   const webShareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}?sharedByName=${encodedUserName}`;
-  const customSchemeShareUrl = `shareevent://{partnerId}/{eventId}?sharedByName=${encodedUserName}`; // Placeholder, not directly used by AndroidInterface.shareLinkFromWeb
+  const customSchemeShareUrl = `shareevent://${partnerId}/${eventId}?sharedByName=${encodedUserName}`;
 
   const title = `Confira este Fervo: ${partnerName} - ${effectiveEventName}`;
   const text = `Olha esse evento que encontrei no Fervo App! ${currentAppUser.name ? 'Enviado por ' + currentAppUser.name : ''}. Veja mais em:`;
 
   let finalSharedSuccessfully = false;
-  console.log("handleShareEvent: Tentando compartilhar. URL Web:", webShareUrl);
+  console.log("handleShareEvent: Tentando compartilhar. URL Web:", webShareUrl, "URL Custom:", customSchemeShareUrl);
 
-  // Prioritize Android Native Interface
   if (typeof window !== 'undefined' && (window as any).AndroidInterface && typeof (window as any).AndroidInterface.shareLinkFromWeb === 'function') {
       try {
           console.log("Tentando compartilhar via AndroidInterface.shareLinkFromWeb com URL Web:", webShareUrl);
-          (window as any).AndroidInterface.shareLinkFromWeb(webShareUrl);
+          (window as any).AndroidInterface.shareLinkFromWeb(webShareUrl); // Pass the web URL for content
           finalSharedSuccessfully = true;
+          console.log("AndroidInterface.shareLinkFromWeb chamado com sucesso.");
           toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
-          console.log("AndroidInterface.shareLinkFromWeb chamado.");
       } catch (nativeShareError: any) {
           console.warn('AndroidInterface.shareLinkFromWeb falhou:', nativeShareError);
-          // Fallback to other methods if this specific one fails
-      }
-  } else if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
-    try {
-      console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com:", title, text, webShareUrl);
-      (window as any).AndroidShareInterface.shareEvent(title, text, webShareUrl);
-      finalSharedSuccessfully = true;
-      toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
-      console.log("AndroidShareInterface.shareEvent chamado.");
-    } catch (nativeShareError: any) {
-      console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
-    }
-  }
-
-
-  if (!finalSharedSuccessfully && navigator.share) {
-    try {
-      console.log("Tentando compartilhar via navigator.share.");
-      await navigator.share({ title, text, url: webShareUrl });
-      finalSharedSuccessfully = true;
-      toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
-    } catch (shareError: any) {
-      if (shareError.name !== 'AbortError') {
-        console.warn('navigator.share falhou, tentando área de transferência:', shareError);
-      } else {
-        console.log("Compartilhamento via navigator.share cancelado pelo usuário.");
-      }
-    }
-  }
-
-  if (!finalSharedSuccessfully) {
-      try {
-        console.log("Tentando copiar para a área de transferência.");
-        await navigator.clipboard.writeText(`${title} ${text} ${webShareUrl}`);
-        finalSharedSuccessfully = true;
-        toast({ title: "Link Copiado!", description: "A mensagem do evento foi copiada para a área de transferência!", variant: "default", duration: 6000 });
-        console.log("Fallback: Conteúdo copiado para a área de transferência.");
-      } catch (clipError) {
-        console.error('Falha ao copiar para área de transferência (fallback final):', clipError);
-        toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
       }
   }
+  // Removed other fallbacks like navigator.share and clipboard to prioritize custom scheme.
 
-
-  if (finalSharedSuccessfully && currentUser && currentAppUser?.role === UserRole.USER) {
-    if (effectiveShareRewardsEnabled) {
-      console.log("handleShareEvent: Compartilhamento bem-sucedido, verificando limite e processando recompensa com atraso de 7 segundos.");
-      
-      const userShareEventDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
-      let currentShareCountForEvent = 0;
-      try {
-          const userShareSnap = await getDoc(userShareEventDataRef);
-          currentShareCountForEvent = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
-
-          if (currentShareCountForEvent >= 10) {
-              toast({ title: "Limite Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10). Nenhuma recompensa será concedida para este compartilhamento.", variant: "default", duration: 6000 });
-              return; 
-          }
-      } catch (error) {
-          console.error("Error fetching share count before reward logic:", error);
-          toast({ title: "Erro ao Verificar Compartilhamentos", description: "Não foi possível verificar seus compartilhamentos anteriores para recompensa.", variant: "destructive" });
-          return; 
-      }
-      
-      setTimeout(async () => {
-        console.log("handleShareEvent: Executando lógica de recompensa após 7 segundos.");
+  if (finalSharedSuccessfully && currentUser && effectiveShareRewardsEnabled && currentAppUser?.role === UserRole.USER) {
+    console.log("handleShareEvent: Compartilhamento bem-sucedido E DENTRO DO LIMITE, processando recompensa com atraso de 15 segundos.");
+    setTimeout(async () => {
+        console.log("handleShareEvent: Executando lógica de recompensa após 15 segundos.");
         const userDocRef = doc(firestore, "users", currentUser.uid);
         const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
         try {
-            const { newCoinTotal, newCouponGenerated, newShareCount } = await runTransaction(firestore, async (transaction) => {
-                // --- READS FIRST ---
-                const userShareEventSnap = await transaction.get(userShareEventDataRef);
-                const userSnap = await transaction.get(userDocRef);
+            // All reads must happen before any writes in a transaction.
+            const freshUserShareSnap = await getDoc(userShareEventDataRef); // Read current share count
+            const userSnapFromTransaction = await getDoc(userDocRef); // Read current user data
 
-                // --- DATA EXTRACTION FROM READS ---
-                if (!userSnap.exists()) {
-                    throw new Error("Usuário não encontrado para premiar moedas (dentro da transação).");
-                }
-                const userData = userSnap.data();
-                const shareCountBeforeThisShare = userShareEventSnap.exists() ? (userShareEventSnap.data()?.shareCount || 0) : 0;
-                
-                // Double check limit inside transaction for safety, though the main check is outside.
-                // If the count fetched *inside* the transaction is already >= 10, this share won't get coins.
-                if (shareCountBeforeThisShare >= 10) {
-                    console.log("handleShareEvent Transaction: Limite de recompensa (10) já atingido para evento", eventId, "antes de incrementar.");
-                    transaction.set(userShareEventDataRef, { shareCount: increment(1), eventId: eventId, partnerId: partnerId }, { merge: true }); // Still log the share
-                    return { 
-                        newCoinTotal: userData.venueCoins?.[partnerId] || 0, 
-                        newCouponGenerated: false, 
-                        newShareCount: shareCountBeforeThisShare + 1
-                    };
+            if (!userSnapFromTransaction.exists()) {
+                throw new Error("Usuário não encontrado para premiar moedas (durante a leitura inicial).");
+            }
+
+            const shareCountInTransaction = freshUserShareSnap.exists() ? (freshUserShareSnap.data()?.shareCount || 0) : 0;
+            const userDataFromTransaction = userSnapFromTransaction.data();
+            const venueCoinsMapFromTransaction: UserVenueCoins = userDataFromTransaction.venueCoins || {};
+            const currentVenueCoinsForPartnerFromTransaction = venueCoinsMapFromTransaction[partnerId] || 0;
+
+            // Now, run the transaction with the data read above.
+            const { newCoinTotal, newCouponGenerated, limitReachedInTransaction } = await runTransaction(firestore, async (transaction) => {
+                // Note: We already read shareCountInTransaction and currentVenueCoinsForPartnerFromTransaction outside.
+                // We might re-read userShareEventDataRef if strict atomicity on shareCount is needed *against other shares*.
+                // For simplicity, we'll use the count read just before this transaction for the limit check of *this* share.
+
+                if (shareCountInTransaction >= 10) {
+                    console.log("handleShareEvent Transaction: Limite de compartilhamento (10) já atingido para evento", eventId, "antes de incrementar.");
+                    // Still log the share attempt if desired, but no reward.
+                    // If you strictly want to prevent even incrementing the count beyond 10, this transaction part for shareCount set can be conditional too.
+                    transaction.set(userShareEventDataRef, { shareCount: increment(1), eventId: eventId, partnerId: partnerId }, { merge: true });
+                    return { newCoinTotal: currentVenueCoinsForPartnerFromTransaction, newCouponGenerated: false, limitReachedInTransaction: true };
                 }
 
-                const shareCountAfterThisShare = shareCountBeforeThisShare + 1;
-                const venueCoinsMap: UserVenueCoins = userData.venueCoins || {};
-                const currentVenueCoinsForPartner = venueCoinsMap[partnerId] || 0;
-                
-                // --- CALCULATIONS ---
+                const shareCountAfterThisIncrement = shareCountInTransaction + 1;
+                transaction.set(userShareEventDataRef, { shareCount: shareCountAfterThisIncrement, eventId: eventId, partnerId: partnerId }, { merge: true });
+
                 const coinsGained = FERVO_COINS_SHARE_REWARD;
                 let coinsSpentOnCoupon = 0;
                 let couponGeneratedThisTransaction = false;
-                const potentialTotalCoinsForPartner = currentVenueCoinsForPartner + coinsGained;
+                const potentialTotalCoinsForPartner = currentVenueCoinsForPartnerFromTransaction + coinsGained;
 
                 if (potentialTotalCoinsForPartner >= FERVO_COINS_FOR_COUPON) {
                     coinsSpentOnCoupon = FERVO_COINS_FOR_COUPON;
                     couponGeneratedThisTransaction = true;
                 }
-                const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + coinsGained - coinsSpentOnCoupon;
+                const finalCoinTotalForThisPartner = currentVenueCoinsForPartnerFromTransaction + coinsGained - coinsSpentOnCoupon;
 
-                // --- WRITES LAST ---
-                transaction.set(userShareEventDataRef, { 
-                    shareCount: shareCountAfterThisShare, 
-                    eventId: eventId, 
-                    partnerId: partnerId,
-                }, { merge: true });
-                
                 const updatesForUserDoc: Record<string, any> = {
                     [`venueCoins.${partnerId}`]: finalCoinTotalForThisPartner,
-                    updatedAt: serverTimestamp() 
+                    // updatedAt: serverTimestamp() // serverTimestamp() cannot be used directly in transaction.update's data
                 };
                 transaction.update(userDocRef, updatesForUserDoc);
 
                 if (couponGeneratedThisTransaction) {
                     const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-                    const newCouponRef = doc(couponCollectionRef); 
+                    const newCouponRef = doc(couponCollectionRef);
                     transaction.set(newCouponRef, {
                         userId: currentUser.uid,
                         couponCode: couponCode,
                         description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
                         eventName: effectiveEventName,
-                        createdAt: serverTimestamp(),
+                        createdAt: serverTimestamp(), // This is fine in transaction.set
                         status: 'active',
                         validAtPartnerId: partnerId,
                         partnerVenueName: partnerName,
                     });
                 }
-                return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction, newShareCount: shareCountAfterThisShare };
+                return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction, limitReachedInTransaction: (shareCountAfterThisIncrement >= 10) };
             });
 
-            // Toasts based on transaction outcome
-            if (newCouponGenerated) {
-                let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins em ${partnerName}! Total: ${newCoinTotal}. E um novo cupom: ${COUPON_REWARD_DESCRIPTION} em ${partnerName}!`;
-                if (newShareCount >= 10) {
-                    rewardMessage += " Você atingiu o limite de compartilhamentos recompensados para este evento.";
-                }
-                toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 8000 });
-            } else if (newCoinTotal > (currentAppUser.venueCoins?.[partnerId] || 0) ) { 
-                let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins em ${partnerName}! Total: ${newCoinTotal}.`;
-                 if (newShareCount >= 10) {
-                    rewardMessage += " Você atingiu o limite de compartilhamentos recompensados para este evento.";
-                }
-                toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 6000 });
-            } else if (newShareCount > currentShareCountForEvent && newShareCount >=10) {
-                // This covers the case where share count was incremented to 10 (or more by race condition)
-                // but no coins were awarded in *this* transaction (e.g., already at coin cap for coupon without generating one)
-                // The initial check before setTimeout covers "already at limit".
-                console.log("handleShareEvent: Compartilhamento contado, limite de recompensa atingido.");
-                 toast({ title: "Limite de Compartilhamento Atingido", description: `Você compartilhou este evento ${newShareCount} vezes e atingiu o limite para recompensas.`, variant: "default", duration: 6000 });
+
+            if (limitReachedInTransaction && !newCouponGenerated) {
+                 toast({ title: "Limite de Compartilhamento Atingido", description: `Você atingiu o limite de 10 compartilhamentos recompensados para este evento.`, variant: "default", duration: 6000 });
+            } else if (newCouponGenerated) {
+                let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins para ${partnerName}! Total neste local: ${newCoinTotal}. E um novo cupom: ${COUPON_REWARD_DESCRIPTION} em ${partnerName}!`;
+                 if(limitReachedInTransaction) rewardMessage += " Você atingiu o limite de compartilhamentos recompensados para este evento.";
+                toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 7000 });
+            } else if (newCoinTotal > (currentAppUser.venueCoins?.[partnerId] || 0) ) { // Check if coins actually increased
+                let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins para ${partnerName}! Total neste local: ${newCoinTotal}.`;
+                if(limitReachedInTransaction) rewardMessage += " Você atingiu o limite de compartilhamentos recompensados para este evento.";
+                toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 5000 });
             }
 
-        } catch (error: any) { // Catch for runTransaction
+        } catch (error: any) {
             console.error("Error in Venue-Specific FervoCoins/Coupon transaction (detailed):", error);
             toast({
                 title: "Erro na Recompensa",
@@ -986,14 +904,12 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                 duration: 7000
             });
         }
-      }, 7000); 
-    } else if (effectiveShareRewardsEnabled === false) { // Explicitly check if rewards are disabled
-        console.log(`handleShareEvent: Evento ${eventId} compartilhado com sucesso, mas recompensas de FervoCoin estão desabilitadas para este evento.`);
-        // Optionally, provide a different success toast if rewards are off
-        // toast({ title: "Compartilhado!", description: "Evento compartilhado com sucesso (recompensas desativadas).", variant: "default" });
-    }
+    }, 15000); // 15 segundos de atraso
+  } else if (finalSharedSuccessfully && currentUser && !effectiveShareRewardsEnabled && currentAppUser?.role === UserRole.USER) {
+      console.log(`handleShareEvent: Evento ${eventId} compartilhado com sucesso, mas recompensas de FervoCoin estão desabilitadas para este evento.`);
   }
 };
+
 
   const handleToggleFavorite = async (venueId: string, venueName: string) => {
     if (isPreviewMode && currentAppUser?.role === UserRole.PARTNER) {
@@ -1005,7 +921,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
       return;
     }
 
-    if (currentAppUser.role === UserRole.PARTNER && !isPreviewMode) {
+    if (currentAppUser.role === UserRole.PARTNER && !isPreviewMode) { // Ensure non-preview partners also cannot favorite
         toast({ title: "Ação não permitida", description: "Parceiros não podem favoritar locais.", variant: "default" });
         return;
     }
@@ -1025,9 +941,9 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
           updatedFavorites = currentFavorites.filter(id => id !== venueId);
           toast({ title: "Removido dos Favoritos!", description: `${venueName} não é mais um dos seus fervos favoritos.` });
         } else {
-          if (currentFavorites.length >= 20) {
+          if (currentFavorites.length >= 20) { // Max 20 favorites
               toast({ title: "Limite de Favoritos Atingido", description: "Você pode ter no máximo 20 locais favoritos.", variant: "destructive", duration: 4000 });
-              return;
+              return; // Exit transaction logic if limit reached
           }
           updatedFavorites = [...currentFavorites, venueId];
           toast({ title: "Adicionado aos Favoritos!", description: `${venueName} agora é um dos seus fervos favoritos!`, variant: "default" });
@@ -1045,10 +961,40 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
       toast({ title: "Erro", description: "Não foi possível identificar o chat ou o evento.", variant: "destructive" });
       return;
     }
-    setEventChatClearedTimestamp(Date.now());
-    toast({ title: "Chat Limpo!", description: "Sua visualização das mensagens do chat foi limpa.", variant: "default"});
-    setShowClearEventChatDialog(false); // Close dialog after setting timestamp
+
+    // Confirm deletion with user
+    const confirmDelete = window.confirm("Tem certeza que deseja apagar TODAS as mensagens deste chat permanentemente para TODOS os usuários? Esta ação não pode ser desfeita.");
+    if (!confirmDelete) {
+        setShowClearEventChatDialog(false); // Ensure dialog closes if cancel
+        return;
+    }
+
+    setIsDeletingEventChat(true);
+    const messagesRef = collection(firestore, `chatRooms/${selectedEventForChat.id}/messages`);
+    try {
+        const querySnapshot = await getDocs(messagesRef);
+        if (querySnapshot.empty) {
+            toast({ title: "Chat Já Vazio", description: "Não há mensagens para apagar.", variant: "default"});
+            setShowClearEventChatDialog(false);
+            setIsDeletingEventChat(false);
+            return;
+        }
+
+        const batch = writeBatch(firestore);
+        querySnapshot.forEach(docSnap => {
+            batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+        toast({ title: "Chat Limpo!", description: "Todas as mensagens foram apagadas permanentemente.", variant: "default"});
+    } catch (error) {
+        console.error("Error clearing event chat from Firestore:", error);
+        toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens do servidor.", variant: "destructive"});
+    } finally {
+        setShowClearEventChatDialog(false);
+        setIsDeletingEventChat(false);
+    }
   };
+
 
   const openEventSpecificChat = (event: VenueEvent) => {
     if (!currentUser || !currentAppUser) {
@@ -1069,18 +1015,17 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
     return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" /> Carregando sua localização...</div>;
   }
 
-  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") { // Default key for check
     return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" />Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const genericPlaceholder = "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0"; // Use the actual key as placeholder to avoid re-prompting if it's this key
 
-  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") { // Strict check for the default placeholder text
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE" || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" /* Stricter check for a known placeholder */ ) {
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.
-            Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no seu arquivo .env ou as configurações do seu projeto Firebase).
+            Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).
         </div>
     );
   }
@@ -1167,7 +1112,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
         </div>
 
         {/* Event-Specific Chat Widget */}
-        {isEventChatWidgetOpen && currentUser && currentAppUser && chatUserProfile && selectedEventForChat && (
+        {isEventChatWidgetOpen && currentUser && currentAppUser && selectedEventForChat && (
             <Card className={cn(
                 "fixed bottom-4 right-4 z-[60] w-[90vw] max-w-sm h-auto max-h-[70vh] flex flex-col border-primary/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
                 "transition-all duration-300 ease-in-out",
@@ -1183,20 +1128,20 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                     <div className="flex items-center gap-1">
                         <AlertDialog open={showClearEventChatDialog} onOpenChange={setShowClearEventChatDialog}>
                             <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:h-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat (apenas visualização)">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:h-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat">
                                     <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
-                                <RadixAlertDialogTitle>Limpar Visualização do Chat</RadixAlertDialogTitle> {/* Use RadixAlertDialogTitle */}
+                                <RadixAlertDialogTitle>Limpar Chat do Evento</RadixAlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Tem certeza que deseja limpar as mensagens desta visualização? As mensagens não serão excluídas permanentemente.
+                                    Tem certeza que deseja apagar TODAS as mensagens deste chat permanentemente para TODOS os usuários? Esta ação não pode ser desfeita.
                                 </AlertDialogDescription>
                                 <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleClearEventChat}>
+                                    <AlertDialogCancel onClick={() => setShowClearEventChatDialog(false)} disabled={isDeletingEventChat}>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleClearEventChat} disabled={isDeletingEventChat} className="bg-destructive hover:bg-destructive/90">
                                         {isDeletingEventChat ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
-                                        Limpar Minha Visualização
+                                        Apagar Mensagens
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
@@ -1214,15 +1159,15 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                         chatRoomId={selectedEventForChat.id}
                         currentUserId={currentUser.uid}
                         isChatSoundMuted={isEventChatSoundMuted}
-                        chatClearedTimestamp={eventChatClearedTimestamp}
+                        chatClearedTimestamp={eventChatClearedTimestamp} // This prop is for client-side visual clear now
                     />
                 </CardContent>
                 <div className="p-3 sm:p-4 border-t border-border bg-card">
                     <ChatInputForm
                         chatRoomId={selectedEventForChat.id}
                         userId={currentUser.uid}
-                        userName={chatUserProfile.name}
-                        userPhotoURL={chatUserProfile.photoURL}
+                        userName={currentAppUser.name} // Use currentAppUser here
+                        userPhotoURL={currentAppUser.photoURL} // Use currentAppUser here
                     />
                 </div>
             </Card>
@@ -1268,9 +1213,9 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                 })}
             </GoogleMap>
         )}
-        {(!GOOGLE_MAPS_API_KEY) && (
+        {(!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "YOUR_DEFAULT_API_KEY_HERE" || GOOGLE_MAPS_API_KEY === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") && (
              <div className="flex items-center justify-center h-full bg-background text-destructive">
-                API Key do Google Maps não configurada ou inválida.
+                API Key do Google Maps não configurada corretamente. Verifique NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.
             </div>
         )}
       </div>
@@ -1280,14 +1225,15 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
             if (!isOpen) {
                 const venueIdInParams = searchParams.get('venueId');
                 setSelectedVenue(null);
-                setSelectedEventForChat(null);
-                setIsEventChatWidgetOpen(false);
+                setSelectedEventForChat(null); // Close event chat when sheet closes
+                setIsEventChatWidgetOpen(false); // Ensure widget is marked as closed
 
                 if (isPreviewMode && venueIdInParams) {
-                    router.replace('/map', { scroll: false });
+                    router.replace('/map', { scroll: false }); // Remove query params
                     if (actualUserLocation) {
-                        setUserLocation(actualUserLocation);
+                        setUserLocation(actualUserLocation); // Reset map to user's actual location
                     } else {
+                        // Fallback to default if actual location isn't available
                         setUserLocation({ lat: -23.55052, lng: -46.633308 });
                     }
                 } else if (!isPreviewMode) {
@@ -1296,8 +1242,8 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                     } else {
                         setUserLocation({ lat: -23.55052, lng: -46.633308 });
                     }
-                    if (venueIdInParams) {
-                        router.replace('/map', { scroll: false });
+                    if (venueIdInParams) { // If we were viewing a specific venue via query param
+                        router.replace('/map', { scroll: false }); // Clear the query param
                     }
                 }
             }
@@ -1305,8 +1251,8 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
           <SheetContent
             side="right"
             className="w-full sm:max-w-md p-0 bg-background/95 backdrop-blur-md shadow-2xl border-l border-border overflow-y-auto rounded-tl-lg rounded-bl-lg"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={(e) => e.preventDefault()}
+            onOpenAutoFocus={(e) => e.preventDefault()} // Prevent focus on first element
+            onCloseAutoFocus={(e) => e.preventDefault()} // Prevent focus on trigger after close
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4 z-10">
                 <div className="flex-1">
@@ -1334,11 +1280,11 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                            !currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) &&
                              "border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground",
                            currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) &&
-                             "animate-pulse"
+                             "animate-pulse" // Example: pulse if favorited
                         )}
                         onClick={() => handleToggleFavorite(selectedVenue.id, selectedVenue.name)}
                         title={currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? "Remover dos Favoritos" : "Adicionar aos Favoritos"}
-                        disabled={!currentAppUser}
+                        disabled={!currentAppUser || (isPreviewMode && currentAppUser?.role === UserRole.PARTNER)}
                       >
                         {currentAppUser?.favoriteVenueIds?.includes(selectedVenue.id) ? (
                             <HeartOff className="w-4 h-4 sm:w-5 sm:w-5 fill-current" />
@@ -1358,11 +1304,11 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                 <SheetPrimitiveDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetPrimitiveDescription>
             </SheetHeader>
 
-            <ScrollArea className="h-[calc(100vh-6rem)]">
+            <ScrollArea className="h-[calc(100vh-6rem)]"> {/* Adjust height as needed */}
               <div className="px-4 sm:px-6 pb-6 pt-4 space-y-6">
                   {getYouTubeEmbedUrl(selectedVenue.youtubeUrl) ? (
                     <div className="mb-4">
-                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' }}>
+                      <div className="relative w-full rounded-lg overflow-hidden shadow-lg" style={{ paddingTop: '56.25%' }}> {/* 16:9 Aspect Ratio */}
                         <iframe
                           src={getYouTubeEmbedUrl(selectedVenue.youtubeUrl)!}
                           title="YouTube video player"
@@ -1416,7 +1362,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && (
+                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && ( // Show only if not embedded
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1444,7 +1390,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                           const existingRatingForEvent = userRatings[event.id];
 
                           return (
-                            <Card key={event.id} className="p-3 bg-card/50 border-border/50">
+                            <Card key={event.id} className="p-3 sm:p-4 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
                                   <div className="flex-1">
                                     <CardTitle className="text-md text-secondary mb-1 font-semibold">{event.eventName}</CardTitle>
@@ -1486,7 +1432,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                               </p>
                               <p className="text-xs text-muted-foreground">
                                 {PRICING_TYPE_OPTIONS.find(p => p.value === event.pricingType)?.label}
-                                {event.pricingType !== PricingType.FREE && event.pricingValue ? `: R$ ${event.pricingValue.toFixed(2)}` : ''}
+                                {event.pricingType !== PricingType.FREE && event.pricingValue ? `: R$ ${Number(event.pricingValue).toFixed(2)}` : ''}
                               </p>
                                {event.averageRating !== undefined && event.ratingCount !== undefined && event.ratingCount > 0 ? (
                                 <div className="flex items-center gap-1 mt-1">
@@ -1516,7 +1462,8 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                                   </Button>
                               )}
 
-                              {currentUser && currentAppUser?.role === UserRole.USER && userCheckIns[event.id] && (
+                              {/* Event-Specific Chat Button - only if user is checked in */}
+                              {currentUser && currentAppUser?.role === UserRole.USER && userCheckIns[event.id] && !isEventPast(event.endDateTime) && (
                                 <Button
                                   onClick={() => openEventSpecificChat(event)}
                                   variant="outline"
@@ -1534,7 +1481,10 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                                   <h4 className="text-sm font-semibold text-primary mb-1.5">Avalie este evento:</h4>
                                   <StarRating
                                     rating={currentlyRatingEventId === event.id ? currentRating : 0}
-                                    setRating={setCurrentRating}
+                                    setRating={(newRating) => {
+                                        setCurrentlyRatingEventId(event.id); // Ensure context is set when star is clicked
+                                        setCurrentRating(newRating);
+                                    }}
                                     readOnly={isSubmittingRating && currentlyRatingEventId === event.id}
                                     totalStars={5}
                                     size={20}
@@ -1544,7 +1494,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
                                     onChange={(e) => {
-                                      setCurrentlyRatingEventId(event.id);
+                                      setCurrentlyRatingEventId(event.id); // Ensure context is set when typing
                                       setCurrentComment(e.target.value);
                                     }}
                                     className="mt-2 text-xs"
@@ -1556,13 +1506,14 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                                     className="mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                                     onClick={() => {
                                         if(currentlyRatingEventId !== event.id && !isSubmittingRating) {
+                                            // If user clicks send on an event they haven't interacted with for rating yet
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id);
+                                        setCurrentlyRatingEventId(event.id); // Ensure context before submission
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
-                                    disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
+                                    disabled={(isSubmittingRating && currentlyRatingEventId === event.id) || (currentlyRatingEventId === event.id && currentRating === 0 && !existingRatingForEvent) || (currentlyRatingEventId !== event.id && currentRating === 0 && !existingRatingForEvent)}
                                   >
                                     {(isSubmittingRating && currentlyRatingEventId === event.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                                     Enviar Avaliação
@@ -1658,12 +1609,12 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  // No longer using genericPlaceholder for the API key check if GOOGLE_MAPS_API_KEY is directly used
-  if (!apiKey || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && apiKey === "YOUR_DEFAULT_API_KEY_HERE") { // Check if it's the placeholder value
+  // Stricter check for known placeholder values
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE" || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" ) {
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.
-            Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no seu arquivo .env ou as configurações do seu projeto Firebase).
+            Verifique as configurações (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).
         </div>
     );
   }
