@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription as UICardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -26,7 +26,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore, auth } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle as SheetPrimitiveTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import {
@@ -45,7 +45,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as RadixAlertDialogTitle, // Aliased to avoid conflict
+  AlertDialogTitle as RadixAlertDialogTitle, 
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -149,10 +149,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', // Yellow-ish
+  [VenueType.STAND_UP]: '#FACC15', 
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', // Pink-ish
-  [VenueType.LGBT]: '#F97316', // Orange-ish
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
+  [VenueType.LGBT]: '#F97316', 
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -179,14 +179,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; // Default secondary color for blink
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; 
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
-  // Prevent blink color from being the same as base color
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'hsl(var(--destructive))'; // Fallback to destructive if secondary is same as primary
+    effectiveBlinkHighlightColor = 'hsl(var(--destructive))'; 
   }
 
 
@@ -339,14 +338,15 @@ const MapContentAndLogic = () => {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
-  // State specific to event chat
   const [selectedEventForChat, setSelectedEventForChat] = useState<VenueEvent | null>(null);
   const [isEventChatWidgetOpen, setIsEventChatWidgetOpen] = useState(false);
   const [isEventChatSoundMuted, setIsEventChatSoundMuted] = useState(false);
   const [showClearEventChatDialog, setShowClearEventChatDialog] = useState(false);
   const [isDeletingEventChat, setIsDeletingEventChat] = useState(false);
   const [eventChatClearedTimestamp, setEventChatClearedTimestamp] = useState<number | null>(null);
-
+  const [chatUserProfile, setChatUserProfile] = useState<{name: string, photoURL: string | null, city: string, state: string } | null>(null);
+  const [isChatProfileLoading, setIsChatProfileLoading] = useState(true);
+  const [chatRoomId, setChatRoomId] = useState<string | null>(null);
 
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
   const barAudioRef = useRef<HTMLAudioElement>(null);
@@ -364,17 +364,45 @@ const MapContentAndLogic = () => {
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data() as MapPageAppUser;
               setCurrentAppUser(userData);
+              // For Chat Widget:
+              setIsChatProfileLoading(true);
+              if (userData.name && userData.address?.city && userData.address?.state) {
+                setChatUserProfile({
+                  name: userData.name,
+                  photoURL: userData.photoURL || null,
+                  city: userData.address.city,
+                  state: userData.address.state,
+                });
+                const cityNorm = userData.address.city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
+                const stateNorm = userData.address.state.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
+                const generatedChatRoomId = `${stateNorm}_${cityNorm}`;
+                setChatRoomId(generatedChatRoomId);
+                console.log("MapPage: ChatRoomId gerado:", generatedChatRoomId);
+              } else {
+                setChatUserProfile(null);
+                setChatRoomId(null);
+              }
+              setIsChatProfileLoading(false);
             } else {
               const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null };
               setCurrentAppUser(basicProfile);
+              setChatUserProfile(null);
+              setChatRoomId(null);
+              setIsChatProfileLoading(false);
             }
         }, (error) => {
             console.error("MapContentAndLogic: Error fetching user document with onSnapshot:", error);
             setCurrentAppUser(null);
+            setChatUserProfile(null);
+            setChatRoomId(null);
+            setIsChatProfileLoading(false);
         });
         return () => unsubscribeUser();
       } else {
         setCurrentAppUser(null);
+        setChatUserProfile(null);
+        setChatRoomId(null);
+        setIsChatProfileLoading(false);
       }
     });
     return () => unsubscribeAuth();
@@ -439,11 +467,13 @@ const MapContentAndLogic = () => {
             lng: position.coords.longitude,
           };
           setActualUserLocation(loc);
-          setUserLocation(loc); 
+          if (!searchParams.get('venueId')) { // Only update userLocation if not focusing on a specific venue
+            setUserLocation(loc); 
+          }
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; // São Paulo
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; 
           setUserLocation(defaultLoc);
           setActualUserLocation(null);
           if (!isPreviewMode) {
@@ -460,7 +490,7 @@ const MapContentAndLogic = () => {
           toast({ title: "Geolocalização Indisponível", description: "Seu navegador não suporta geolocalização. Usando localização padrão de SP.", variant: "default" });
        }
     }
-  }, [toast, isPreviewMode]);
+  }, [toast, isPreviewMode, searchParams]);
 
   useEffect(() => {
     setIsLoadingVenues(true);
@@ -747,190 +777,175 @@ const MapContentAndLogic = () => {
     }
 };
 
-  const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp, eventNameForShare?: string, shareRewardsEnabledForEvent?: boolean) => {
-    if (!currentUser || !currentAppUser) {
-      toast({ title: "Login Necessário", description: "Faça login para compartilhar e ganhar moedas.", variant: "destructive" });
+const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp, eventNameForShare?: string, shareRewardsEnabledForEvent?: boolean) => {
+  if (!currentUser || !currentAppUser) {
+    toast({ title: "Login Necessário", description: "Faça login para compartilhar.", variant: "destructive" });
+    return;
+  }
+
+  if (isPreviewMode && currentAppUser?.role === UserRole.PARTNER) {
+    toast({ title: "Modo Preview", description: "Compartilhamento desabilitado para parceiros no modo de preview.", variant: "default" });
+    return;
+  }
+  
+  if (isEventPast(eventEndDateTime)) {
+    toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
+    return;
+  }
+  
+  const userShareEventDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
+  try {
+    const userShareSnap = await getDoc(userShareEventDataRef);
+    const currentShareCountForEvent = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
+
+    if (currentShareCountForEvent >= 10) {
+      toast({ title: "Limite Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10).", variant: "default", duration: 5000 });
       return;
     }
+  } catch (error) {
+    console.error("Error fetching share count before sharing:", error);
+    toast({ title: "Erro ao Verificar Compartilhamentos", description: "Não foi possível verificar seus compartilhamentos anteriores, tente novamente.", variant: "destructive" });
+    return;
+  }
 
-    if (isPreviewMode && currentAppUser?.role === UserRole.PARTNER) {
-        toast({ title: "Modo Preview", description: "Compartilhamento desabilitado para parceiros no modo de preview.", variant: "default" });
-        return;
-    }
-    
-    if (isEventPast(eventEndDateTime)) {
-        toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
-        return;
-    }
-    
-    // Check share limit before attempting to share
-    const userShareEventDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
+  const effectiveEventName = eventNameForShare || selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento';
+  const effectiveShareRewardsEnabled = shareRewardsEnabledForEvent ?? selectedVenue?.events?.find(e => e.id === eventId)?.shareRewardsEnabled ?? true;
+
+  const encodedUserName = currentAppUser.name ? encodeURIComponent(currentAppUser.name) : '';
+  const webShareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}?sharedByName=${encodedUserName}`;
+  const customSchemeShareUrl = `shareevent://${partnerId}/${eventId}?sharedByName=${encodedUserName}`;
+
+  const title = `Confira este Fervo: ${partnerName} - ${effectiveEventName}`;
+  const text = `Olha esse evento que encontrei no Fervo App! ${currentAppUser.name ? 'Enviado por ' + currentAppUser.name : ''}. Veja mais em:`;
+
+  let finalSharedSuccessfully = false;
+  console.log("Tentando compartilhar...");
+
+  if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
     try {
-      const userShareSnap = await getDoc(userShareEventDataRef);
-      const currentShareCountForEvent = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
-
-      if (currentShareCountForEvent >= 10) {
-        toast({ title: "Limite Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10).", variant: "default", duration: 5000 });
-        return; // Stop if limit reached
-      }
-    } catch (error) {
-        console.error("Error fetching share count before sharing:", error);
-        toast({ title: "Erro ao Verificar Compartilhamentos", description: "Não foi possível verificar seus compartilhamentos anteriores, tente novamente.", variant: "destructive" });
-        return;
+      console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com title:", title, "text:", text, "webShareUrl:", webShareUrl);
+      (window as any).AndroidShareInterface.shareEvent(title, text, webShareUrl);
+      finalSharedSuccessfully = true;
+      toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
+      console.log("AndroidShareInterface.shareEvent chamado.");
+    } catch (nativeShareError: any) {
+      console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
     }
-
-
-    const effectiveEventName = eventNameForShare || selectedVenue?.events?.find(e => e.id === eventId)?.eventName || 'Evento';
-    const effectiveShareRewardsEnabled = shareRewardsEnabledForEvent ?? selectedVenue?.events?.find(e => e.id === eventId)?.shareRewardsEnabled ?? true;
-
-    const sharerNameQueryParam = currentAppUser.name ? `?sharedByName=${encodeURIComponent(currentAppUser.name)}` : '';
-    const webShareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}${sharerNameQueryParam}`;
-    const customSchemeShareUrl = `shareevent://${partnerId}/${eventId}${sharerNameQueryParam}`;
-    const title = `Confira este Fervo: ${partnerName} - ${effectiveEventName}`;
-    const text = `Olha esse evento que encontrei no Fervo App! ${currentAppUser.name ? 'Enviado por ' + currentAppUser.name : ''}. Veja mais em:`;
-
-
-    let finalSharedSuccessfully = false;
-    console.log("Tentando compartilhar. URL Web:", webShareUrl, "URL Custom Scheme:", customSchemeShareUrl);
-
-    if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
+  }
+  
+  if (!finalSharedSuccessfully && typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchShareIntent === 'function') {
       try {
-        console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com:", title, text, webShareUrl);
-        (window as any).AndroidShareInterface.shareEvent(title, text, webShareUrl);
-        finalSharedSuccessfully = true;
-        toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
-      } catch (nativeShareError: any) {
-        console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
-      }
-    } else if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchShareIntent === 'function') {
-        // Fallback to older custom scheme if shareEvent is not available
-        try {
-            console.log("Tentando compartilhar via AndroidShareInterface.launchShareIntent com:", customSchemeShareUrl);
-            (window as any).AndroidShareInterface.launchShareIntent(customSchemeShareUrl); // Pass the custom scheme URL
-            finalSharedSuccessfully = true;
-             toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
-        } catch (customSchemeError:any) {
-            console.warn('AndroidShareInterface.launchShareIntent falhou:', customSchemeError);
-        }
-    }
-
-
-    if (!finalSharedSuccessfully && navigator.share) {
-      try {
-        console.log("Tentando compartilhar via navigator.share.");
-        await navigator.share({ title, text, url: webShareUrl });
-        finalSharedSuccessfully = true;
-        toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
-      } catch (shareError: any) {
-        if (shareError.name !== 'AbortError') {
-          console.warn('navigator.share falhou, tentando área de transferência:', shareError);
-        } else {
-          console.log("Compartilhamento via navigator.share cancelado pelo usuário.");
-        }
-      }
-    }
-
-    if (!finalSharedSuccessfully) {
-        try {
-          console.log("Tentando copiar para a área de transferência.");
-          await navigator.clipboard.writeText(`${title} ${text} ${webShareUrl}`); // Copy full message
+          console.log("Tentando compartilhar via AndroidShareInterface.launchShareIntent com customSchemeShareUrl:", customSchemeShareUrl);
+          (window as any).AndroidShareInterface.launchShareIntent(customSchemeShareUrl);
           finalSharedSuccessfully = true;
-          toast({ title: "Link Copiado!", description: "O compartilhamento não está disponível. A mensagem do evento foi copiada!", variant: "default", duration: 6000 });
-        } catch (clipError) {
-          console.error('Falha ao copiar para área de transferência (fallback final):', clipError);
-          toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
-        }
+          toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
+          console.log("AndroidShareInterface.launchShareIntent chamado.");
+      } catch (customSchemeError:any) {
+          console.warn('AndroidShareInterface.launchShareIntent falhou:', customSchemeError);
+      }
+  }
+  
+  // If native interfaces were not available or failed, finalSharedSuccessfully will still be false
+  if (!finalSharedSuccessfully) {
+    console.log("Nenhuma interface nativa Android detectada ou falhou. Tentando copiar para área de transferência como último recurso.");
+    try {
+      await navigator.clipboard.writeText(`${title} ${text} ${webShareUrl}`);
+      finalSharedSuccessfully = true; // Assume success for clipboard copy in this simplified flow
+      toast({ title: "Link Copiado!", description: "A mensagem do evento foi copiada para a área de transferência!", variant: "default", duration: 6000 });
+      console.log("Fallback: Conteúdo copiado para a área de transferência.");
+    } catch (clipError) {
+      console.error('Falha ao copiar para área de transferência (fallback final):', clipError);
+      toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
     }
+  }
 
+  if (finalSharedSuccessfully && currentUser && (effectiveShareRewardsEnabled) && currentAppUser?.role === UserRole.USER) {
+    console.log("handleShareEvent: Compartilhamento bem-sucedido, processando recompensa.");
+    const userDocRef = doc(firestore, "users", currentUser.uid);
+    const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
-    if (finalSharedSuccessfully && currentUser && (effectiveShareRewardsEnabled) && currentAppUser?.role === UserRole.USER) {
-      console.log("handleShareEvent: Compartilhamento bem-sucedido, processando recompensa.");
-      const userDocRef = doc(firestore, "users", currentUser.uid);
-      const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
-
-      try {
+    try {
         const { newCoinTotal, newCouponGenerated } = await runTransaction(firestore, async (transaction) => {
-          // 1. Read current share count for this specific event
-          const userShareEventDataSnap = await transaction.get(userShareEventDataRef);
-          const shareCountFromTransaction = userShareEventDataSnap.exists() ? (userShareEventDataSnap.data()?.shareCount || 0) : 0;
+            const userShareEventSnap = await transaction.get(userShareEventDataRef);
+            const userSnap = await transaction.get(userDocRef);
 
-          // 2. Read current user data (for venueCoins)
-          const userSnapFromTransaction = await transaction.get(userDocRef);
-          if (!userSnapFromTransaction.exists()) {
-            console.error("handleShareEvent Transaction: User document not found for user", currentUser.uid);
-            throw new Error("Usuário não encontrado para premiar moedas.");
-          }
-          const userDataFromTransaction = userSnapFromTransaction.data();
-          const venueCoinsMap: UserVenueCoins = userDataFromTransaction.venueCoins || {};
-          const currentVenueCoinsForPartner = venueCoinsMap[partnerId] || 0;
+            if (!userSnap.exists()) {
+                console.error("handleShareEvent Transaction: User document not found for user", currentUser.uid);
+                throw new Error("Usuário não encontrado para premiar moedas.");
+            }
+            
+            const shareCountFromTransaction = userShareEventSnap.exists() ? (userShareEventSnap.data()?.shareCount || 0) : 0;
+            const userDataFromTransaction = userSnap.data();
+            const venueCoinsMap: UserVenueCoins = userDataFromTransaction.venueCoins || {};
+            const currentVenueCoinsForPartner = venueCoinsMap[partnerId] || 0;
 
-          // Check limit again within transaction to be absolutely sure (though pre-checked)
-          if (shareCountFromTransaction >= 10) {
-             console.log("handleShareEvent Transaction: Share limit already reached for event", eventId, "by user", currentUser.uid);
-             throw new Error("Limite de compartilhamento (10) já atingido para este evento (verificação final).");
-          }
+            if (shareCountFromTransaction >= 10) {
+                console.log("handleShareEvent Transaction: Share limit (10) already reached for event", eventId, "by user", currentUser.uid);
+                // This specific error will be caught by the outer try-catch of runTransaction
+                // We've already checked this outside the transaction, so this is a safeguard.
+                throw new Error("Limite de compartilhamento (10) já atingido para este evento (verificação final na transação).");
+            }
 
-          const coinsGained = FERVO_COINS_SHARE_REWARD;
-          let coinsSpentOnCoupon = 0;
-          let couponGeneratedThisTransaction = false;
-          
-          const potentialTotalCoinsForPartner = currentVenueCoinsForPartner + coinsGained;
+            const coinsGained = FERVO_COINS_SHARE_REWARD;
+            let coinsSpentOnCoupon = 0;
+            let couponGeneratedThisTransaction = false;
+            
+            const potentialTotalCoinsForPartner = currentVenueCoinsForPartner + coinsGained;
 
-          if (potentialTotalCoinsForPartner >= FERVO_COINS_FOR_COUPON) {
-            coinsSpentOnCoupon = FERVO_COINS_FOR_COUPON;
-            couponGeneratedThisTransaction = true;
-          }
-          
-          const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + coinsGained - coinsSpentOnCoupon;
+            if (potentialTotalCoinsForPartner >= FERVO_COINS_FOR_COUPON) {
+                coinsSpentOnCoupon = FERVO_COINS_FOR_COUPON;
+                couponGeneratedThisTransaction = true;
+            }
+            
+            const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + coinsGained - coinsSpentOnCoupon;
 
-          // All writes together
-          transaction.set(userShareEventDataRef, { shareCount: increment(1), eventId: eventId, partnerId: partnerId }, { merge: true });
-          
-          const updatesForUserDoc: Record<string, any> = {
-            [`venueCoins.${partnerId}`]: finalCoinTotalForThisPartner
-          };
-          transaction.update(userDocRef, updatesForUserDoc);
+            transaction.set(userShareEventDataRef, { shareCount: increment(1), eventId: eventId, partnerId: partnerId }, { merge: true });
+            
+            const updatesForUserDoc: Record<string, any> = {
+                [`venueCoins.${partnerId}`]: finalCoinTotalForThisPartner
+            };
+            transaction.update(userDocRef, updatesForUserDoc);
 
-          if (couponGeneratedThisTransaction) {
-            const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-            const newCouponRef = doc(couponCollectionRef); 
-            transaction.set(newCouponRef, {
-              userId: currentUser.uid,
-              couponCode: couponCode,
-              description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
-              eventName: effectiveEventName,
-              createdAt: serverTimestamp(),
-              status: 'active',
-              validAtPartnerId: partnerId,
-              partnerVenueName: partnerName,
-            });
-             console.log("handleShareEvent Transaction: Coupon generated for user", currentUser.uid, "at venue", partnerName);
-          }
-          console.log("handleShareEvent Transaction: Coin balance updated for user", currentUser.uid, "at venue", partnerId, "New total:", finalCoinTotalForThisPartner);
-          return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction };
+            if (couponGeneratedThisTransaction) {
+                const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+                const newCouponRef = doc(couponCollectionRef); 
+                transaction.set(newCouponRef, {
+                    userId: currentUser.uid,
+                    couponCode: couponCode,
+                    description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
+                    eventName: effectiveEventName,
+                    createdAt: serverTimestamp(),
+                    status: 'active',
+                    validAtPartnerId: partnerId,
+                    partnerVenueName: partnerName,
+                });
+                console.log("handleShareEvent Transaction: Coupon generated for user", currentUser.uid, "at venue", partnerName);
+            }
+            console.log("handleShareEvent Transaction: Coin balance updated for user", currentUser.uid, "at venue", partnerId, "New total:", finalCoinTotalForThisPartner);
+            return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction };
         });
 
         let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins para ${partnerName}! Total neste local: ${newCoinTotal}.`;
         if (newCouponGenerated) {
-          rewardMessage += ` E um novo cupom: ${COUPON_REWARD_DESCRIPTION} em ${partnerName}!`;
-          toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 7000 });
+            rewardMessage += ` E um novo cupom: ${COUPON_REWARD_DESCRIPTION} em ${partnerName}!`;
+            toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 7000 });
         } else {
-          toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 5000 });
+            toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 5000 });
         }
 
-      } catch (error: any) {
+    } catch (error: any) {
         console.error("Error in Venue-Specific FervoCoins/Coupon transaction (detailed):", error);
         toast({
-          title: "Erro na Recompensa",
-          description: error.message || `Não foi possível processar sua recompensa de moedas/cupom.`,
-          variant: "destructive",
-          duration: 7000
+            title: "Erro na Recompensa",
+            description: error.message || `Não foi possível processar sua recompensa de moedas/cupom.`,
+            variant: "destructive",
+            duration: 7000
         });
-      }
-    } else if (finalSharedSuccessfully && currentUser && !effectiveShareRewardsEnabled && currentAppUser?.role === UserRole.USER) {
-        console.log(`handleShareEvent: Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
     }
-  };
+  } else if (finalSharedSuccessfully && currentUser && !effectiveShareRewardsEnabled && currentAppUser?.role === UserRole.USER) {
+      console.log(`handleShareEvent: Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
+  }
+};
 
   const handleToggleFavorite = async (venueId: string, venueName: string) => {
     if (isPreviewMode && currentAppUser?.role === UserRole.PARTNER) {
@@ -1128,10 +1143,9 @@ const MapContentAndLogic = () => {
              <Logo logoWidth={50} logoHeight={50} />
         </div>
 
-         {/* Event-Specific Chat Widget Integrated Here */}
-        {isEventChatWidgetOpen && currentUser && currentAppUser && selectedEventForChat && (
+        {isEventChatWidgetOpen && currentUser && chatUserProfile && selectedEventForChat && chatRoomId && (
             <Card className={cn(
-                "fixed bottom-4 right-4 z-30 w-[90vw] max-w-sm h-auto max-h-[70vh] flex flex-col border-primary/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
+                "fixed bottom-4 right-4 z-[60] w-[90vw] max-w-sm h-auto max-h-[70vh] flex flex-col border-primary/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
                 "transition-all duration-300 ease-in-out",
                 isEventChatWidgetOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-full"
             )}>
@@ -1176,7 +1190,7 @@ const MapContentAndLogic = () => {
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
                     <ChatMessageList
-                        chatRoomId={selectedEventForChat.id} 
+                        chatRoomId={selectedEventForChat.id} // Event-specific chat uses eventId as chatRoomId
                         currentUserId={currentUser.uid}
                         isChatSoundMuted={isEventChatSoundMuted}
                         chatClearedTimestamp={eventChatClearedTimestamp}
@@ -1186,24 +1200,11 @@ const MapContentAndLogic = () => {
                     <ChatInputForm
                         chatRoomId={selectedEventForChat.id} 
                         userId={currentUser.uid}
-                        userName={currentAppUser.name || 'Usuário Anônimo'}
-                        userPhotoURL={currentAppUser.photoURL || null}
+                        userName={chatUserProfile.name}
+                        userPhotoURL={chatUserProfile.photoURL}
                     />
                 </div>
             </Card>
-        )}
-        {isEventChatWidgetOpen && (!currentUser || !selectedEventForChat) && ( // If chat widget is toggled but user not logged in or no event selected
-             <Card className={cn(
-                 "fixed bottom-4 right-4 z-30 w-[90vw] max-w-sm h-auto flex flex-col border-destructive/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
-                 "transition-all duration-300 ease-in-out",
-                 "p-6 text-center"
-              )}>
-                <CardTitle className="text-lg text-destructive">Acesso ao Chat Indisponível</CardTitle>
-                <UICardDescription className="text-muted-foreground mt-2">
-                    Você precisa estar logado, ter feito check-in no evento e selecionado um evento para participar do chat.
-                </UICardDescription>
-                <Button onClick={() => setIsEventChatWidgetOpen(false)} className="mt-4">OK</Button>
-             </Card>
         )}
         
 
@@ -1288,9 +1289,9 @@ const MapContentAndLogic = () => {
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4 z-10">
                 <div className="flex-1">
-                    <SheetTitle className="text-2xl font-bold text-secondary"> 
+                    <SheetPrimitiveTitle className="text-2xl font-bold text-secondary"> 
                     {selectedVenue.name}
-                    </SheetTitle>
+                    </SheetPrimitiveTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="hsl(var(--primary))" readOnly />
@@ -1653,6 +1654,3 @@ const MapPage: NextPage = () => {
 }
 
 export default MapPage;
-
-
-    
