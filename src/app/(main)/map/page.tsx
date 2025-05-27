@@ -5,13 +5,13 @@ import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap, useMapsLibrary }
 import { useEffect, useState, useMemo, useCallback, type ReactElement, useRef } from 'react';
 import type { NextPage } from 'next';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, X, Music2, Loader2, CalendarClock, MapPin, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX, AlertCircle, Trash2, ExternalLink } from 'lucide-react';
+import { Filter, X, Music2, Loader2, CalendarClock, MapPin as MapPinIcon, Navigation2, Car, Navigation as NavigationIcon, User as UserIconLucide, Instagram, Facebook, Youtube, Bell, Share2, Clapperboard, MessageSquare, Star as StarIcon, Send, Heart, BellOff, Ticket, HeartOff, XCircle as XCircleIcon, Volume2, VolumeX, AlertCircle, Trash2, ExternalLink } from 'lucide-react';
 import { collection, getDocs, query, where, Timestamp as FirebaseTimestamp, doc, runTransaction, serverTimestamp, onSnapshot, updateDoc, orderBy, getDoc, increment, writeBatch, addDoc, collectionGroup, documentId } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Corrected import for CardTitle and CardDescription
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { GOOGLE_MAPS_API_KEY, VenueType, MusicStyle, MUSIC_STYLE_OPTIONS, VENUE_TYPE_OPTIONS, UserRole, PricingType, PRICING_TYPE_OPTIONS, FERVO_COINS_SHARE_REWARD, FERVO_COINS_FOR_COUPON, COUPON_REWARD_DESCRIPTION, COUPON_CODE_PREFIX, APP_URL } from '@/lib/constants';
 import type { Location } from '@/services/geocoding';
@@ -45,7 +45,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as RadixAlertDialogTitle, 
+  AlertDialogTitle as RadixAlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -149,10 +149,10 @@ const musicStyleLabels: Record<MusicStyle, string> = MUSIC_STYLE_OPTIONS.reduce(
 const venueTypeColors: Record<VenueType, string> = {
   [VenueType.NIGHTCLUB]: 'hsl(var(--primary))',
   [VenueType.BAR]: 'hsl(var(--accent))',
-  [VenueType.STAND_UP]: '#FACC15', 
+  [VenueType.STAND_UP]: '#FACC15',
   [VenueType.SHOW_HOUSE]: 'hsl(var(--secondary))',
-  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899', 
-  [VenueType.LGBT]: '#F97316', 
+  [VenueType.ADULT_ENTERTAINMENT]: '#EC4899',
+  [VenueType.LGBT]: '#F97316',
 };
 
 const MapUpdater = ({ center }: { center: Location | null }) => {
@@ -179,13 +179,13 @@ const VenueCustomMapMarker = ({
   const IconComponent = venueTypeIcons[type];
   const basePinColor = venueTypeColors[type] || 'hsl(var(--primary))';
 
-  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))'; 
+  let effectiveBlinkHighlightColor = 'hsl(var(--secondary))';
   const normalizeHex = (hex: string) => hex.startsWith('#') ? hex.substring(1).toUpperCase() : hex.toUpperCase();
 
   const normalizedBasePinColor = basePinColor.startsWith('hsl') ? basePinColor : `#${normalizeHex(basePinColor)}`;
 
   if (normalizedBasePinColor === normalizeHex(effectiveBlinkHighlightColor) || basePinColor === effectiveBlinkHighlightColor) {
-    effectiveBlinkHighlightColor = 'hsl(var(--destructive))'; 
+    effectiveBlinkHighlightColor = 'hsl(var(--destructive))';
   }
 
 
@@ -364,7 +364,6 @@ const MapContentAndLogic = () => {
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data() as MapPageAppUser;
               setCurrentAppUser(userData);
-              // For Chat Widget:
               setIsChatProfileLoading(true);
               if (userData.name && userData.address?.city && userData.address?.state) {
                 setChatUserProfile({
@@ -467,13 +466,13 @@ const MapContentAndLogic = () => {
             lng: position.coords.longitude,
           };
           setActualUserLocation(loc);
-          if (!searchParams.get('venueId')) { // Only update userLocation if not focusing on a specific venue
-            setUserLocation(loc); 
+          if (!searchParams.get('venueId')) {
+            setUserLocation(loc);
           }
         },
         (error) => {
           console.error("Error getting user location:", error);
-          const defaultLoc = { lat: -23.55052, lng: -46.633308 }; 
+          const defaultLoc = { lat: -23.55052, lng: -46.633308 };
           setUserLocation(defaultLoc);
           setActualUserLocation(null);
           if (!isPreviewMode) {
@@ -565,8 +564,8 @@ const MapContentAndLogic = () => {
             setUserLocation(venueToSelect.location);
           }
         } else {
-          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null); 
-          router.replace('/map', { scroll: false }); 
+          if (selectedVenue?.id === venueIdFromQuery) setSelectedVenue(null);
+          router.replace('/map', { scroll: false });
           if (!isPreviewMode) {
             toast({ title: "Local não encontrado", description: "O Fervo especificado no link não foi encontrado.", variant: "default" });
           }
@@ -596,7 +595,7 @@ const MapContentAndLogic = () => {
         toast({title: "Erro ao buscar eventos", description: "Não foi possível carregar os eventos deste local.", variant: "destructive"})
         setIsLoadingEvents(false);
       });
-      return unsubscribe; 
+      return unsubscribe;
     } catch (error) {
       console.error("Error fetching venue events:", error);
       toast({title: "Erro ao buscar eventos", description: "Ocorreu um problema inesperado.", variant: "destructive"})
@@ -606,7 +605,7 @@ const MapContentAndLogic = () => {
 
   useEffect(() => {
     let unsubscribeEvents: (() => void) | undefined;
-    if (selectedVenue && !selectedVenue.events) { 
+    if (selectedVenue && !selectedVenue.events) {
        fetchVenueEvents(selectedVenue.id).then(unsub => unsubscribeEvents = unsub);
     } else if (selectedVenue && selectedVenue.events) {
       setCurrentlyRatingEventId(null);
@@ -617,7 +616,7 @@ const MapContentAndLogic = () => {
         if (unsubscribeEvents) unsubscribeEvents();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVenue]); 
+  }, [selectedVenue]);
 
 
   const toggleVenueTypeFilter = useCallback((type: VenueType) => {
@@ -680,18 +679,18 @@ const MapContentAndLogic = () => {
       if (activeMusicStyleFilters.length > 0) {
         return musicStyleMatch;
       }
-      return false; 
+      return false;
     });
   }, [venues, activeVenueTypeFilters, activeMusicStyleFilters, isAnyFilterActive]);
 
 
   const VenueIconDisplayForFilter = ({ type }: { type: VenueType }) => {
     const IconComponent = venueTypeIcons[type];
-    let colorClass = "text-foreground"; 
-    let hoverColorClass = "hover:text-secondary"; 
+    let colorClass = "text-foreground";
+    let hoverColorClass = "hover:text-secondary";
 
     if (activeVenueTypeFilters.includes(type)) {
-      colorClass = "text-primary"; 
+      colorClass = "text-primary";
       hoverColorClass = "hover:text-primary/80";
     }
 
@@ -731,7 +730,7 @@ const MapContentAndLogic = () => {
             if (existingRatingSnap.exists()) {
                 const previousUserRating = existingRatingSnap.data()?.rating || 0;
                 newAverageRating = oldRatingCount > 0 ? ((oldAverageRating * oldRatingCount) - previousUserRating + currentRating) / oldRatingCount : currentRating;
-                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) { 
+                 if (oldRatingCount === 1 && previousUserRating === oldAverageRating * oldRatingCount) {
                     newAverageRating = currentRating;
                 }
 
@@ -763,7 +762,7 @@ const MapContentAndLogic = () => {
         toast({ title: "Avaliação Enviada!", description: "Obrigado pelo seu feedback!", variant: "default" });
         setCurrentRating(0);
         setCurrentComment('');
-        setCurrentlyRatingEventId(null); 
+        setCurrentlyRatingEventId(null);
 
         if (selectedVenue) {
             await updatePartnerOverallRating(selectedVenue.id);
@@ -778,6 +777,7 @@ const MapContentAndLogic = () => {
 };
 
 const handleShareEvent = async (partnerId: string, eventId: string, partnerName: string, eventEndDateTime: FirebaseTimestamp, eventNameForShare?: string, shareRewardsEnabledForEvent?: boolean) => {
+  console.log("handleShareEvent: Iniciando compartilhamento para evento:", eventId, "Parceiro:", partnerId);
   if (!currentUser || !currentAppUser) {
     toast({ title: "Login Necessário", description: "Faça login para compartilhar.", variant: "destructive" });
     return;
@@ -787,24 +787,9 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
     toast({ title: "Modo Preview", description: "Compartilhamento desabilitado para parceiros no modo de preview.", variant: "default" });
     return;
   }
-  
+
   if (isEventPast(eventEndDateTime)) {
     toast({ title: "Evento Encerrado", description: "Este evento já terminou e não pode mais ser compartilhado.", variant: "destructive" });
-    return;
-  }
-  
-  const userShareEventDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
-  try {
-    const userShareSnap = await getDoc(userShareEventDataRef);
-    const currentShareCountForEvent = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
-
-    if (currentShareCountForEvent >= 10) {
-      toast({ title: "Limite Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10).", variant: "default", duration: 5000 });
-      return;
-    }
-  } catch (error) {
-    console.error("Error fetching share count before sharing:", error);
-    toast({ title: "Erro ao Verificar Compartilhamentos", description: "Não foi possível verificar seus compartilhamentos anteriores, tente novamente.", variant: "destructive" });
     return;
   }
 
@@ -813,17 +798,29 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
 
   const encodedUserName = currentAppUser.name ? encodeURIComponent(currentAppUser.name) : '';
   const webShareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}?sharedByName=${encodedUserName}`;
-  const customSchemeShareUrl = `shareevent://${partnerId}/${eventId}?sharedByName=${encodedUserName}`;
+  const customSchemeShareUrl = `shareevent://{partnerId}/{eventId}?sharedByName=${encodedUserName}`; // Placeholder, not directly used by AndroidInterface.shareLinkFromWeb
 
   const title = `Confira este Fervo: ${partnerName} - ${effectiveEventName}`;
   const text = `Olha esse evento que encontrei no Fervo App! ${currentAppUser.name ? 'Enviado por ' + currentAppUser.name : ''}. Veja mais em:`;
 
   let finalSharedSuccessfully = false;
-  console.log("Tentando compartilhar...");
+  console.log("handleShareEvent: Tentando compartilhar. URL Web:", webShareUrl);
 
-  if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
+  // Prioritize Android Native Interface
+  if (typeof window !== 'undefined' && (window as any).AndroidInterface && typeof (window as any).AndroidInterface.shareLinkFromWeb === 'function') {
+      try {
+          console.log("Tentando compartilhar via AndroidInterface.shareLinkFromWeb com URL Web:", webShareUrl);
+          (window as any).AndroidInterface.shareLinkFromWeb(webShareUrl);
+          finalSharedSuccessfully = true;
+          toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
+          console.log("AndroidInterface.shareLinkFromWeb chamado.");
+      } catch (nativeShareError: any) {
+          console.warn('AndroidInterface.shareLinkFromWeb falhou:', nativeShareError);
+          // Fallback to other methods if this specific one fails
+      }
+  } else if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
     try {
-      console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com title:", title, "text:", text, "webShareUrl:", webShareUrl);
+      console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com:", title, text, webShareUrl);
       (window as any).AndroidShareInterface.shareEvent(title, text, webShareUrl);
       finalSharedSuccessfully = true;
       toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
@@ -832,118 +829,169 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
       console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
     }
   }
-  
-  if (!finalSharedSuccessfully && typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchShareIntent === 'function') {
+
+
+  if (!finalSharedSuccessfully && navigator.share) {
+    try {
+      console.log("Tentando compartilhar via navigator.share.");
+      await navigator.share({ title, text, url: webShareUrl });
+      finalSharedSuccessfully = true;
+      toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
+    } catch (shareError: any) {
+      if (shareError.name !== 'AbortError') {
+        console.warn('navigator.share falhou, tentando área de transferência:', shareError);
+      } else {
+        console.log("Compartilhamento via navigator.share cancelado pelo usuário.");
+      }
+    }
+  }
+
+  if (!finalSharedSuccessfully) {
       try {
-          console.log("Tentando compartilhar via AndroidShareInterface.launchShareIntent com customSchemeShareUrl:", customSchemeShareUrl);
-          (window as any).AndroidShareInterface.launchShareIntent(customSchemeShareUrl);
-          finalSharedSuccessfully = true;
-          toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default", duration: 3000});
-          console.log("AndroidShareInterface.launchShareIntent chamado.");
-      } catch (customSchemeError:any) {
-          console.warn('AndroidShareInterface.launchShareIntent falhou:', customSchemeError);
+        console.log("Tentando copiar para a área de transferência.");
+        await navigator.clipboard.writeText(`${title} ${text} ${webShareUrl}`);
+        finalSharedSuccessfully = true;
+        toast({ title: "Link Copiado!", description: "A mensagem do evento foi copiada para a área de transferência!", variant: "default", duration: 6000 });
+        console.log("Fallback: Conteúdo copiado para a área de transferência.");
+      } catch (clipError) {
+        console.error('Falha ao copiar para área de transferência (fallback final):', clipError);
+        toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
       }
   }
-  
-  // If native interfaces were not available or failed, finalSharedSuccessfully will still be false
-  if (!finalSharedSuccessfully) {
-    console.log("Nenhuma interface nativa Android detectada ou falhou. Tentando copiar para área de transferência como último recurso.");
-    try {
-      await navigator.clipboard.writeText(`${title} ${text} ${webShareUrl}`);
-      finalSharedSuccessfully = true; // Assume success for clipboard copy in this simplified flow
-      toast({ title: "Link Copiado!", description: "A mensagem do evento foi copiada para a área de transferência!", variant: "default", duration: 6000 });
-      console.log("Fallback: Conteúdo copiado para a área de transferência.");
-    } catch (clipError) {
-      console.error('Falha ao copiar para área de transferência (fallback final):', clipError);
-      toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
-    }
-  }
 
-  if (finalSharedSuccessfully && currentUser && (effectiveShareRewardsEnabled) && currentAppUser?.role === UserRole.USER) {
-    console.log("handleShareEvent: Compartilhamento bem-sucedido, processando recompensa.");
-    const userDocRef = doc(firestore, "users", currentUser.uid);
-    const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
-    try {
-        const { newCoinTotal, newCouponGenerated } = await runTransaction(firestore, async (transaction) => {
-            const userShareEventSnap = await transaction.get(userShareEventDataRef);
-            const userSnap = await transaction.get(userDocRef);
+  if (finalSharedSuccessfully && currentUser && currentAppUser?.role === UserRole.USER) {
+    if (effectiveShareRewardsEnabled) {
+      console.log("handleShareEvent: Compartilhamento bem-sucedido, verificando limite e processando recompensa com atraso de 7 segundos.");
+      
+      const userShareEventDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
+      let currentShareCountForEvent = 0;
+      try {
+          const userShareSnap = await getDoc(userShareEventDataRef);
+          currentShareCountForEvent = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
 
-            if (!userSnap.exists()) {
-                console.error("handleShareEvent Transaction: User document not found for user", currentUser.uid);
-                throw new Error("Usuário não encontrado para premiar moedas.");
+          if (currentShareCountForEvent >= 10) {
+              toast({ title: "Limite Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10). Nenhuma recompensa será concedida para este compartilhamento.", variant: "default", duration: 6000 });
+              return; 
+          }
+      } catch (error) {
+          console.error("Error fetching share count before reward logic:", error);
+          toast({ title: "Erro ao Verificar Compartilhamentos", description: "Não foi possível verificar seus compartilhamentos anteriores para recompensa.", variant: "destructive" });
+          return; 
+      }
+      
+      setTimeout(async () => {
+        console.log("handleShareEvent: Executando lógica de recompensa após 7 segundos.");
+        const userDocRef = doc(firestore, "users", currentUser.uid);
+        const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
+
+        try {
+            const { newCoinTotal, newCouponGenerated, newShareCount } = await runTransaction(firestore, async (transaction) => {
+                // --- READS FIRST ---
+                const userShareEventSnap = await transaction.get(userShareEventDataRef);
+                const userSnap = await transaction.get(userDocRef);
+
+                // --- DATA EXTRACTION FROM READS ---
+                if (!userSnap.exists()) {
+                    throw new Error("Usuário não encontrado para premiar moedas (dentro da transação).");
+                }
+                const userData = userSnap.data();
+                const shareCountBeforeThisShare = userShareEventSnap.exists() ? (userShareEventSnap.data()?.shareCount || 0) : 0;
+                
+                // Double check limit inside transaction for safety, though the main check is outside.
+                // If the count fetched *inside* the transaction is already >= 10, this share won't get coins.
+                if (shareCountBeforeThisShare >= 10) {
+                    console.log("handleShareEvent Transaction: Limite de recompensa (10) já atingido para evento", eventId, "antes de incrementar.");
+                    transaction.set(userShareEventDataRef, { shareCount: increment(1), eventId: eventId, partnerId: partnerId }, { merge: true }); // Still log the share
+                    return { 
+                        newCoinTotal: userData.venueCoins?.[partnerId] || 0, 
+                        newCouponGenerated: false, 
+                        newShareCount: shareCountBeforeThisShare + 1
+                    };
+                }
+
+                const shareCountAfterThisShare = shareCountBeforeThisShare + 1;
+                const venueCoinsMap: UserVenueCoins = userData.venueCoins || {};
+                const currentVenueCoinsForPartner = venueCoinsMap[partnerId] || 0;
+                
+                // --- CALCULATIONS ---
+                const coinsGained = FERVO_COINS_SHARE_REWARD;
+                let coinsSpentOnCoupon = 0;
+                let couponGeneratedThisTransaction = false;
+                const potentialTotalCoinsForPartner = currentVenueCoinsForPartner + coinsGained;
+
+                if (potentialTotalCoinsForPartner >= FERVO_COINS_FOR_COUPON) {
+                    coinsSpentOnCoupon = FERVO_COINS_FOR_COUPON;
+                    couponGeneratedThisTransaction = true;
+                }
+                const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + coinsGained - coinsSpentOnCoupon;
+
+                // --- WRITES LAST ---
+                transaction.set(userShareEventDataRef, { 
+                    shareCount: shareCountAfterThisShare, 
+                    eventId: eventId, 
+                    partnerId: partnerId,
+                }, { merge: true });
+                
+                const updatesForUserDoc: Record<string, any> = {
+                    [`venueCoins.${partnerId}`]: finalCoinTotalForThisPartner,
+                    updatedAt: serverTimestamp() 
+                };
+                transaction.update(userDocRef, updatesForUserDoc);
+
+                if (couponGeneratedThisTransaction) {
+                    const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+                    const newCouponRef = doc(couponCollectionRef); 
+                    transaction.set(newCouponRef, {
+                        userId: currentUser.uid,
+                        couponCode: couponCode,
+                        description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
+                        eventName: effectiveEventName,
+                        createdAt: serverTimestamp(),
+                        status: 'active',
+                        validAtPartnerId: partnerId,
+                        partnerVenueName: partnerName,
+                    });
+                }
+                return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction, newShareCount: shareCountAfterThisShare };
+            });
+
+            // Toasts based on transaction outcome
+            if (newCouponGenerated) {
+                let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins em ${partnerName}! Total: ${newCoinTotal}. E um novo cupom: ${COUPON_REWARD_DESCRIPTION} em ${partnerName}!`;
+                if (newShareCount >= 10) {
+                    rewardMessage += " Você atingiu o limite de compartilhamentos recompensados para este evento.";
+                }
+                toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 8000 });
+            } else if (newCoinTotal > (currentAppUser.venueCoins?.[partnerId] || 0) ) { 
+                let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins em ${partnerName}! Total: ${newCoinTotal}.`;
+                 if (newShareCount >= 10) {
+                    rewardMessage += " Você atingiu o limite de compartilhamentos recompensados para este evento.";
+                }
+                toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 6000 });
+            } else if (newShareCount > currentShareCountForEvent && newShareCount >=10) {
+                // This covers the case where share count was incremented to 10 (or more by race condition)
+                // but no coins were awarded in *this* transaction (e.g., already at coin cap for coupon without generating one)
+                // The initial check before setTimeout covers "already at limit".
+                console.log("handleShareEvent: Compartilhamento contado, limite de recompensa atingido.");
+                 toast({ title: "Limite de Compartilhamento Atingido", description: `Você compartilhou este evento ${newShareCount} vezes e atingiu o limite para recompensas.`, variant: "default", duration: 6000 });
             }
-            
-            const shareCountFromTransaction = userShareEventSnap.exists() ? (userShareEventSnap.data()?.shareCount || 0) : 0;
-            const userDataFromTransaction = userSnap.data();
-            const venueCoinsMap: UserVenueCoins = userDataFromTransaction.venueCoins || {};
-            const currentVenueCoinsForPartner = venueCoinsMap[partnerId] || 0;
 
-            if (shareCountFromTransaction >= 10) {
-                console.log("handleShareEvent Transaction: Share limit (10) already reached for event", eventId, "by user", currentUser.uid);
-                // This specific error will be caught by the outer try-catch of runTransaction
-                // We've already checked this outside the transaction, so this is a safeguard.
-                throw new Error("Limite de compartilhamento (10) já atingido para este evento (verificação final na transação).");
-            }
-
-            const coinsGained = FERVO_COINS_SHARE_REWARD;
-            let coinsSpentOnCoupon = 0;
-            let couponGeneratedThisTransaction = false;
-            
-            const potentialTotalCoinsForPartner = currentVenueCoinsForPartner + coinsGained;
-
-            if (potentialTotalCoinsForPartner >= FERVO_COINS_FOR_COUPON) {
-                coinsSpentOnCoupon = FERVO_COINS_FOR_COUPON;
-                couponGeneratedThisTransaction = true;
-            }
-            
-            const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + coinsGained - coinsSpentOnCoupon;
-
-            transaction.set(userShareEventDataRef, { shareCount: increment(1), eventId: eventId, partnerId: partnerId }, { merge: true });
-            
-            const updatesForUserDoc: Record<string, any> = {
-                [`venueCoins.${partnerId}`]: finalCoinTotalForThisPartner
-            };
-            transaction.update(userDocRef, updatesForUserDoc);
-
-            if (couponGeneratedThisTransaction) {
-                const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-                const newCouponRef = doc(couponCollectionRef); 
-                transaction.set(newCouponRef, {
-                    userId: currentUser.uid,
-                    couponCode: couponCode,
-                    description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
-                    eventName: effectiveEventName,
-                    createdAt: serverTimestamp(),
-                    status: 'active',
-                    validAtPartnerId: partnerId,
-                    partnerVenueName: partnerName,
-                });
-                console.log("handleShareEvent Transaction: Coupon generated for user", currentUser.uid, "at venue", partnerName);
-            }
-            console.log("handleShareEvent Transaction: Coin balance updated for user", currentUser.uid, "at venue", partnerId, "New total:", finalCoinTotalForThisPartner);
-            return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction };
-        });
-
-        let rewardMessage = `Você ganhou ${FERVO_COINS_SHARE_REWARD} FervoCoins para ${partnerName}! Total neste local: ${newCoinTotal}.`;
-        if (newCouponGenerated) {
-            rewardMessage += ` E um novo cupom: ${COUPON_REWARD_DESCRIPTION} em ${partnerName}!`;
-            toast({ title: "Recompensa Turbinada!", description: rewardMessage, variant: "default", duration: 7000 });
-        } else {
-            toast({ title: "Recompensa!", description: rewardMessage, variant: "default", duration: 5000 });
+        } catch (error: any) { // Catch for runTransaction
+            console.error("Error in Venue-Specific FervoCoins/Coupon transaction (detailed):", error);
+            toast({
+                title: "Erro na Recompensa",
+                description: error.message || `Não foi possível processar sua recompensa de moedas/cupom.`,
+                variant: "destructive",
+                duration: 7000
+            });
         }
-
-    } catch (error: any) {
-        console.error("Error in Venue-Specific FervoCoins/Coupon transaction (detailed):", error);
-        toast({
-            title: "Erro na Recompensa",
-            description: error.message || `Não foi possível processar sua recompensa de moedas/cupom.`,
-            variant: "destructive",
-            duration: 7000
-        });
+      }, 7000); 
+    } else if (effectiveShareRewardsEnabled === false) { // Explicitly check if rewards are disabled
+        console.log(`handleShareEvent: Evento ${eventId} compartilhado com sucesso, mas recompensas de FervoCoin estão desabilitadas para este evento.`);
+        // Optionally, provide a different success toast if rewards are off
+        // toast({ title: "Compartilhado!", description: "Evento compartilhado com sucesso (recompensas desativadas).", variant: "default" });
     }
-  } else if (finalSharedSuccessfully && currentUser && !effectiveShareRewardsEnabled && currentAppUser?.role === UserRole.USER) {
-      console.log(`handleShareEvent: Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
   }
 };
 
@@ -979,7 +1027,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
         } else {
           if (currentFavorites.length >= 20) {
               toast({ title: "Limite de Favoritos Atingido", description: "Você pode ter no máximo 20 locais favoritos.", variant: "destructive", duration: 4000 });
-              return; 
+              return;
           }
           updatedFavorites = [...currentFavorites, venueId];
           toast({ title: "Adicionado aos Favoritos!", description: `${venueName} agora é um dos seus fervos favoritos!`, variant: "default" });
@@ -997,34 +1045,9 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
       toast({ title: "Erro", description: "Não foi possível identificar o chat ou o evento.", variant: "destructive" });
       return;
     }
-
-    const currentChatRoomIdForClear = selectedEventForChat.id;
-
-    setIsDeletingEventChat(true);
-    try {
-      const messagesRef = collection(firestore, `chatRooms/${currentChatRoomIdForClear}/messages`);
-      const messagesSnapshot = await getDocs(messagesRef);
-
-      if (messagesSnapshot.empty) {
-          toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
-          setShowClearEventChatDialog(false);
-          setIsDeletingEventChat(false);
-          return;
-      }
-
-      const batchOp = writeBatch(firestore); 
-      messagesSnapshot.docs.forEach(docSnap => batchOp.delete(docSnap.ref)); 
-      await batchOp.commit();
-
-      toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${selectedEventForChat.eventName} foram apagadas.`, variant: "default" });
-      setShowClearEventChatDialog(false);
-
-    } catch (error) {
-        console.error("Error clearing event chat messages:", error);
-        toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens do chat.", variant: "destructive"});
-    } finally {
-        setIsDeletingEventChat(false);
-    }
+    setEventChatClearedTimestamp(Date.now());
+    toast({ title: "Chat Limpo!", description: "Sua visualização das mensagens do chat foi limpa.", variant: "default"});
+    setShowClearEventChatDialog(false); // Close dialog after setting timestamp
   };
 
   const openEventSpecificChat = (event: VenueEvent) => {
@@ -1046,14 +1069,14 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
     return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" /> Carregando sua localização...</div>;
   }
 
-  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "YOUR_DEFAULT_API_KEY_HERE") {
+  if (!mapsApi && GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY !== "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0") {
     return <div className="flex items-center justify-center h-screen bg-background text-foreground"><Loader2 className="w-10 h-10 animate-spin text-primary mr-2" />Carregando API do Mapa... Se demorar, verifique sua conexão ou a configuração da API Key.</div>;
   }
 
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE";
+  const genericPlaceholder = "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0"; // Use the actual key as placeholder to avoid re-prompting if it's this key
 
-  if (!apiKey || apiKey === genericPlaceholder) {
+  if (!apiKey || apiKey === "YOUR_DEFAULT_API_KEY_HERE") { // Strict check for the default placeholder text
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.
@@ -1140,10 +1163,11 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                 <Filter className="w-5 h-5" />
             </Button>
             )}
-             <Logo logoWidth={50} logoHeight={50} />
+             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={50} logoHeight={50} className="hidden sm:flex" />
         </div>
 
-        {isEventChatWidgetOpen && currentUser && chatUserProfile && selectedEventForChat && chatRoomId && (
+        {/* Event-Specific Chat Widget */}
+        {isEventChatWidgetOpen && currentUser && currentAppUser && chatUserProfile && selectedEventForChat && (
             <Card className={cn(
                 "fixed bottom-4 right-4 z-[60] w-[90vw] max-w-sm h-auto max-h-[70vh] flex flex-col border-primary/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
                 "transition-all duration-300 ease-in-out",
@@ -1159,22 +1183,19 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                     <div className="flex items-center gap-1">
                         <AlertDialog open={showClearEventChatDialog} onOpenChange={setShowClearEventChatDialog}>
                             <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:h-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:h-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat (apenas visualização)">
                                     <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
-                                <RadixAlertDialogTitle>Confirmar Limpeza do Chat</RadixAlertDialogTitle>
+                                <RadixAlertDialogTitle>Limpar Visualização do Chat</RadixAlertDialogTitle> {/* Use RadixAlertDialogTitle */}
                                 <AlertDialogDescription>
-                                    Esta ação apenas limpará a sua visualização atual do chat. As mensagens permanecerão no servidor para outros usuários e para você, caso reabra o chat.
+                                    Tem certeza que deseja limpar as mensagens desta visualização? As mensagens não serão excluídas permanentemente.
                                 </AlertDialogDescription>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => {
-                                        setEventChatClearedTimestamp(Date.now());
-                                        toast({ title: "Chat Limpo!", description: "Sua visualização do chat foi limpa.", variant: "default"});
-                                        setShowClearEventChatDialog(false);
-                                    }} className="bg-destructive hover:bg-destructive/90">
+                                    <AlertDialogAction onClick={handleClearEventChat}>
+                                        {isDeletingEventChat ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
                                         Limpar Minha Visualização
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -1190,7 +1211,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
                     <ChatMessageList
-                        chatRoomId={selectedEventForChat.id} // Event-specific chat uses eventId as chatRoomId
+                        chatRoomId={selectedEventForChat.id}
                         currentUserId={currentUser.uid}
                         isChatSoundMuted={isEventChatSoundMuted}
                         chatClearedTimestamp={eventChatClearedTimestamp}
@@ -1198,7 +1219,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                 </CardContent>
                 <div className="p-3 sm:p-4 border-t border-border bg-card">
                     <ChatInputForm
-                        chatRoomId={selectedEventForChat.id} 
+                        chatRoomId={selectedEventForChat.id}
                         userId={currentUser.uid}
                         userName={chatUserProfile.name}
                         userPhotoURL={chatUserProfile.photoURL}
@@ -1206,7 +1227,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                 </div>
             </Card>
         )}
-        
+
 
         {GOOGLE_MAPS_API_KEY && mapsApi && (
             <GoogleMap
@@ -1259,8 +1280,8 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
             if (!isOpen) {
                 const venueIdInParams = searchParams.get('venueId');
                 setSelectedVenue(null);
-                setSelectedEventForChat(null); 
-                setIsEventChatWidgetOpen(false); 
+                setSelectedEventForChat(null);
+                setIsEventChatWidgetOpen(false);
 
                 if (isPreviewMode && venueIdInParams) {
                     router.replace('/map', { scroll: false });
@@ -1289,7 +1310,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4 z-10">
                 <div className="flex-1">
-                    <SheetPrimitiveTitle className="text-2xl font-bold text-secondary"> 
+                    <SheetPrimitiveTitle className="text-2xl font-bold text-secondary">
                     {selectedVenue.name}
                     </SheetPrimitiveTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
@@ -1333,6 +1354,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                     </Button>
                    </SheetClose>
                 </div>
+                {/* SheetPrimitiveDescription is required for accessibility, even if sr-only */}
                 <SheetPrimitiveDescription className="sr-only">Detalhes sobre {selectedVenue.name}</SheetPrimitiveDescription>
             </SheetHeader>
 
@@ -1394,7 +1416,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                             <Facebook className="w-6 h-6" />
                           </a>
                         )}
-                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && ( 
+                        {selectedVenue.youtubeUrl && !getYouTubeEmbedUrl(selectedVenue.youtubeUrl) && (
                           <a href={selectedVenue.youtubeUrl} target="_blank" rel="noopener noreferrer" aria-label="YouTube do local" title="YouTube" className="text-muted-foreground hover:text-primary transition-colors">
                             <Youtube className="w-6 h-6" />
                           </a>
@@ -1425,7 +1447,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                             <Card key={event.id} className="p-3 bg-card/50 border-border/50">
                               <div className="flex justify-between items-start">
                                   <div className="flex-1">
-                                    <CardTitle className="text-md text-secondary mb-1 font-semibold">{event.eventName}</CardTitle> 
+                                    <CardTitle className="text-md text-secondary mb-1 font-semibold">{event.eventName}</CardTitle>
                                     {isHappening && (
                                       <Badge className="mt-1 text-xs bg-green-500/80 text-white hover:bg-green-500 animate-pulse">
                                         <Clapperboard className="w-3 h-3 mr-1" /> Acontecendo Agora
@@ -1435,26 +1457,26 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                                         <Badge variant="outline" className="mt-1 text-xs border-destructive text-destructive">Encerrado</Badge>
                                     )}
                                   </div>
-                                  <div className="flex items-center space-x-0.5"> 
+                                  <div className="flex items-center space-x-0.5">
                                       <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="text-accent hover:text-accent/80 -mr-1 -mt-1 h-7 w-7" 
+                                          className="text-accent hover:text-accent/80 -mr-1 -mt-1 h-7 w-7"
                                           onClick={() => handleShareEvent(selectedVenue.id, event.id, selectedVenue.name, event.endDateTime, event.eventName, event.shareRewardsEnabled)}
                                           title={eventHasEnded ? "Evento encerrado" : "Compartilhar evento e ganhar moedas!"}
                                           disabled={eventHasEnded || (isPreviewMode && currentAppUser?.role === UserRole.PARTNER)}
                                       >
-                                          <Share2 className="w-4 h-4" /> 
+                                          <Share2 className="w-4 h-4" />
                                       </Button>
                                       <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="text-primary hover:text-primary/80 -mr-1 -mt-1 h-7 w-7" 
+                                          className="text-primary hover:text-primary/80 -mr-1 -mt-1 h-7 w-7"
                                           onClick={() => toast({ title: "Notificação Ativada!", description: `Você será notificado sobre ${event.eventName}. (Recurso em breve)`, duration: 3000})}
                                           title={eventHasEnded || event.startDateTime.toDate() < new Date() ? "Evento já começou ou encerrou" : "Ativar notificação para este evento"}
                                           disabled={eventHasEnded || event.startDateTime.toDate() < new Date()}
                                       >
-                                          <Bell className="w-4 h-4" /> 
+                                          <Bell className="w-4 h-4" />
                                       </Button>
                                   </div>
                               </div>
@@ -1522,7 +1544,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                                     placeholder="Deixe um comentário (opcional)..."
                                     value={currentlyRatingEventId === event.id ? currentComment : ''}
                                     onChange={(e) => {
-                                      setCurrentlyRatingEventId(event.id); 
+                                      setCurrentlyRatingEventId(event.id);
                                       setCurrentComment(e.target.value);
                                     }}
                                     className="mt-2 text-xs"
@@ -1537,7 +1559,7 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                                             setCurrentRating(0);
                                             setCurrentComment('');
                                         }
-                                        setCurrentlyRatingEventId(event.id); 
+                                        setCurrentlyRatingEventId(event.id);
                                         handleRateEvent(event.id, selectedVenue.id)
                                     }}
                                     disabled={isSubmittingRating && currentlyRatingEventId === event.id || (currentlyRatingEventId === event.id && currentRating === 0)}
@@ -1578,21 +1600,21 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                             className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
-                              if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchNavigation === 'function') {
-                                (window as any).AndroidShareInterface.launchNavigation('googlemaps', lat, lng, selectedVenue.name);
+                              if (typeof window !== 'undefined' && (window as any).AndroidInterface && typeof (window as any).AndroidInterface.launchNavigation === 'function') {
+                                (window as any).AndroidInterface.launchNavigation('googlemaps', lat, lng, selectedVenue.name);
                               } else {
                                 window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
                               }
                             }}
                           >
-                            <MapPin className="w-4 h-4 mr-2 text-primary" /> Google Maps
+                            <MapPinIcon className="w-4 h-4 mr-2 text-primary" /> Google Maps
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="hover:bg-accent/20 focus:bg-accent/20 cursor-pointer"
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
-                               if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchNavigation === 'function') {
-                                (window as any).AndroidShareInterface.launchNavigation('waze', lat, lng, selectedVenue.name);
+                               if (typeof window !== 'undefined' && (window as any).AndroidInterface && typeof (window as any).AndroidInterface.launchNavigation === 'function') {
+                                (window as any).AndroidInterface.launchNavigation('waze', lat, lng, selectedVenue.name);
                               } else {
                                 window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, '_blank');
                               }
@@ -1605,8 +1627,8 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
                             onClick={() => {
                               const { lat, lng } = selectedVenue.location!;
                               const venueName = encodeURIComponent(selectedVenue.name);
-                               if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchNavigation === 'function') {
-                                (window as any).AndroidShareInterface.launchNavigation('uber', lat, lng, selectedVenue.name);
+                               if (typeof window !== 'undefined' && (window as any).AndroidInterface && typeof (window as any).AndroidInterface.launchNavigation === 'function') {
+                                (window as any).AndroidInterface.launchNavigation('uber', lat, lng, selectedVenue.name);
                               } else {
                                 window.open(`https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${lat}&dropoff[longitude]=${lng}&dropoff[formatted_address]=${venueName}`, '_blank');
                               }
@@ -1636,9 +1658,8 @@ const handleShareEvent = async (partnerId: string, eventId: string, partnerName:
 
 const MapPage: NextPage = () => {
   const apiKey = GOOGLE_MAPS_API_KEY;
-  const genericPlaceholder = "YOUR_DEFAULT_API_KEY_HERE";
-
-  if (!apiKey || apiKey === genericPlaceholder ) {
+  // No longer using genericPlaceholder for the API key check if GOOGLE_MAPS_API_KEY is directly used
+  if (!apiKey || apiKey === "AIzaSyByPJkEKJ-YC8eT0Q0XWcYZ9P0N5YQx3u0" && apiKey === "YOUR_DEFAULT_API_KEY_HERE") { // Check if it's the placeholder value
     return (
         <div className="flex items-center justify-center h-screen bg-background text-destructive p-4 text-center">
             API Key do Google Maps não configurada corretamente.
