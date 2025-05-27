@@ -70,7 +70,7 @@ interface CheckedInEvent {
   hasRated?: boolean;
 }
 
-interface AppUser {
+export interface AppUser { // Exporting AppUser
   uid: string;
   name: string;
   email: string | null;
@@ -94,6 +94,7 @@ interface AppUser {
   photoURL?: string | null;
   fcmTokens?: string[];
   checkedInEvents?: Record<string, CheckedInEvent>;
+  onboardingEventCreationCompleted?: boolean; // For partner tutorial
 }
 
 
@@ -136,10 +137,11 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false, // Will be updated by customerDoc listener
+              stripeSubscriptionActive: false, 
               photoURL: userData.photoURL || user.photoURL || null,
               fcmTokens: userData.fcmTokens || [],
-              checkedInEvents: {}, // Will be updated by checkedInEvents listener
+              checkedInEvents: {}, 
+              onboardingEventCreationCompleted: userData.onboardingEventCreationCompleted ?? false,
             };
 
             let isCustomerDocListenerNeeded = true;
@@ -151,16 +153,16 @@ const useAuthAndUserSubscription = () => {
                 unsubscribeCustomerDoc = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
                     let isActive = !subscriptionsSnap.empty;
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: isActive}));
-                    isCustomerDocListenerNeeded = false; // Mark as done
+                    isCustomerDocListenerNeeded = false; 
                     if (!areCheckedInEventsListenerNeeded) setLoading(false);
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: false}));
                     isCustomerDocListenerNeeded = false;
-                    setLoading(false); // Ensure loading is set to false in error case
+                    setLoading(false); 
                 });
             } else {
-                 isCustomerDocListenerNeeded = false; // Not a partner, no need for this listener
+                 isCustomerDocListenerNeeded = false; 
             }
 
             const checkedInEventsRef = collection(firestore, `users/${user.uid}/checkedInEvents`);
@@ -171,25 +173,28 @@ const useAuthAndUserSubscription = () => {
                     checkInsData[docSnap.id] = docSnap.data() as CheckedInEvent;
                 });
                 setAppUser(prevUser => ({ ... (prevUser || baseAppUser), checkedInEvents: checkInsData }));
-                areCheckedInEventsListenerNeeded = false; // Mark as done
+                areCheckedInEventsListenerNeeded = false; 
                 if (!isCustomerDocListenerNeeded) setLoading(false);
             }, (error) => {
                 console.error("Error fetching checked-in events:", error);
                 setAppUser(prevUser => ({ ... (prevUser || baseAppUser), checkedInEvents: {} }));
                 areCheckedInEventsListenerNeeded = false;
-                setLoading(false); // Ensure loading is set to false in error case
+                setLoading(false); 
             });
 
-
-            // Initial set, will be refined by listeners
             setAppUser(baseAppUser);
             if (!isCustomerDocListenerNeeded && !areCheckedInEventsListenerNeeded) {
+                setLoading(false);
+            } else if (!userData.role || userData.role !== UserRole.PARTNER && !areCheckedInEventsListenerNeeded) {
+                // If not a partner (so customer listener not needed) and checked-in events are done
+                setLoading(false);
+            } else if (userData.role === UserRole.PARTNER && !isCustomerDocListenerNeeded && !areCheckedInEventsListenerNeeded) {
+                 // If a partner and both listeners are done (this case might be redundant due to above)
                 setLoading(false);
             }
 
 
           } else {
-            // User authenticated but no Firestore document yet
             console.warn("User document not found for UID:", user.uid);
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
@@ -210,6 +215,7 @@ const useAuthAndUserSubscription = () => {
               photoURL: user.photoURL || null,
               fcmTokens: [],
               checkedInEvents: {},
+              onboardingEventCreationCompleted: false,
             });
             setLoading(false);
           }
@@ -246,7 +252,7 @@ const useAuthAndUserSubscription = () => {
   return { firebaseUser, appUser, setAppUser, loading };
 };
 
-const useNotificationSetup = (user: AppUser | null) => {
+const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<React.SetStateAction<AppUser | null>>) => {
   const { toast } = useToast();
 
   useEffect(() => {
@@ -256,8 +262,8 @@ const useNotificationSetup = (user: AppUser | null) => {
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
             console.log('Notification permission granted.');
-            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE";
-            if (!vapidKeyToUse || vapidKeyToUse === "SUA_CHAVE_PUBLICA_VAPID_AQUI") {
+            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE"; // Fallback key
+            if (!vapidKeyToUse || vapidKeyToUse === "SUA_CHAVE_PUBLICA_VAPID_AQUI") { // Check against your specific placeholder too
                 console.warn("VAPID key is not defined or is a placeholder. Push notifications might not work correctly.");
             }
             const currentToken = await getToken(messaging, { vapidKey: vapidKeyToUse });
@@ -270,7 +276,9 @@ const useNotificationSetup = (user: AppUser | null) => {
                 await updateDoc(userDocRef, {
                   fcmTokens: arrayUnion(currentToken),
                 });
-                console.log('FCM token saved to Firestore.');
+                // Optimistically update local state for fcmTokens
+                setAppUser(prevUser => prevUser ? { ...prevUser, fcmTokens: [...(prevUser.fcmTokens || []), currentToken] } : null);
+                console.log('FCM token saved to Firestore and local state updated.');
               }
             } else {
               console.log('No registration token available or user not available. Request permission to generate one.');
@@ -291,12 +299,13 @@ const useNotificationSetup = (user: AppUser | null) => {
           title: payload.notification?.title || "Nova Notificação",
           description: payload.notification?.body || "Você tem uma nova mensagem!",
         });
+        // Potentially update local notifications array here if desired for foreground messages
       });
       return () => {
         unsubscribeOnMessage();
       };
     }
-  }, [user, toast]);
+  }, [user, toast, setAppUser]);
 };
 
 
@@ -306,7 +315,7 @@ export default function MainAppLayout({
   children: React.ReactNode;
 }) {
   const { appUser, setAppUser, loading } = useAuthAndUserSubscription();
-  useNotificationSetup(appUser);
+  useNotificationSetup(appUser, setAppUser); // Pass setAppUser
   const { theme, setTheme } = useTheme();
 
   const router = useRouter();
@@ -316,7 +325,7 @@ export default function MainAppLayout({
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const prevAppUserRef = useRef<AppUser | null>(null);
 
-  // States for global chat widget
+  // States for global event chat widget
   const [isChatWidgetOpen, setIsChatWidgetOpen] = useState(false);
   const [chatRoomId, setChatRoomId] = useState<string | null>(null);
   const [chatEventName, setChatEventName] = useState<string | null>(null);
@@ -579,10 +588,10 @@ export default function MainAppLayout({
                         message = `Evento atualizado em ${venueName}: ${eventData.eventName}. Confira as novidades!`;
                         notificationIdSuffix = `update_${relevantTimestamp.toMillis()}`;
                     } else {
-                        return;
+                        return; // Don't notify for modifications to events that were created *after* the last check
                     }
                 } else {
-                    return;
+                    return; // Ignore 'removed' changes for notifications
                 }
 
                 if (message) {
@@ -617,7 +626,7 @@ export default function MainAppLayout({
                     if (notificationsActuallyToAdd.length > 0) {
                         const allNotifications = [...freshExistingUserNotifications, ...notificationsActuallyToAdd]
                           .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-                          .slice(0, 20);
+                          .slice(0, 20); // Keep max 20 notifications
 
                         let maxCreatedAtOfNew: FirebaseTimestamp | null = null;
                         notificationsActuallyToAdd.forEach(n => {
@@ -773,14 +782,16 @@ export default function MainAppLayout({
         return;
     }
 
+    // Check if user has any active check-ins
     const activeCheckIn = appUser.checkedInEvents && Object.values(appUser.checkedInEvents).find(
-        event => event.checkedInAt // Add more logic here if "active" means more than just having a check-in record
+        event => event.checkedInAt // Could be more specific here, e.g., check if event.endDateTime > now
     );
 
     if (activeCheckIn) {
         setChatRoomId(activeCheckIn.eventId);
         setChatEventName(activeCheckIn.eventName);
         setIsChatWidgetOpen(true);
+        console.log("Opening chat for event:", activeCheckIn.eventName, "ID:", activeCheckIn.eventId);
     } else {
         toast({
             title: "Fervo Chat nos Eventos!",
@@ -797,7 +808,7 @@ export default function MainAppLayout({
     }
     setEventChatClearedTimestamp(Date.now());
     toast({ title: "Chat Limpo!", description: "Sua visualização das mensagens do chat foi limpa.", variant: "default"});
-    setShowClearEventChatDialog(false); // Close dialog after setting timestamp
+    setShowClearEventChatDialog(false); 
   };
 
 
@@ -822,10 +833,10 @@ export default function MainAppLayout({
       if (appUser.questionnaireCompleted) {
         renderChildrenContent = true;
       } else {
-        renderChildrenContent = false;
+        renderChildrenContent = false; // Don't render main content if questionnaire not complete and not on an allowed page
       }
     } else {
-      renderChildrenContent = false;
+      renderChildrenContent = false; // Not loading and no appUser means redirect should happen or it's an auth page
     }
   }
 
@@ -1019,7 +1030,7 @@ export default function MainAppLayout({
                       <HelpCircle className="w-4 h-4 mr-2" />
                       Central de Ajuda
                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/privacy-policy')}>
+                   <DropdownMenuItem onClick={() => router.push('/privacy-policy')}>
                       <ShieldCheck className="w-4 h-4 mr-2" />
                       Política de Privacidade
                     </DropdownMenuItem>
@@ -1055,7 +1066,7 @@ export default function MainAppLayout({
                 className={cn(
                     "rounded-full h-14 w-14 p-0 shadow-lg flex items-center justify-center",
                     "bg-gradient-to-br from-primary to-accent hover:from-primary/80 hover:to-accent/80",
-                    "animate-bounce hover:animate-none"
+                    "animate-bounce hover:animate-none" 
                 )}
                 aria-label="Abrir Fervo Chat do Evento"
                 title="Abrir Fervo Chat do Evento"
@@ -1066,7 +1077,7 @@ export default function MainAppLayout({
       )}
 
       {/* Global Event Chat Widget - Rendered by Layout */}
-        {isChatWidgetOpen && appUser && appUser.uid && chatRoomId && chatEventName && appUser.address?.city && appUser.address?.state && (
+        {isChatWidgetOpen && appUser && appUser.uid && chatRoomId && chatEventName && (
             <Card className={cn(
                 "fixed bottom-4 right-4 z-[60] w-[90vw] max-w-sm h-auto max-h-[70vh] flex flex-col border-primary/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
                 "transition-all duration-300 ease-in-out",
