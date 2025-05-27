@@ -26,7 +26,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { firestore, auth } from '@/lib/firebase';
-import { Sheet, SheetContent, SheetHeader, SheetTitle as ShadSheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription as SheetPrimitiveDescription, SheetClose } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import {
@@ -338,16 +338,14 @@ const MapContentAndLogic = () => {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [currentlyRatingEventId, setCurrentlyRatingEventId] = useState<string | null>(null);
 
-  const [chatRoomId, setChatRoomId] = useState<string | null>(null);
-  const [isLoadingUserProfileForChat, setIsLoadingUserProfileForChat] = useState(true);
-  const [chatUserProfile, setChatUserProfile] = useState<MapPageAppUser | null>(null);
-  const [isChatSoundMuted, setIsChatSoundMuted] = useState(false);
-
-  const [showClearChatDialog, setShowClearChatDialog] = useState(false);
-  const [isDeletingChat, setIsDeletingChat] = useState(false);
+  // State specific to event chat
+  const [eventChatRoomId, setEventChatRoomId] = useState<string | null>(null);
+  const [isEventChatSoundMuted, setIsEventChatSoundMuted] = useState(false);
+  const [showClearEventChatDialog, setShowClearEventChatDialog] = useState(false);
+  const [isDeletingEventChat, setIsDeletingEventChat] = useState(false);
   const [selectedEventForChat, setSelectedEventForChat] = useState<VenueEvent | null>(null);
-  const [isChatWidgetOpen, setIsChatWidgetOpen] = useState(false);
-  const [chatClearedTimestamp, setChatClearedTimestamp] = useState<number | null>(null);
+  const [isEventChatWidgetOpen, setIsEventChatWidgetOpen] = useState(false);
+  const [eventChatClearedTimestamp, setEventChatClearedTimestamp] = useState<number | null>(null);
 
 
   const nightclubAudioRef = useRef<HTMLAudioElement>(null);
@@ -361,49 +359,24 @@ const MapContentAndLogic = () => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       setCurrentUser(user);
       if (user) {
-        setIsLoadingUserProfileForChat(true);
         const userDocRef = doc(firestore, "users", user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (userDocSnap) => {
             if (userDocSnap.exists()) {
               const userData = userDocSnap.data() as MapPageAppUser;
               setCurrentAppUser(userData);
-              setChatUserProfile(userData);
-              console.log("MapContentAndLogic: AppUser data loaded:", userData);
-
-              const city = userData.address?.city;
-              const state = userData.address?.state;
-              if (city && state) {
-                const normalizedCity = city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
-                const normalizedState = state.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
-                const generatedChatRoomId = `${normalizedState}_${normalizedCity}`;
-                console.log("MapContentAndLogic: Generated chatRoomId:", generatedChatRoomId);
-                setChatRoomId(generatedChatRoomId);
-              } else {
-                setChatRoomId(null);
-                console.log("MapContentAndLogic: City/State not set for chatRoomId generation.");
-              }
-
+              console.log("MapContentAndLogic: AppUser data loaded for chat profile and general use:", userData);
             } else {
               const basicProfile: MapPageAppUser = { uid: user.uid, name: "Usuário Fervo", favoriteVenueIds: [], role: UserRole.USER, questionnaireCompleted: false, photoURL: null };
               setCurrentAppUser(basicProfile);
-              setChatUserProfile(basicProfile);
-              setChatRoomId(null);
-              console.log('MapContentAndLogic: User document not found, using basic profile, chatRoomId set to null.');
+               console.log('MapContentAndLogic: User document not found, using basic profile.');
             }
-            setIsLoadingUserProfileForChat(false);
         }, (error) => {
             console.error("MapContentAndLogic: Error fetching user document with onSnapshot:", error);
             setCurrentAppUser(null);
-            setChatUserProfile(null);
-            setChatRoomId(null);
-            setIsLoadingUserProfileForChat(false);
         });
         return () => unsubscribeUser();
       } else {
         setCurrentAppUser(null);
-        setChatUserProfile(null);
-        setChatRoomId(null);
-        setIsLoadingUserProfileForChat(false);
       }
     });
     return () => unsubscribeAuth();
@@ -792,14 +765,13 @@ const MapContentAndLogic = () => {
         return;
     }
     
-    // Check share limit BEFORE attempting to share
     const userShareDataRef = doc(firestore, `users/${currentUser.uid}/eventShareCounts/${eventId}`);
     const userShareSnap = await getDoc(userShareDataRef);
     const currentShareCount = userShareSnap.exists() ? (userShareSnap.data()?.shareCount || 0) : 0;
 
     if (currentShareCount >= 10) {
         toast({ title: "Limite Atingido", description: "Você já compartilhou este evento o número máximo de vezes (10).", variant: "default" });
-        return; // Exit early if limit is reached
+        return;
     }
 
 
@@ -808,86 +780,76 @@ const MapContentAndLogic = () => {
 
     const sharerNameQueryParam = currentAppUser.name ? `?sharedByName=${encodeURIComponent(currentAppUser.name)}` : '';
     const webShareUrl = `${APP_URL}/shared-event/${partnerId}/${eventId}${sharerNameQueryParam}`;
-    const customShareUrl = `shareevent://${partnerId}/${eventId}${sharerNameQueryParam}`; // For direct native app intent
     const title = `Confira este Fervo: ${partnerName} - ${effectiveEventName}`;
     const text = `Olha esse evento que encontrei no Fervo App! ${currentAppUser.name ? 'Enviado por ' + currentAppUser.name : ''}.`;
 
     let finalSharedSuccessfully = false;
+    console.log("handleShareEvent: Iniciando tentativas de compartilhamento. URL Web:", webShareUrl);
+
 
     if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.shareEvent === 'function') {
       try {
-        console.log("Tentando compartilhar via AndroidShareInterface.shareEvent com:", title, text, webShareUrl);
+        console.log("handleShareEvent: Tentando compartilhar via AndroidShareInterface.shareEvent com:", title, text, webShareUrl);
         (window as any).AndroidShareInterface.shareEvent(title, text, webShareUrl);
         finalSharedSuccessfully = true;
-        if (finalSharedSuccessfully) {
-           toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
-        }
+        toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android.", variant: "default" });
       } catch (nativeShareError: any) {
-        console.warn('AndroidShareInterface.shareEvent falhou:', nativeShareError);
-      }
-    } else if (typeof window !== 'undefined' && (window as any).AndroidShareInterface && typeof (window as any).AndroidShareInterface.launchShareIntent === 'function') {
-      try {
-        console.log("Tentando compartilhar via AndroidShareInterface.launchShareIntent com:", customShareUrl);
-        (window as any).AndroidShareInterface.launchShareIntent(customShareUrl);
-        finalSharedSuccessfully = true;
-        if (finalSharedSuccessfully) {
-          toast({ title: "Compartilhando...", description: "Use o seletor de compartilhamento do Android (legacy).", variant: "default" });
-        }
-      } catch (legacyNativeError: any) {
-        console.warn('AndroidShareInterface.launchShareIntent falhou:', legacyNativeError);
+        console.warn('handleShareEvent: AndroidShareInterface.shareEvent falhou:', nativeShareError);
       }
     }
 
 
     if (!finalSharedSuccessfully && navigator.share) {
       try {
+        console.log("handleShareEvent: Tentando compartilhar via navigator.share.");
         await navigator.share({ title, text, url: webShareUrl });
         finalSharedSuccessfully = true;
-         if (finalSharedSuccessfully) {
-            toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
-        }
+        toast({ title: "Compartilhado!", description: "Link do evento compartilhado com sucesso!", variant: "default", duration: 4000 });
       } catch (shareError: any) {
         if (shareError.name !== 'AbortError') {
-          console.warn('navigator.share falhou, tentando área de transferência:', shareError);
+          console.warn('handleShareEvent: navigator.share falhou, tentando área de transferência:', shareError);
         } else {
-          console.log("Compartilhamento via navigator.share cancelado pelo usuário.");
+          console.log("handleShareEvent: Compartilhamento via navigator.share cancelado pelo usuário.");
         }
       }
     }
 
     if (!finalSharedSuccessfully) {
         try {
+          console.log("handleShareEvent: Tentando copiar para a área de transferência.");
           await navigator.clipboard.writeText(webShareUrl);
           finalSharedSuccessfully = true;
           toast({ title: "Link Copiado!", description: "O compartilhamento não está disponível. O link do evento foi copiado!", variant: "default", duration: 6000 });
         } catch (clipError) {
-          console.error('Falha ao copiar para área de transferência (fallback final):', clipError);
+          console.error('handleShareEvent: Falha ao copiar para área de transferência (fallback final):', clipError);
           toast({ title: "Erro ao Copiar Link", description: "Não foi possível copiar o link do evento.", variant: "destructive"});
         }
     }
 
 
     if (finalSharedSuccessfully && currentUser && (effectiveShareRewardsEnabled) && currentAppUser?.role === UserRole.USER) {
+      console.log("handleShareEvent: Compartilhamento bem-sucedido, processando recompensa.");
       const userDocRef = doc(firestore, "users", currentUser.uid);
       const couponCollectionRef = collection(firestore, `users/${currentUser.uid}/coupons`);
 
       try {
-        // Transaction to update share count and award coins/coupon
         const { newCoinTotal, newCouponGenerated } = await runTransaction(firestore, async (transaction) => {
-          // All reads must happen before any writes
           const userShareSnapFromTransaction = await transaction.get(userShareDataRef);
           const userSnapFromTransaction = await transaction.get(userDocRef);
 
           if (!userSnapFromTransaction.exists()) {
+            console.error("handleShareEvent Transaction: User document not found for user", currentUser.uid);
             throw new Error("Usuário não encontrado para premiar moedas.");
           }
 
           const userDataFromTransaction = userSnapFromTransaction.data();
-          const shareCountFromTransaction = userShareSnapFromTransaction.exists() ? (userShareSnapFromTransaction.data()?.shareCount || 0) : 0;
-          
-          // This check is now primarily a safeguard, as the main check is done outside.
-          // However, it's good to have it here in case of concurrent shares, though less likely.
+          let shareCountFromTransaction = 0;
+          if (userShareSnapFromTransaction.exists()) {
+            shareCountFromTransaction = userShareSnapFromTransaction.data()?.shareCount || 0;
+          }
+
           if (shareCountFromTransaction >= 10) {
+             console.log("handleShareEvent Transaction: Share limit already reached for event", eventId, "by user", currentUser.uid);
              throw new Error("Limite de compartilhamento (10) já atingido para este evento (verificação final).");
           }
 
@@ -905,14 +867,13 @@ const MapContentAndLogic = () => {
             couponGeneratedThisTransaction = true;
           }
           
-          const netCoinChangeForPartner = coinsGained - coinsSpentOnCoupon;
-          const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + netCoinChangeForPartner;
+          const finalCoinTotalForThisPartner = currentVenueCoinsForPartner + coinsGained - coinsSpentOnCoupon;
 
           // All writes together
-          transaction.set(userShareDataRef, { shareCount: increment(1) }, { merge: true });
+          transaction.set(userShareDataRef, { shareCount: increment(1), eventId: eventId, partnerId: partnerId }, { merge: true });
           
           const updatesForUserDoc: Record<string, any> = {
-            [`venueCoins.${partnerId}`]: increment(netCoinChangeForPartner)
+            [`venueCoins.${partnerId}`]: finalCoinTotalForThisPartner
           };
           transaction.update(userDocRef, updatesForUserDoc);
 
@@ -920,7 +881,7 @@ const MapContentAndLogic = () => {
             const couponCode = `${COUPON_CODE_PREFIX}-${Date.now().toString(36).slice(-4).toUpperCase()}${Math.random().toString(36).slice(2,6).toUpperCase()}`;
             const newCouponRef = doc(couponCollectionRef); 
             transaction.set(newCouponRef, {
-              userId: currentUser.uid, // Storing userId in the coupon document
+              userId: currentUser.uid,
               couponCode: couponCode,
               description: `${COUPON_REWARD_DESCRIPTION} em ${partnerName}`,
               eventName: effectiveEventName,
@@ -929,8 +890,9 @@ const MapContentAndLogic = () => {
               validAtPartnerId: partnerId,
               partnerVenueName: partnerName,
             });
+             console.log("handleShareEvent Transaction: Coupon generated for user", currentUser.uid, "at venue", partnerName);
           }
-
+          console.log("handleShareEvent Transaction: Coin balance updated for user", currentUser.uid, "at venue", partnerId, "New total:", finalCoinTotalForThisPartner);
           return { newCoinTotal: finalCoinTotalForThisPartner, newCouponGenerated: couponGeneratedThisTransaction };
         });
 
@@ -943,7 +905,7 @@ const MapContentAndLogic = () => {
         }
 
       } catch (error: any) {
-        console.error("Error in Venue-Specific FervoCoins/Coupon transaction (detailed):", error);
+        console.error("handleShareEvent: Error in FervoCoins/Coupon transaction:", error);
         toast({
           title: "Erro na Recompensa",
           description: error.message || `Não foi possível processar sua recompensa de moedas/cupom.`,
@@ -952,7 +914,7 @@ const MapContentAndLogic = () => {
         });
       }
     } else if (finalSharedSuccessfully && currentUser && !effectiveShareRewardsEnabled && currentAppUser?.role === UserRole.USER) {
-        console.log(`Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
+        console.log(`handleShareEvent: Event ${eventId} shared successfully, but FervoCoin rewards are disabled for this event.`);
     }
   };
 
@@ -1001,7 +963,7 @@ const MapContentAndLogic = () => {
     }
   };
 
-  const handleClearChat = async () => {
+  const handleClearEventChat = async () => {
     if (!currentUser || !selectedEventForChat) {
       toast({ title: "Erro", description: "Não foi possível identificar o chat ou o evento.", variant: "destructive" });
       return;
@@ -1009,34 +971,34 @@ const MapContentAndLogic = () => {
 
     const currentChatRoomIdForClear = selectedEventForChat.id;
 
-    setIsDeletingChat(true);
+    setIsDeletingEventChat(true);
     try {
       const messagesRef = collection(firestore, `chatRooms/${currentChatRoomIdForClear}/messages`);
       const messagesSnapshot = await getDocs(messagesRef);
 
       if (messagesSnapshot.empty) {
           toast({ title: "Chat Vazio", description: "Não há mensagens para apagar.", variant: "default" });
-          setShowClearChatDialog(false);
-          setIsDeletingChat(false);
+          setShowClearEventChatDialog(false);
+          setIsDeletingEventChat(false);
           return;
       }
 
-      const batch = writeBatch(firestore);
-      messagesSnapshot.docs.forEach(docSnap => batch.delete(docSnap.ref)); 
-      await batch.commit();
+      const batchOp = writeBatch(firestore); // Renamed to avoid conflict with react-hook-form's batch
+      messagesSnapshot.docs.forEach(docSnap => batchOp.delete(docSnap.ref)); 
+      await batchOp.commit();
 
       toast({ title: "Chat Limpo!", description: `Todas as mensagens em ${selectedEventForChat.eventName} foram apagadas.`, variant: "default" });
-      setShowClearChatDialog(false);
+      setShowClearEventChatDialog(false);
 
     } catch (error) {
-        console.error("Error clearing chat messages:", error);
+        console.error("Error clearing event chat messages:", error);
         toast({ title: "Erro ao Limpar Chat", description: "Não foi possível apagar as mensagens do chat.", variant: "destructive"});
     } finally {
-        setIsDeletingChat(false);
+        setIsDeletingEventChat(false);
     }
   };
 
-  const openEventChat = (event: VenueEvent) => {
+  const openEventSpecificChat = (event: VenueEvent) => {
     if (!currentUser || !currentAppUser) {
         toast({ title: "Login Necessário", description: "Faça login para acessar o chat do evento.", variant: "destructive"});
         return;
@@ -1046,9 +1008,9 @@ const MapContentAndLogic = () => {
         return;
     }
     setSelectedEventForChat(event);
-    setChatRoomId(event.id); 
-    setIsChatWidgetOpen(true);
-    console.log("Opening chat for event:", event.eventName, "Room ID:", event.id);
+    setEventChatRoomId(event.id); 
+    setIsEventChatWidgetOpen(true);
+    console.log("Opening event-specific chat for event:", event.eventName, "Room ID:", event.id);
   };
 
 
@@ -1154,89 +1116,20 @@ const MapContentAndLogic = () => {
         </div>
 
         
-        {isChatWidgetOpen && !selectedEventForChat && currentAppUser && currentAppUser.questionnaireCompleted && chatRoomId && (
+        {isEventChatWidgetOpen && !currentUser && ( // If chat widget is toggled but user is not logged in
              <Card className={cn(
-                 "fixed bottom-24 right-6 z-30 w-[90vw] max-w-sm h-[60vh] sm:h-[70vh] max-h-[500px] flex flex-col border-primary/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
+                 "fixed bottom-6 right-6 z-30 w-[90vw] max-w-sm h-auto flex flex-col border-destructive/50 bg-background/90 backdrop-blur-sm shadow-2xl rounded-lg",
                  "transition-all duration-300 ease-in-out",
-                 isChatWidgetOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"
+                 "p-6 text-center"
               )}>
-               <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between sticky top-0 bg-background/95 z-10">
-                   <div className="flex items-center gap-2">
-                       <MessageSquare className="h-5 w-5 text-primary" />
-                       <div>
-                           <CardTitle className="text-md sm:text-lg text-primary leading-tight truncate max-w-[150px] sm:max-w-[200px] font-semibold">Chat: {chatUserProfile?.address?.city || 'Sua Região'}</CardTitle>
-                       </div>
-                   </div>
-                   <div className="flex items-center gap-1">
-                     <Button variant="ghost" size="icon" onClick={() => setIsChatSoundMuted(prev => !prev)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary" title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}>
-                         {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
-                     </Button>
-                     <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Fechar chat">
-                         <XCircleIcon className="h-4 w-4 sm:h-5 sm:h-5"/>
-                     </Button>
-                   </div>
-               </CardHeader>
-               <CardContent className="flex-1 overflow-y-auto p-3 sm:p-4 bg-background/30">
-                   <ChatMessageList
-                       chatRoomId={chatRoomId} 
-                       currentUserId={currentUser.uid}
-                       isChatSoundMuted={isChatSoundMuted}
-                       chatClearedTimestamp={null} 
-                   />
-               </CardContent>
-               <div className="p-3 sm:p-4 border-t border-border bg-card">
-                   <ChatInputForm
-                       chatRoomId={chatRoomId} 
-                       userId={currentUser.uid}
-                       userName={chatUserProfile?.name || 'Usuário Anônimo'}
-                       userPhotoURL={chatUserProfile?.photoURL || null}
-                   />
-               </div>
+                <CardTitle className="text-lg text-destructive">Acesso Negado ao Chat</CardTitle>
+                <UICardDescription className="text-muted-foreground mt-2">
+                    Você precisa estar logado e ter feito check-in no evento para participar do chat.
+                </UICardDescription>
+                <Button onClick={() => setIsEventChatWidgetOpen(false)} className="mt-4">OK</Button>
              </Card>
-           )}
-
-           {/* Chat Floating Action Button (FAB) - controls regional chat widget */}
-            {currentAppUser && currentAppUser.questionnaireCompleted && (
-                <Button
-                    onClick={() => {
-                        if (isLoadingUserProfileForChat) {
-                            toast({ title: "Aguarde", description: "Carregando informações do perfil para o chat...", variant: "default" });
-                            return;
-                        }
-                        if (currentAppUser && currentAppUser.address && currentAppUser.address.city && currentAppUser.address.state) {
-                            const city = currentAppUser.address.city;
-                            const state = currentAppUser.address.state;
-                            const normalizedCity = city.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
-                            const normalizedState = state.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, '_');
-                            const generatedChatRoomId = `${normalizedState}_${normalizedCity}`;
-                            setChatRoomId(generatedChatRoomId);
-                            setSelectedEventForChat(null); // Ensure it's for regional chat
-                            setIsChatWidgetOpen(prev => !prev);
-                            console.log("Toggling regional chat widget. Room ID:", generatedChatRoomId);
-                        } else {
-                            toast({
-                                title: "Localização Necessária",
-                                description: "Por favor, complete sua cidade e estado no seu perfil para usar o Fervo Chat regional.",
-                                variant: "destructive",
-                                duration: 5000,
-                                action: <Button variant="outline" size="sm" onClick={() => router.push('/user/profile')}>Completar Perfil</Button>
-                            });
-                        }
-                    }}
-                    className={cn(
-                        "fixed bottom-6 right-6 z-30 rounded-full h-14 w-auto px-4 shadow-lg text-white flex items-center justify-center",
-                        "bg-gradient-to-br from-primary to-accent hover:from-primary/80 hover:to-accent/80",
-                        isChatWidgetOpen && !selectedEventForChat ? "animate-none" : "animate-bounce hover:animate-none"
-                    )}
-                    aria-label={isChatWidgetOpen && !selectedEventForChat ? "Fechar Fervo Chat Regional" : "Abrir Fervo Chat Regional"}
-                    title={isChatWidgetOpen && !selectedEventForChat ? "Fechar Fervo Chat Regional" : "Abrir Fervo Chat Regional"}
-                    size="lg"
-                >
-                    {isChatWidgetOpen && !selectedEventForChat ? <XCircleIcon className="h-6 w-6 mr-2" /> : <MessageSquare className="h-6 w-6 mr-2" />}
-                    Fervo Chat
-                </Button>
-            )}
-
+        )}
+        
 
         {GOOGLE_MAPS_API_KEY && mapsApi && (
             <GoogleMap
@@ -1290,7 +1183,7 @@ const MapContentAndLogic = () => {
                 const venueIdInParams = searchParams.get('venueId');
                 setSelectedVenue(null);
                 setSelectedEventForChat(null); 
-                setIsChatWidgetOpen(false); 
+                setIsEventChatWidgetOpen(false); 
 
                 if (isPreviewMode && venueIdInParams) {
                     router.replace('/map', { scroll: false });
@@ -1319,9 +1212,9 @@ const MapContentAndLogic = () => {
           >
             <SheetHeader className="px-4 sm:px-6 pt-6 pb-4 sticky top-0 bg-background/95 backdrop-blur-md border-b border-border flex flex-row justify-between items-start gap-x-4 z-10">
                 <div className="flex-1">
-                    <ShadSheetTitle className="text-2xl font-bold text-secondary"> 
+                    <SheetTitle className="text-2xl font-bold text-secondary"> 
                     {selectedVenue.name}
-                    </ShadSheetTitle>
+                    </SheetTitle>
                     {selectedVenue.averageVenueRating !== undefined && selectedVenue.venueRatingCount !== undefined && selectedVenue.venueRatingCount > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
                             <StarRating rating={selectedVenue.averageVenueRating} totalStars={5} size={16} fillColor="hsl(var(--primary))" readOnly />
@@ -1526,10 +1419,7 @@ const MapContentAndLogic = () => {
 
                               {currentUser && currentAppUser?.role === UserRole.USER && userCheckIns[event.id] && (
                                 <Button
-                                  onClick={() => {
-                                    console.log("Button clicked for event chat:", event);
-                                    openEventChat(event);
-                                  }}
+                                  onClick={() => openEventSpecificChat(event)}
                                   variant="outline"
                                   className="w-full mt-3 border-primary text-primary hover:bg-primary/10"
                                   size="sm"
@@ -1659,7 +1549,7 @@ const MapContentAndLogic = () => {
                   )}
 
                   {/* Event-Specific Chat Widget integrated here */}
-                  {isChatWidgetOpen && currentUser && chatUserProfile && selectedEventForChat && (
+                  {isEventChatWidgetOpen && currentUser && currentAppUser && selectedEventForChat && (
                     <Card className="mt-6 flex flex-col max-h-[60vh] border-primary/50 bg-background/90 backdrop-blur-sm">
                       <CardHeader className="p-3 sm:p-4 border-b border-border flex-row items-center justify-between sticky top-0 bg-background/95 z-10">
                           <div className="flex items-center gap-2">
@@ -1669,7 +1559,7 @@ const MapContentAndLogic = () => {
                               </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
+                            <AlertDialog open={showClearEventChatDialog} onOpenChange={setShowClearEventChatDialog}>
                               <AlertDialogTrigger asChild>
                                   <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat">
                                       <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
@@ -1681,18 +1571,18 @@ const MapContentAndLogic = () => {
                                       Tem certeza que deseja apagar TODAS as mensagens do chat "{selectedEventForChat.eventName}"? Esta ação é permanente e afetará todos os usuários.
                                   </AlertDialogDescription>
                                   <AlertDialogFooter>
-                                      <AlertDialogCancel disabled={isDeletingChat}>Cancelar</AlertDialogCancel>
-                                      <AlertDialogAction onClick={handleClearChat} disabled={isDeletingChat} className="bg-destructive hover:bg-destructive/90">
-                                          {isDeletingChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                      <AlertDialogCancel disabled={isDeletingEventChat}>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={handleClearEventChat} disabled={isDeletingEventChat} className="bg-destructive hover:bg-destructive/90">
+                                          {isDeletingEventChat ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                           Apagar Todas as Mensagens
                                       </AlertDialogAction>
                                   </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
-                            <Button variant="ghost" size="icon" onClick={() => setIsChatSoundMuted(prev => !prev)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary" title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}>
-                                {isChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
+                            <Button variant="ghost" size="icon" onClick={() => setIsEventChatSoundMuted(prev => !prev)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary" title={isEventChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}>
+                                {isEventChatSoundMuted ? <VolumeX className="h-4 w-4 sm:h-5 sm:h-5" /> : <Volume2 className="h-4 w-4 sm:h-5 sm:h-5" />}
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Fechar chat">
+                            <Button variant="ghost" size="icon" onClick={() => setIsEventChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Fechar chat">
                                 <XCircleIcon className="h-4 w-4 sm:h-5 sm:h-5"/>
                             </Button>
                           </div>
@@ -1701,16 +1591,16 @@ const MapContentAndLogic = () => {
                           <ChatMessageList
                               chatRoomId={selectedEventForChat.id} 
                               currentUserId={currentUser.uid}
-                              isChatSoundMuted={isChatSoundMuted}
-                              chatClearedTimestamp={chatClearedTimestamp}
+                              isChatSoundMuted={isEventChatSoundMuted}
+                              chatClearedTimestamp={eventChatClearedTimestamp}
                           />
                       </CardContent>
                       <div className="p-3 sm:p-4 border-t border-border bg-card">
                           <ChatInputForm
                               chatRoomId={selectedEventForChat.id} 
                               userId={currentUser.uid}
-                              userName={chatUserProfile.name || 'Usuário Anônimo'}
-                              userPhotoURL={chatUserProfile.photoURL || null}
+                              userName={currentAppUser.name || 'Usuário Anônimo'}
+                              userPhotoURL={currentAppUser.photoURL || null}
                           />
                       </div>
                     </Card>

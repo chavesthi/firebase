@@ -110,21 +110,21 @@ const useAuthAndUserSubscription = () => {
               address: userData.address,
               createdAt: userData.createdAt as FirebaseTimestamp || undefined,
               trialExpiredNotified: userData.trialExpiredNotified || false,
-              stripeSubscriptionActive: false,
+              stripeSubscriptionActive: false, // Default to false, will be updated by customer subscription listener
               photoURL: userData.photoURL || user.photoURL || null,
               fcmTokens: userData.fcmTokens || [],
             };
 
             if (userData.role === UserRole.PARTNER) {
                 const subscriptionsQuery = query(collection(firestore, `customers/${user.uid}/subscriptions`), where("status", "in", ["trialing", "active"]));
-                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc();
+                if(unsubscribeCustomerDoc) unsubscribeCustomerDoc(); // Unsubscribe from previous listener if it exists
                 unsubscribeCustomerDoc = onSnapshot(subscriptionsQuery, (subscriptionsSnap) => {
                     let isActive = false;
                     if (!subscriptionsSnap.empty) {
                         isActive = true;
                     }
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: isActive}));
-                    setLoading(false); // setLoading(false) moved here to ensure it's called
+                    setLoading(false); 
                 }, (error) => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: false}));
@@ -135,6 +135,7 @@ const useAuthAndUserSubscription = () => {
                 setLoading(false);
             }
           } else {
+            // User authenticated but no Firestore document yet
             const defaultRoleBasedOnInitialAuthAttempt = pathname.includes('/partner') ? UserRole.PARTNER : UserRole.USER;
             setAppUser({
               uid: user.uid,
@@ -163,6 +164,7 @@ const useAuthAndUserSubscription = () => {
           toast({ title: "Erro ao carregar dados", description: "Não foi possível sincronizar os dados do usuário.", variant: "destructive" });
         });
       } else {
+        // No user is logged in
         setAppUser(null);
         setLoading(false);
         if (unsubscribeUserDoc) unsubscribeUserDoc();
@@ -181,7 +183,7 @@ const useAuthAndUserSubscription = () => {
            delete activeEventNotificationListeners[key];
       }
     };
-  }, [pathname, toast]);
+  }, [pathname, toast]); // Removed appUser from dependencies to avoid re-triggering on appUser changes
 
   return { firebaseUser, appUser, setAppUser, loading };
 };
@@ -196,7 +198,7 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
             console.log('Notification permission granted.');
-            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE"; // Fallback
+            const vapidKeyToUse = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BJfuqMoIg71930bvxMlESIA55IA3bjFB7HdMbkdo3hlgoFSAiHGTjz3Sh-MACsdvu8IgNQEVaUyztm4J4kWzEaE";
             if (!vapidKeyToUse || vapidKeyToUse === "SUA_CHAVE_PUBLICA_VAPID_AQUI") {
                 console.warn("VAPID key is not defined or is a placeholder. Push notifications might not work correctly.");
                 toast({ title: "Configuração Incompleta", description: "A chave VAPID para notificações não está configurada.", variant: "destructive"});
@@ -206,6 +208,7 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
             if (currentToken) {
               console.log('FCM Token:', currentToken);
               const userDocRef = doc(firestore, 'users', user.uid);
+              // Use a transaction or a server-side update for atomicity if fcmTokens is critical
               const userDocSnap = await getDoc(userDocRef);
               const existingTokens = userDocSnap.data()?.fcmTokens || [];
               if (!existingTokens.includes(currentToken)) {
@@ -213,7 +216,7 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
                   fcmTokens: arrayUnion(currentToken),
                 });
                 console.log('FCM token saved to Firestore.');
-                if(setAppUser) { // Ensure setAppUser is defined
+                if(setAppUser) {
                   setAppUser(prev => prev ? { ...prev, fcmTokens: [...existingTokens, currentToken] } : null);
                 }
               }
@@ -265,7 +268,7 @@ export default function MainAppLayout({
   const totalFervoCoins = useMemo(() => {
     if (!appUser || !appUser.venueCoins) return 0;
     return Object.values(appUser.venueCoins).reduce((sum, count) => sum + count, 0);
-  }, [appUser]);
+  }, [appUser?.venueCoins]);
 
   const unreadNotificationsCount = useMemo(() => {
     if (!appUser || !appUser.notifications) return 0;
@@ -280,7 +283,8 @@ export default function MainAppLayout({
 
     const isAuthPage = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEventPage = pathname.startsWith('/shared-event');
-    const isGeneralUserAccessiblePage = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/user/help');
+    // More specific check for user-accessible pages that don't require full questionnaire completion yet
+    const isGeneralUserAccessiblePage = ['/user/profile', '/user/coins', '/user/favorites', '/user/coupons', '/user/help'].includes(pathname);
 
 
     if (!appUser) {
@@ -288,21 +292,26 @@ export default function MainAppLayout({
         router.push('/login');
       }
     } else {
-      if (isAuthPage) {
+      // User is authenticated
+      if (isAuthPage) { // If on an auth page (login, questionnaire)
         if (appUser.questionnaireCompleted) {
           const targetPath = appUser.role === UserRole.USER ? '/map' : '/partner/dashboard';
           router.push(targetPath);
         } else {
+            // If on /login but questionnaire not complete, redirect to appropriate questionnaire
             if (pathname === '/login') {
                  const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
                  router.push(questionnairePath);
             }
+            // Otherwise, stay on questionnaire page if they are there
         }
-      } else {
-        if (!appUser.questionnaireCompleted && !isSharedEventPage && !isGeneralUserAccessiblePage) {
+      } else { // If on a main app page (not auth, not shared event)
+        if (!appUser.questionnaireCompleted && !isGeneralUserAccessiblePage && !isSharedEventPage) {
+          // If questionnaire is not complete AND it's not a general accessible page or shared event, redirect to questionnaire
           const questionnairePath = appUser.role === UserRole.USER ? '/questionnaire' : '/partner-questionnaire';
           router.push(questionnairePath);
         }
+        // If questionnaire is complete, or it's a general accessible page/shared event, allow access
       }
     }
   }, [appUser, loading, router, pathname]);
@@ -314,12 +323,13 @@ export default function MainAppLayout({
 
       if (appUser.role === UserRole.PARTNER) {
         isPartnerWithActiveSub = appUser.stripeSubscriptionActive || false;
+        // Check if trialExpiredNotified is true AND there's no active sub, meaning they were notified of expiration
         if (appUser.createdAt && appUser.trialExpiredNotified === true && !isPartnerWithActiveSub) {
             const createdAtDate = appUser.createdAt.toDate();
             const trialEndDate = new Date(createdAtDate.getTime() + 15 * 24 * 60 * 60 * 1000);
             const now = new Date();
-            if (now > trialEndDate) {
-                 isPartnerTrialExpiredRecently = true;
+            if (now > trialEndDate) { // Double check if trial is indeed over
+                 isPartnerTrialExpiredRecently = true; // This flag means trial is over, they were notified, and they haven't subscribed
             }
         }
       }
@@ -349,7 +359,8 @@ export default function MainAppLayout({
           greetingDescription = "Qual Evento Vai Rolar Hoje?";
       }
 
-      if (greetingTitle && (!isPartnerTrialExpiredRecently || isPartnerWithActiveSub)){
+      // Only show the general greeting if the partner is not in the "trial recently expired and not subscribed" state
+      if (greetingTitle && (!isPartnerTrialExpiredRecently)){
           toast({
             title: greetingTitle,
             description: greetingDescription,
@@ -389,21 +400,21 @@ export default function MainAppLayout({
           const typeMatch = appUser.preferredVenueTypes?.includes(partnerData.venueType as VenueType);
           const styleMatch = Array.isArray(partnerData.musicStyles) && partnerData.musicStyles.some((style: MusicStyle) => appUser.preferredMusicStyles?.includes(style));
 
-          const userCity = appUser.address?.city;
-          const userState = appUser.address?.state;
-          const partnerCity = partnerData.address?.city;
-          const partnerState = partnerData.address?.state;
-
+          const userCity = appUser.address?.city?.toLowerCase();
+          const userState = appUser.address?.state?.toLowerCase();
+          const partnerCity = partnerData.address?.city?.toLowerCase();
+          const partnerState = partnerData.address?.state?.toLowerCase();
+          
           const locationMatch = userCity && userState && partnerCity && partnerState &&
-                                userCity.toLowerCase() === partnerCity.toLowerCase() &&
-                                userState.toLowerCase() === partnerState.toLowerCase();
+                                userCity === partnerCity &&
+                                userState === partnerState;
 
           if ((typeMatch || styleMatch) && locationMatch) {
             potentialNewNotifications.push({
               id: `partner_${partnerId}_${partnerProfileCompletedAt.getTime()}`,
               partnerId: partnerId,
-              venueName: partnerData.venueName,
-              message: `Novo Fervo em ${partnerData.address?.city || 'sua região'} que combina com você: ${partnerData.venueName}!`,
+              venueName: partnerData.venueName || "Novo Local",
+              message: `Novo Fervo em ${partnerData.address?.city || 'sua região'} que combina com você: ${partnerData.venueName || "Novo Local"}!`,
               createdAt: partnerData.questionnaireCompletedAt as FirebaseTimestamp,
               read: false,
               venueType: partnerData.venueType as VenueType,
@@ -414,11 +425,11 @@ export default function MainAppLayout({
       }
 
       if (potentialNewNotifications.length > 0 && appUser.uid) {
-        const userDocRef = doc(firestore, "users", appUser.uid);
+        const userDocRefToUpdate = doc(firestore, "users", appUser.uid);
 
         try {
             await runTransaction(firestore, async (transaction) => {
-                const currentUserDocSnap = await transaction.get(userDocRef);
+                const currentUserDocSnap = await transaction.get(userDocRefToUpdate);
                 if (!currentUserDocSnap.exists()) {
                     console.warn("User document not found for updating new partner notifications.");
                     return;
@@ -431,7 +442,7 @@ export default function MainAppLayout({
                 if (notificationsActuallyToAdd.length > 0) {
                     const finalNotifications = [...freshExistingNotificationsFromDB, ...notificationsActuallyToAdd]
                         .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-                        .slice(0, 20);
+                        .slice(0, 20); // Keep only the latest 20 notifications
 
                     let maxCreatedAt: FirebaseTimestamp | undefined = currentUserDocSnap.data()?.lastNotificationCheckTimestamp;
                     notificationsActuallyToAdd.forEach(n => {
@@ -443,7 +454,7 @@ export default function MainAppLayout({
                     if (maxCreatedAt && (!appUser.lastNotificationCheckTimestamp || maxCreatedAt.toMillis() > appUser.lastNotificationCheckTimestamp.toMillis())) {
                         updatePayload.lastNotificationCheckTimestamp = maxCreatedAt;
                     }
-                    transaction.update(userDocRef, updatePayload);
+                    transaction.update(userDocRefToUpdate, updatePayload);
                 }
             });
         } catch (error) {
@@ -455,7 +466,7 @@ export default function MainAppLayout({
     });
 
     return () => unsubscribe();
-  }, [appUser, loading]);
+  }, [appUser, loading]); // Dependencies for new partner notifications
 
 
   useEffect(() => {
@@ -473,34 +484,41 @@ export default function MainAppLayout({
     const currentSettings = appUser.favoriteVenueNotificationSettings || {};
 
     currentFavorites.forEach(async (venueId) => {
-      const notificationsEnabledForVenue = currentSettings[venueId] ?? true;
+      const notificationsEnabledForVenue = currentSettings[venueId] ?? true; // Default to true if not set
 
       if (notificationsEnabledForVenue && !activeEventNotificationListeners[venueId]) {
+        // Fetch venue name once for notifications from this venue
         const venueDocRef = doc(firestore, "users", venueId);
         const venueDocSnap = await getDoc(venueDocRef);
         const venueName = venueDocSnap.exists() ? venueDocSnap.data().venueName : "Local Desconhecido";
 
         const eventsRef = collection(firestore, `users/${venueId}/events`);
+        // Listen for new and modified events, ordered by when they were last updated
         const qEvents = query(eventsRef, where('visibility', '==', true), orderBy('updatedAt', 'desc'));
 
         const unsubscribe = onSnapshot(qEvents, async (snapshot) => {
-          const userDocRefToUpdate = doc(firestore, "users", appUser.uid!);
+          const userDocRefToUpdate = doc(firestore, "users", appUser.uid!); // Ensured appUser.uid exists
           const notificationsToAddThisCycle: Notification[] = [];
-          const currentAppUserLastCheck = (await getDoc(userDocRefToUpdate)).data()?.lastNotificationCheckTimestamp?.toMillis() || 0;
+
+          // Fetch the latest lastNotificationCheckTimestamp for the user before processing changes
+          // This is crucial to avoid re-notifying for events already seen if the appUser state is stale
+          const currentAppUserDocSnap = await getDoc(userDocRefToUpdate);
+          const currentAppUserLastCheck = currentAppUserDocSnap.data()?.lastNotificationCheckTimestamp?.toMillis() || 0;
 
 
           snapshot.docChanges().forEach((change) => {
             const eventData = change.doc.data();
             const eventId = change.doc.id;
             const eventCreatedAt = eventData.createdAt as FirebaseTimestamp;
-            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp;
+            const eventUpdatedAt = eventData.updatedAt as FirebaseTimestamp; // This is the key for "modified"
             const eventEndDateTime = eventData.endDateTime as FirebaseTimestamp;
 
+            // Skip if event has already ended
             if (eventEndDateTime && eventEndDateTime.toDate() < new Date()) {
               return;
             }
 
-            const relevantTimestamp = eventUpdatedAt || eventCreatedAt;
+            const relevantTimestamp = eventUpdatedAt || eventCreatedAt; // Prioritize updatedAt for changes
 
             if (relevantTimestamp && relevantTimestamp.toMillis() > currentAppUserLastCheck) {
                 let message = "";
@@ -510,14 +528,17 @@ export default function MainAppLayout({
                     message = `Novo evento em ${venueName}: ${eventData.eventName}!`;
                     notificationIdSuffix = `new_${relevantTimestamp.toMillis()}`;
                 } else if (change.type === "modified") {
+                    // Only notify for modification if the event was created *before* the last check,
+                    // but updated *after* it. This avoids double notifications for newly added events
+                    // that might also appear as "modified" initially by Firestore.
                     if (eventCreatedAt && eventCreatedAt.toMillis() <= currentAppUserLastCheck) {
                         message = `Evento atualizado em ${venueName}: ${eventData.eventName}. Confira as novidades!`;
                         notificationIdSuffix = `update_${relevantTimestamp.toMillis()}`;
                     } else {
-                        return;
+                        return; // Don't notify for "modification" of a brand new event
                     }
                 } else {
-                    return;
+                    return; // Only handle 'added' and 'modified'
                 }
 
                 if (message) {
@@ -528,7 +549,7 @@ export default function MainAppLayout({
                         venueName: venueName,
                         eventName: eventData.eventName,
                         message: message,
-                        createdAt: relevantTimestamp,
+                        createdAt: relevantTimestamp, // Use the relevant timestamp for sorting
                         read: false,
                     });
                 }
@@ -538,20 +559,22 @@ export default function MainAppLayout({
           if (notificationsToAddThisCycle.length > 0) {
             try {
                 await runTransaction(firestore, async (transaction) => {
-                    const currentUserDocSnap = await transaction.get(userDocRefToUpdate);
-                     if (!currentUserDocSnap.exists()) {
+                    const currentUserDocSnapForTransaction = await transaction.get(userDocRefToUpdate);
+                     if (!currentUserDocSnapForTransaction.exists()) {
                         console.warn("User document not found for updating favorite event notifications.");
                         return;
                     }
-                    const freshExistingUserNotifications: Notification[] = currentUserDocSnap.data()?.notifications || [];
+                    const freshExistingUserNotifications: Notification[] = currentUserDocSnapForTransaction.data()?.notifications || [];
+                    
+                    // Filter out notifications that might have already been added by another listener or tab
                     const notificationsActuallyToAdd = notificationsToAddThisCycle.filter(newNotif =>
                         !freshExistingUserNotifications.some((exNotif: Notification) => exNotif.id === newNotif.id)
                     );
 
                     if (notificationsActuallyToAdd.length > 0) {
                         const allNotifications = [...freshExistingUserNotifications, ...notificationsActuallyToAdd]
-                          .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
-                          .slice(0, 20);
+                          .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()) // Sort all by most recent
+                          .slice(0, 20); // Keep only the latest 20
 
                         let maxCreatedAtOfNew: FirebaseTimestamp | null = null;
                         notificationsActuallyToAdd.forEach(n => {
@@ -561,8 +584,8 @@ export default function MainAppLayout({
                         });
 
                         const updatePayload: any = { notifications: allNotifications };
-                        const currentLastCheckTimestamp = currentUserDocSnap.data()?.lastNotificationCheckTimestamp;
-                        if (maxCreatedAtOfNew && (!currentLastCheckTimestamp || maxCreatedAtOfNew.toMillis() > currentLastCheckTimestamp.toMillis())) {
+                        const currentLastCheckFromTransaction = currentUserDocSnapForTransaction.data()?.lastNotificationCheckTimestamp;
+                        if (maxCreatedAtOfNew && (!currentLastCheckFromTransaction || maxCreatedAtOfNew.toMillis() > currentLastCheckFromTransaction.toMillis())) {
                             updatePayload.lastNotificationCheckTimestamp = maxCreatedAtOfNew;
                         }
                        transaction.update(userDocRefToUpdate, updatePayload);
@@ -577,11 +600,13 @@ export default function MainAppLayout({
         });
         activeEventNotificationListeners[venueId] = unsubscribe;
       } else if (!notificationsEnabledForVenue && activeEventNotificationListeners[venueId]) {
+        // If notifications for this venue were disabled, stop listening
         activeEventNotificationListeners[venueId]();
         delete activeEventNotificationListeners[venueId];
       }
     });
 
+    // Cleanup: Remove listeners for venues no longer in favorites
     Object.keys(activeEventNotificationListeners).forEach(venueId => {
       if (!currentFavorites.includes(venueId)) {
         if (activeEventNotificationListeners[venueId]) {
@@ -590,7 +615,8 @@ export default function MainAppLayout({
         }
       }
     });
-  }, [appUser, loading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appUser?.favoriteVenueIds, appUser?.favoriteVenueNotificationSettings, loading]); // React to changes in favorites and their settings
 
 
   const handleNotificationsClick = async () => {
@@ -616,6 +642,7 @@ export default function MainAppLayout({
 
     if (unreadNotificationsCount > 0 && appUser.notifications && setAppUser) {
         const userDocRef = doc(firestore, "users", appUser.uid);
+        // Create a deep copy to avoid mutating state directly before Firestore update
         const currentNotificationsCopy = JSON.parse(JSON.stringify(appUser.notifications));
         const updatedNotifications = currentNotificationsCopy.map((n: Notification) => ({ ...n, read: true }));
 
@@ -623,14 +650,12 @@ export default function MainAppLayout({
         setAppUser(prev => prev ? {...prev, notifications: updatedNotifications } : null);
 
         // Update Firestore in the background
+        // No need to update lastNotificationCheckTimestamp here, as it's updated when notifications are added
         updateDoc(userDocRef, {
             notifications: updatedNotifications,
-            // Update lastNotificationCheckTimestamp to ensure new partner notifications aren't re-triggered
-            // if they were created before this read action but after the last check.
-            lastNotificationCheckTimestamp: serverTimestamp()
         }).catch(error => {
             console.error("Error updating notifications as read in Firestore:", error);
-            // Revert client state on error if needed, or simply log
+            // Revert client state on error if needed
             setAppUser(prev => prev ? {...prev, notifications: appUser.notifications } : null); // Revert
             toast({ title: "Erro ao Marcar Notificações", description: "Não foi possível marcar notificações como lidas no servidor.", variant: "destructive" });
         });
@@ -657,7 +682,9 @@ export default function MainAppLayout({
             transaction.update(userDocRef, { notifications: updatedDbNotifications });
         });
 
-        // Optimistically update client state
+        // The onSnapshot listener for appUser.notifications will automatically update the client state.
+        // No need for optimistic update here if onSnapshot is reliable.
+        // However, if immediate feedback is desired or onSnapshot has latency:
         setAppUser(prev => {
             if (!prev || !prev.notifications) return prev;
             return { ...prev, notifications: prev.notifications.filter(n => n.id !== notificationId) };
@@ -724,21 +751,29 @@ export default function MainAppLayout({
     );
   }
 
+  // Determine if children should be rendered based on loading and auth state
   let renderChildrenContent = false;
   if (!loading) {
     const isAuthPg = pathname === '/login' || pathname.startsWith('/questionnaire') || pathname.startsWith('/partner-questionnaire');
     const isSharedEvtPg = pathname.startsWith('/shared-event');
-    const isGeneralUserAccPg = pathname.startsWith('/user/profile') || pathname.startsWith('/user/coins') || pathname.startsWith('/user/favorites') || pathname.startsWith('/user/coupons') || pathname.startsWith('/user/help');
+    const isGeneralUserAccPg = ['/user/profile', '/user/coins', '/user/favorites', '/user/coupons', '/user/help'].includes(pathname);
 
 
     if (isAuthPg || isSharedEvtPg || isGeneralUserAccPg) {
-      renderChildrenContent = true;
-    } else if (appUser) {
+      renderChildrenContent = true; // Always render these pages, auth state handled within them
+    } else if (appUser) { // If user is authenticated
       if (appUser.questionnaireCompleted) {
-        renderChildrenContent = true;
+        renderChildrenContent = true; // Render if questionnaire is complete
       } else {
+        // If questionnaire is not complete, they should have been redirected already by the useEffect above.
+        // This path should ideally not be hit often for main app pages if redirection logic is sound.
+        // Render a loader as a fallback if redirection hasn't happened yet or is in progress.
+        renderChildrenContent = false; 
       }
     } else {
+      // No user, and not an auth/shared/general page, should have been redirected to login.
+      // Render a loader as a fallback.
+      renderChildrenContent = false;
     }
   }
 
@@ -949,22 +984,23 @@ export default function MainAppLayout({
       )}
       <main className="flex-1">
         {renderChildrenContent ? children : (
-          <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+          <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-background text-foreground"> {/* Adjusted min-height */}
             <Loader2 className="w-10 h-10 animate-spin text-primary" />
              <p className="ml-2">Carregando...</p>
           </div>
         )}
       </main>
 
-      {/* Floating Chat Info Button */}
-      {appUser && appUser.questionnaireCompleted && appUser.role === UserRole.USER && (
+       {/* Floating Chat Info Button - REMOVED as per user request to remove old global chat */}
+       {/*
+        appUser && appUser.questionnaireCompleted && appUser.role === UserRole.USER && (
         <div className="fixed bottom-6 right-6 z-40">
             <Button
-                onClick={handleChatIconClick}
+                onClick={handleChatIconClick} // This now shows a toast
                 className={cn(
                     "rounded-full h-14 w-14 p-0 shadow-lg text-white flex items-center justify-center",
                     "bg-gradient-to-br from-primary to-accent hover:from-primary/80 hover:to-accent/80",
-                    "animate-bounce hover:animate-none" // Simple bounce animation
+                    "animate-bounce hover:animate-none"
                 )}
                 aria-label="Informações sobre o Fervo Chat"
                 title="Informações sobre o Fervo Chat"
@@ -972,7 +1008,7 @@ export default function MainAppLayout({
                 <MessageSquare className="h-7 w-7" />
             </Button>
         </div>
-      )}
+      )*/}
 
 
       {appUser && appUser.role === UserRole.USER && appUser.uid && (
@@ -985,4 +1021,3 @@ export default function MainAppLayout({
     </div>
   );
 }
-
