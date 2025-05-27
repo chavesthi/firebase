@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff, HelpCircle, MessageSquare, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, LogOut, Map, UserCircle, Settings, Bell, Coins, TicketPercent, ScanLine, Loader2, Moon, Sun, Trash2, Heart, HeartOff, HelpCircle, MessageSquare, ShieldCheck, X as XIcon } from 'lucide-react'; // Renamed X to XIcon
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { UserRole, type VenueType, type MusicStyle } from '@/lib/constants';
@@ -157,7 +157,7 @@ const useAuthAndUserSubscription = () => {
                     console.error("Error fetching Stripe subscription status:", error);
                     setAppUser(prevUser => ({... (prevUser || baseAppUser), stripeSubscriptionActive: false}));
                     isCustomerDocListenerNeeded = false;
-                    if (!areCheckedInEventsListenerNeeded) setLoading(false);
+                    setLoading(false); // Ensure loading is set to false in error case
                 });
             } else {
                  isCustomerDocListenerNeeded = false; // Not a partner, no need for this listener
@@ -177,7 +177,7 @@ const useAuthAndUserSubscription = () => {
                 console.error("Error fetching checked-in events:", error);
                 setAppUser(prevUser => ({ ... (prevUser || baseAppUser), checkedInEvents: {} }));
                 areCheckedInEventsListenerNeeded = false;
-                if (!isCustomerDocListenerNeeded) setLoading(false);
+                setLoading(false); // Ensure loading is set to false in error case
             });
 
 
@@ -246,7 +246,7 @@ const useAuthAndUserSubscription = () => {
   return { firebaseUser, appUser, setAppUser, loading };
 };
 
-const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<React.SetStateAction<AppUser | null>>) => {
+const useNotificationSetup = (user: AppUser | null) => {
   const { toast } = useToast();
 
   useEffect(() => {
@@ -271,7 +271,6 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
                   fcmTokens: arrayUnion(currentToken),
                 });
                 console.log('FCM token saved to Firestore.');
-                // Optimistically update local state via the main onSnapshot listener for AppUser
               }
             } else {
               console.log('No registration token available or user not available. Request permission to generate one.');
@@ -297,7 +296,7 @@ const useNotificationSetup = (user: AppUser | null, setAppUser: React.Dispatch<R
         unsubscribeOnMessage();
       };
     }
-  }, [user, toast, setAppUser]);
+  }, [user, toast]);
 };
 
 
@@ -307,7 +306,7 @@ export default function MainAppLayout({
   children: React.ReactNode;
 }) {
   const { appUser, setAppUser, loading } = useAuthAndUserSubscription();
-  useNotificationSetup(appUser, setAppUser);
+  useNotificationSetup(appUser);
   const { theme, setTheme } = useTheme();
 
   const router = useRouter();
@@ -413,7 +412,7 @@ export default function MainAppLayout({
           greetingDescription = "Qual Evento Vai Rolar Hoje?";
       }
 
-      if (greetingTitle && (!isPartnerTrialExpiredRecently)){
+      if (greetingTitle && (!isPartnerTrialExpiredRecently || isPartnerWithActiveSub)){
           toast({
             title: greetingTitle,
             description: greetingDescription,
@@ -716,6 +715,15 @@ export default function MainAppLayout({
             const updatedDbNotifications = currentDbNotifications.filter((n) => n.id !== notificationId);
             transaction.update(userDocRef, { notifications: updatedDbNotifications });
         });
+        // Optimistically update local state for immediate UI feedback,
+        // onSnapshot listener for AppUser will eventually catch up with DB state.
+        setAppUser(prevUser => {
+            if (!prevUser) return null;
+            return {
+                ...prevUser,
+                notifications: prevUser.notifications?.filter(n => n.id !== notificationId) || []
+            };
+        });
         toast({ title: "Notificação Removida", description: "A notificação foi removida permanentemente.", variant: "default", duration: 3000 });
     } catch (error: any) {
         console.error("Error dismissing notification from Firestore:", error);
@@ -760,25 +768,14 @@ export default function MainAppLayout({
   };
 
   const handleFloatingChatIconClick = () => {
-    if (!appUser) return;
-
-    if (!appUser.address?.city || !appUser.address?.state) {
-      toast({
-        title: "Complete seu Perfil",
-        description: "Por favor, adicione sua cidade e estado no seu perfil para usar o Fervo Chat regional.",
-        duration: 5000,
-        action: <Button onClick={() => router.push('/user/profile')}>Ir para Perfil</Button>
-      });
-      return;
+    if (!appUser || !appUser.uid) {
+        toast({title: "Login Necessário", description: "Faça login para acessar o chat.", variant: "destructive"});
+        return;
     }
 
-    const checkedInEventsArray = appUser.checkedInEvents ? Object.values(appUser.checkedInEvents) : [];
-    const activeCheckIn = checkedInEventsArray.find(event =>
-        event.checkedInAt && // Ensure checkedInAt exists
-        // Add logic to determine if event is currently active if needed, e.g., compare with event.endDateTime
-        true // For now, any check-in makes it "active" for chat purposes
+    const activeCheckIn = appUser.checkedInEvents && Object.values(appUser.checkedInEvents).find(
+        event => event.checkedInAt // Add more logic here if "active" means more than just having a check-in record
     );
-
 
     if (activeCheckIn) {
         setChatRoomId(activeCheckIn.eventId);
@@ -843,7 +840,7 @@ export default function MainAppLayout({
       {appUser && (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex items-center h-16 max-w-screen-2xl">
-             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={40} logoHeight={40} className="mr-auto md:mr-4" />
+             <Logo logoSrc="/images/fervoapp_logo_512x512.png" logoWidth={80} logoHeight={80} className="mr-auto md:mr-4" />
 
             <nav className="flex items-center gap-1 ml-auto sm:gap-2 md:gap-4">
               {appUser?.role === UserRole.USER && (
@@ -1085,7 +1082,7 @@ export default function MainAppLayout({
                     <div className="flex items-center gap-1">
                         <AlertDialog open={showClearEventChatDialog} onOpenChange={setShowClearEventChatDialog}>
                             <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat (apenas visualização)">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:h-8 text-muted-foreground hover:text-destructive" title="Limpar mensagens deste chat (apenas visualização)">
                                     <Trash2 className="h-4 w-4 sm:h-5 sm:h-5" />
                                 </Button>
                             </AlertDialogTrigger>
@@ -1104,11 +1101,11 @@ export default function MainAppLayout({
                                 </AlertDialogFooter>
                             </AlertDialogContent>
                         </AlertDialog>
-                        <Button variant="ghost" size="icon" onClick={() => setIsChatSoundMuted(prev => !prev)} className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-primary" title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}>
-                            {isChatSoundMuted ? <LogOut className="h-4 w-4 sm:h-5 sm:h-5" /> : <Sun className="h-4 w-4 sm:h-5 sm:h-5" />} {/* Placeholder icons, replace with VolumeX/Volume2 */}
+                        <Button variant="ghost" size="icon" onClick={() => setIsChatSoundMuted(prev => !prev)} className="h-7 w-7 sm:h-8 sm:h-8 text-muted-foreground hover:text-primary" title={isChatSoundMuted ? "Ativar som do chat" : "Silenciar som do chat"}>
+                           {isChatSoundMuted ? <XIcon className="h-4 w-4 sm:h-5 sm:h-5" /> : <Sun className="h-4 w-4 sm:h-5 sm:h-5" />} {/* Placeholder icons, replace with VolumeX/Volume2 */}
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => setIsChatWidgetOpen(false)} className="h-7 w-7 sm:h-8 sm:h-8 text-muted-foreground hover:text-destructive" title="Fechar chat">
-                            <X className="h-4 w-4 sm:h-5 sm:h-5"/>
+                            <XIcon className="h-4 w-4 sm:h-5 sm:h-5"/>
                         </Button>
                     </div>
                 </CardHeader>
